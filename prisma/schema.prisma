@@ -30,6 +30,57 @@ enum UserRole {
   ADMIN // web dashboard only; never created through public registration
 }
 
+/// Who may see a player's phone number from their profile.
+enum ContactVisibility {
+  ON_TAP // anyone signed in can tap "show number" (the default)
+  AFTER_ACCEPT // only people the player has accepted (an accepted application or invite)
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum RequestKind {
+  MATCH // "players needed for a game": players apply
+  EVENT // a recruiter's trial / camp: players tap "interested"
+}
+
+enum VerificationKind {
+  RECRUITER
+  PLAYER_STATS
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CreditReason {
+  PURCHASE
+  CONTACT_REVEAL
+  BOOST
+  ADMIN_GRANT
+  REFUND
+}
+
+enum PaymentMethod {
+  SANDBOX // non-production only: pays instantly, for development and tests
+  BKASH
+  NAGAD
+  ROCKET
+}
+
+enum PaymentStatus {
+  PENDING // checkout created, user hasn't paid / submitted a transaction id yet
+  SUBMITTED // user paid by mobile banking and sent the transaction id; waiting for an admin
+  PAID
+  REJECTED
+}
+
 enum RecruiterType {
   CLUB
   ACADEMY
@@ -120,6 +171,13 @@ enum NotificationType {
   REQUEST_UPDATED
   APPLICATION_WITHDRAWN
   RATING_REMINDER
+  INVITE_RECEIVED
+  INVITE_ACCEPTED
+  INVITE_DECLINED
+  CONTACT_VIEWED
+  NEW_MESSAGE
+  VERIFICATION_RESULT
+  TEAM_JOINED
   SYSTEM
 }
 
@@ -129,6 +187,7 @@ enum ReportTargetType {
   REQUEST
   TEAM
   RATING
+  CONVERSATION
 }
 
 enum AdminActionType {
@@ -143,6 +202,13 @@ enum AdminActionType {
   RECRUITER_VERIFY
   RECRUITER_UNVERIFY
   USER_ROLE_CHANGE
+  VERIFICATION_APPROVE
+  VERIFICATION_REJECT
+  PAYMENT_APPROVE
+  PAYMENT_REJECT
+  CREDITS_GRANT
+  CREDIT_PACK_SET
+  CONVERSATION_VIEW
   REQUEST_HIDE
   REQUEST_UNHIDE
   REPORT_RESOLVE
@@ -183,22 +249,33 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  authAccounts      AuthAccount[]
-  refreshTokens     RefreshToken[]
-  verificationCodes VerificationCode[]
-  playerProfile     PlayerProfile?
-  recruiterProfile  RecruiterProfile?
-  teamsCaptained    Team[]             @relation("TeamCaptain")
-  teamMemberships   TeamMember[]
-  requestsCreated   PlayerRequest[]
-  applications      Application[]
-  ratingsGiven      Rating[]           @relation("RatingRater")
-  ratingsReceived   Rating[]           @relation("RatingRatee")
-  deviceTokens      DeviceToken[]
-  notifications     Notification[]
-  reportsFiled      Report[]           @relation("ReportReporter")
-  reportsResolved   Report[]           @relation("ReportResolver")
-  adminActions      AdminAction[]
+  authAccounts             AuthAccount[]
+  refreshTokens            RefreshToken[]
+  verificationCodes        VerificationCode[]
+  playerProfile            PlayerProfile?
+  recruiterProfile         RecruiterProfile?
+  creditBalance            Int                   @default(0) // maintained with the ledger, never negative (CHECK in the migration)
+  creditTransactions       CreditTransaction[]
+  payments                 Payment[]
+  contactReveals           ContactReveal[]       @relation("ContactViewer")
+  invitesSent              Invite[]              @relation("InviteRecruiter")
+  shortlist                ShortlistEntry[]
+  verificationRequests     VerificationRequest[] @relation("VerificationSubmitter")
+  verificationsReviewed    VerificationRequest[] @relation("VerificationReviewer")
+  conversationsAsRecruiter Conversation[]        @relation("ConversationRecruiter")
+  conversationsAsPlayer    Conversation[]        @relation("ConversationPlayer")
+  messagesSent             Message[]
+  teamsCaptained           Team[]                @relation("TeamCaptain")
+  teamMemberships          TeamMember[]
+  requestsCreated          PlayerRequest[]
+  applications             Application[]
+  ratingsGiven             Rating[]              @relation("RatingRater")
+  ratingsReceived          Rating[]              @relation("RatingRatee")
+  deviceTokens             DeviceToken[]
+  notifications            Notification[]
+  reportsFiled             Report[]              @relation("ReportReporter")
+  reportsResolved          Report[]              @relation("ReportResolver")
+  adminActions             AdminAction[]
 
   @@index([status])
   @@index([role, status])
@@ -364,17 +441,18 @@ model Position {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model PlayerProfile {
-  id              String    @id @default(cuid())
-  userId          String    @unique
-  bio             String?
+  id                String            @id @default(cuid())
+  userId            String            @unique
+  bio               String?
   // Home location. District + upazila are required so every profile is searchable by area.
-  districtId      Int
-  upazilaId       Int
-  unionId         Int?
-  isVisible       Boolean   @default(true) // player's own switch; admin hiding sets this false too
-  verifiedBadge   Boolean   @default(false)
+  districtId        Int
+  upazilaId         Int
+  unionId           Int?
+  isVisible         Boolean           @default(true) // player's own switch; admin hiding sets this false too
+  verifiedBadge     Boolean           @default(false)
   // Set by an admin; unlike isVisible (the player's own switch) the player cannot clear it.
-  hiddenByAdminAt DateTime?
+  hiddenByAdminAt   DateTime?
+  contactVisibility ContactVisibility @default(ON_TAP)
 
   avgRating    Float    @default(0)
   ratingCount  Int      @default(0)
@@ -384,12 +462,15 @@ model PlayerProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  district District      @relation(fields: [districtId], references: [id])
-  upazila  Upazila       @relation(fields: [upazilaId], references: [id])
-  union    Union?        @relation(fields: [unionId], references: [id])
-  sports   PlayerSport[]
-  media    PlayerMedia[]
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district       District         @relation(fields: [districtId], references: [id])
+  upazila        Upazila          @relation(fields: [upazilaId], references: [id])
+  union          Union?           @relation(fields: [unionId], references: [id])
+  sports         PlayerSport[]
+  media          PlayerMedia[]
+  contactReveals ContactReveal[]
+  invites        Invite[]
+  shortlisted    ShortlistEntry[]
 
   // Player search: filter by place, then walk the sort order — each index ends in `id`, the unique
   // tie-breaker the keyset cursor uses, so Postgres never has to sort. (Without the location-first
@@ -431,13 +512,16 @@ model PlayerSport {
   // Earned in matches of this sport only (the account-level rating on PlayerProfile blends all sports).
   avgRating       Float     @default(0)
   ratingCount     Int       @default(0)
+  // Set when an admin approves a stats verification; editing the stats clears it.
+  statsVerifiedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile      PlayerProfile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  sport        Sport               @relation(fields: [sportId], references: [id])
-  achievements PlayerAchievement[]
+  profile       PlayerProfile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  sport         Sport                 @relation(fields: [sportId], references: [id])
+  achievements  PlayerAchievement[]
+  verifications VerificationRequest[]
 
   @@unique([profileId, sportId])
   @@index([sportId, khepAvailable])
@@ -491,8 +575,9 @@ model RecruiterProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  district District @relation(fields: [districtId], references: [id])
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district      District              @relation(fields: [districtId], references: [id])
+  verifications VerificationRequest[]
 
   @@index([districtId])
 }
@@ -511,6 +596,8 @@ model Team {
   captainId    String
   logoUrl      String?
   logoPublicId String?
+  // Shared by the captain; entering it joins the team (so nobody can be added without consent).
+  joinCode     String   @unique @default(dbgenerated("upper(substr(md5(((random())::text || (clock_timestamp())::text)), 1, 8))"))
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -561,6 +648,8 @@ model PlayerRequest {
   budgetMax       Int?
   isPaid          Boolean       @default(false)
   notes           String?
+  kind            RequestKind   @default(MATCH)
+  title           String? // events only: "Under-17 trial, Barishal"
   status          RequestStatus @default(OPEN)
   isHidden        Boolean       @default(false) // admin moderation
   completedAt     DateTime? // starts the 7-day rating window
@@ -577,6 +666,7 @@ model PlayerRequest {
   union        Union?        @relation(fields: [unionId], references: [id])
   applications Application[]
   ratings      Rating[]
+  invites      Invite[]
 
   @@index([status, matchAt])
   @@index([upazilaId, status, matchAt])
@@ -710,4 +800,183 @@ model AdminAction {
   @@index([targetType, targetId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
   @@index([adminId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contact, invites, shortlist, events
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Someone tapped "show number" on a player's profile. One row per (viewer, player): re-opening is free, and the
+/// player can see who looked.
+model ContactReveal {
+  id        String   @id @default(cuid())
+  viewerId  String
+  profileId String
+  cost      Int      @default(0) // credits spent (0 = within the free daily allowance, or already related)
+  createdAt DateTime @default(now())
+
+  viewer  User          @relation("ContactViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, profileId])
+  @@index([profileId, createdAt(sort: Desc)])
+  @@index([viewerId, createdAt(sort: Desc)])
+}
+
+/// A recruiter asking one player to come (optionally to a specific event). Accepting shares both numbers.
+model Invite {
+  id          String       @id @default(cuid())
+  recruiterId String
+  profileId   String
+  sportId     Int?
+  requestId   String?
+  message     String?
+  status      InviteStatus @default(PENDING)
+  respondedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  recruiter User           @relation("InviteRecruiter", fields: [recruiterId], references: [id], onDelete: Cascade)
+  profile   PlayerProfile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  request   PlayerRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  // A partial unique index (one PENDING invite per recruiter + player) lives in the migration.
+  @@index([profileId, status, createdAt(sort: Desc)])
+  @@index([recruiterId, createdAt(sort: Desc)])
+}
+
+model ShortlistEntry {
+  id          String   @id @default(cuid())
+  recruiterId String
+  profileId   String
+  note        String?
+  createdAt   DateTime @default(now())
+
+  recruiter User          @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+  profile   PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([recruiterId, profileId])
+  @@index([recruiterId, createdAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Verification (recruiters, and the stats on a player's sport profile)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model VerificationRequest {
+  id                 String             @id @default(cuid())
+  kind               VerificationKind
+  submitterId        String
+  recruiterProfileId String?
+  playerSportId      String?
+  note               String?
+  evidenceLinks      String[] // https links: a page, a federation record, a match report
+  evidenceImages     Json? // [{ url, publicId }] — uploaded through /media/images
+  status             VerificationStatus @default(PENDING)
+  reviewedById       String?
+  reviewedAt         DateTime?
+  reviewNote         String?
+  createdAt          DateTime           @default(now())
+
+  submitter        User              @relation("VerificationSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+  reviewedBy       User?             @relation("VerificationReviewer", fields: [reviewedById], references: [id])
+  recruiterProfile RecruiterProfile? @relation(fields: [recruiterProfileId], references: [id], onDelete: Cascade)
+  playerSport      PlayerSport?      @relation(fields: [playerSportId], references: [id], onDelete: Cascade)
+
+  // Partial unique indexes (one PENDING request per target) live in the migration.
+  @@index([status, createdAt])
+  @@index([submitterId, createdAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Credits & payments
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CreditPack {
+  id       String  @id @default(cuid())
+  code     String  @unique
+  credits  Int
+  priceBdt Int
+  isActive Boolean @default(true)
+  order    Int     @default(0)
+
+  payments Payment[]
+}
+
+/// Append-only. `User.creditBalance` is always the sum of a user's rows; both change in one transaction.
+model CreditTransaction {
+  id           String       @id @default(cuid())
+  userId       String
+  delta        Int
+  balanceAfter Int
+  reason       CreditReason
+  refType      String?
+  refId        String?
+  createdAt    DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  userId       String
+  packId       String
+  credits      Int // copied from the pack at checkout so later price edits never change an order
+  amountBdt    Int
+  method       PaymentMethod
+  trxId        String? // the bKash / Nagad / Rocket transaction id the user paid with
+  senderNumber String?
+  status       PaymentStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pack CreditPack @relation(fields: [packId], references: [id])
+
+  @@unique([method, trxId]) // a transaction id can only ever buy credits once
+  @@index([status, createdAt])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chat (recruiter ⇄ player, one conversation per pair)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Conversation {
+  id                 String    @id @default(cuid())
+  recruiterId        String
+  playerId           String
+  lastMessageAt      DateTime  @default(now())
+  lastMessagePreview String?
+  recruiterUnread    Int       @default(0)
+  playerUnread       Int       @default(0)
+  // Set by the player to stop the recruiter writing; the recruiter isn't told why.
+  blockedAt          DateTime?
+  createdAt          DateTime  @default(now())
+
+  recruiter User      @relation("ConversationRecruiter", fields: [recruiterId], references: [id], onDelete: Cascade)
+  player    User      @relation("ConversationPlayer", fields: [playerId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@unique([recruiterId, playerId])
+  @@index([recruiterId, lastMessageAt(sort: Desc)])
+  @@index([playerId, lastMessageAt(sort: Desc)])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt(sort: Desc)])
 }

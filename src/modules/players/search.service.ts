@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { shortlistedAmong } from "../shortlist/shortlist.service.js";
 import { profileInclude, toPlayerCard } from "./players.presenter.js";
 import type { searchQuery } from "./players.schema.js";
 
@@ -71,6 +72,7 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
   if (q.minRating !== undefined && q.sportId !== undefined) sport.push(Prisma.sql`ps."avgRating" >= ${q.minRating} AND ps."ratingCount" > 0`);
   if (q.minExperienceYears !== undefined) sport.push(Prisma.sql`ps."experienceYears" >= ${q.minExperienceYears}`);
   if (q.minSkillLevel !== undefined) sport.push(Prisma.sql`ps."skillLevel" >= ${q.minSkillLevel}`);
+  if (q.statsVerified === true) sport.push(Prisma.sql`ps."statsVerifiedAt" IS NOT NULL`);
   if (q.position) sport.push(Prisma.sql`ps.positions @> ARRAY[${q.position}]::text[]`);
   if (q.khepAvailable !== undefined) sport.push(Prisma.sql`ps."khepAvailable" = ${q.khepAvailable}`);
   // Rates only mean something for khep (paid) players, so a budget filter implies khepAvailable.
@@ -139,7 +141,8 @@ export async function searchPlayers(viewerId: string, q: Query) {
     include: profileInclude,
   });
   const byId = new Map(profiles.map((p) => [p.id, p]));
-  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!, r.matchedSportIds)] : []));
+  const saved = await shortlistedAmong(viewerId, page.map((r) => r.id));
+  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!, r.matchedSportIds, saved.has(r.id))] : []));
 
   return { items, nextCursor: hasMore ? encode(rowCursor(q.sort, page[page.length - 1]!)) : null };
 }

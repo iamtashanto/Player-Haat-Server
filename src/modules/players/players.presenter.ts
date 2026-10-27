@@ -36,6 +36,7 @@ function sportEntry(s: FullProfile["sports"][number], detailed: boolean) {
     currentTeam: s.currentTeam,
     stats: s.stats as Record<string, number> | null,
     rating: { average: round2(s.avgRating), count: s.ratingCount },
+    statsVerified: s.statsVerifiedAt !== null,
     ...(detailed && {
       preferredFoot: s.preferredFoot,
       battingStyle: s.battingStyle,
@@ -49,7 +50,7 @@ function sportEntry(s: FullProfile["sports"][number], detailed: boolean) {
  * The compact shape used in search results. Only public sport profiles are listed; those that matched
  * the search's sport-level filters come first, so a recruiter lands on the most relevant one.
  */
-export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = []) {
+export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], shortlisted = false) {
   const matched = new Set(matchedSportIds);
   const sports = p.sports.filter(isPublicSport).sort((a, b) => Number(matched.has(b.sportId)) - Number(matched.has(a.sportId)));
   return {
@@ -63,13 +64,15 @@ export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = []) {
     location: { district: p.district, upazila: p.upazila, union: p.union },
     sports: sports.map((s) => sportEntry(s, false)),
     matchedSportIds: sports.filter((s) => matched.has(s.sportId)).map((s) => s.sportId),
+    // Whether the viewing recruiter has saved this player (always false for everyone else).
+    shortlisted,
   };
 }
 
 /** What other users see. Deliberately omits email, phone, birth year and the user id. */
-export function toPublicProfile(p: FullProfile) {
+export function toPublicProfile(p: FullProfile, shortlisted = false) {
   return {
-    ...toPlayerCard(p),
+    ...toPlayerCard(p, [], shortlisted),
     sports: p.sports.filter(isPublicSport).map((s) => sportEntry(s, true)),
     bio: p.bio,
     media: p.media.map((m) => ({ id: m.id, type: m.type, url: m.url, order: m.order })),
@@ -84,5 +87,6 @@ export function toMyProfile(p: FullProfile) {
     sports: p.sports.map((s) => ({ ...sportEntry(s, true), isVisible: s.isVisible, hiddenByAdmin: s.hiddenByAdminAt !== null })),
     isVisible: p.isVisible,
     hiddenByAdmin: p.hiddenByAdminAt !== null,
+    contactVisibility: p.contactVisibility,
   };
 }

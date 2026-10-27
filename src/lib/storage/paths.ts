@@ -10,6 +10,7 @@ const FOLDER: Record<ImageKind, string> = {
   avatar: "avatars",
   "player-photo": "player-photos",
   "team-logo": "team-logos",
+  "verification-doc": "verification-docs",
 };
 
 /** `<root>/<folder>/<userId>/` — every image a user uploads lives under their own prefix. */

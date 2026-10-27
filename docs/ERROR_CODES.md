@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-96 codes. Messages are developer-facing English and may change; **codes are stable**.
+144 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -18,6 +18,12 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `ADMIN_CANNOT_TARGET_ADMIN` | 403 | Admins can't be moderated through the API | `modules/admin/admin.service.ts` |
 | `ADMIN_CANNOT_TARGET_SELF` | 403 | You can't do that to yourself | `modules/admin/admin.service.ts` |
+
+## ALREADY
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `ALREADY_VERIFIED` | 409 | You're already verified | `modules/verification/verification.service.ts` |
 
 ## APPLICATION
 
@@ -35,13 +41,14 @@ Every error response has this shape — the app should translate `error.code`, n
 | `AUTH_ADMIN_DASHBOARD_ONLY` | 403 | Admin accounts sign in through the admin dashboard | `modules/auth/auth.service.ts` |
 | `AUTH_EMAIL_ALREADY_VERIFIED` | 409 | Email is already verified | `modules/auth/auth.service.ts` |
 | `AUTH_EMAIL_TAKEN` | 409 | Email already registered | `modules/auth/auth.service.ts` |
-| `AUTH_FORBIDDEN` | 403 | Signed in, but not allowed to do this | `middlewares/auth.ts` |
+| `AUTH_FORBIDDEN` | 403 | Signed in, but not allowed to do this | `middlewares/auth.ts`, `modules/chat/chat.service.ts` |
 | `AUTH_INVALID_CREDENTIALS` | 401 | Invalid email or password | `modules/auth/auth.service.ts` |
 | `AUTH_INVALID_OTP` | 400 | Invalid code | `modules/auth/auth.service.ts`, `modules/auth/otp.service.ts` |
 | `AUTH_INVALID_REFRESH_TOKEN` | 401 | Unknown or logged-out refresh token | `modules/auth/token.service.ts` |
 | `AUTH_INVALID_SOCIAL_TOKEN` | 401 | Invalid Apple token | `lib/social/apple.ts`, `lib/social/google.ts` |
 | `AUTH_LAST_LOGIN_METHOD` | 409 | Cannot remove your only login method | `modules/auth/methods.service.ts` |
 | `AUTH_NO_EMAIL` | 409 | Account has no email address | `modules/auth/auth.service.ts` |
+| `AUTH_NO_REFRESH_TOKEN` | 401 | Refresh token missing | `modules/admin/admin.routes.ts` |
 | `AUTH_OTP_COOLDOWN` | 429 | Wait… | `modules/auth/otp.service.ts` |
 | `AUTH_OTP_EXPIRED` | 400 | Code expired | `modules/auth/otp.service.ts` |
 | `AUTH_OTP_LIMIT` | 429 | Too many codes requested for this number; try again later | `modules/auth/auth.service.ts` |
@@ -57,17 +64,89 @@ Every error response has this shape — the app should translate `error.code`, n
 | `AUTH_UNAUTHENTICATED` | 401 | Missing, malformed or invalid access token | `lib/jwt.ts`, `middlewares/auth.ts` |
 | `AUTH_WRONG_PASSWORD` | 400 | Password is incorrect | `modules/auth/account.service.ts`, `modules/auth/auth.service.ts` |
 
+## BOOST
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `BOOST_UNAVAILABLE` | 409 | Boosting isn't available right now | `modules/requests/requests.service.ts` |
+
+## CHAT
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `CHAT_LIMIT` | 429 | You can start up to… | `modules/chat/chat.service.ts` |
+| `CHAT_UNAVAILABLE` | 403 | You can't message this person | `modules/chat/chat.service.ts` |
+
 ## CONFLICT
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `CONFLICT` | 409 | Resource already exists | `(shared middleware)`, `modules/admin/admin.service.ts` |
 
+## CONTACT
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `CONTACT_LOCKED` | 403 | This player shares their number only with people they've accepted | `modules/contact/contact.service.ts` |
+
+## CONVERSATION
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `CONVERSATION_NOT_FOUND` | 404 | Conversation not found | `modules/chat/chat.service.ts` |
+
+## CREDIT
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `CREDIT_PACK_EXISTS` | 409 | A pack with that code already exists | `modules/billing/billing.admin.ts` |
+| `CREDIT_PACK_NOT_FOUND` | 404 | Pack not found | `modules/billing/billing.admin.ts`, `modules/billing/billing.service.ts` |
+
+## CREDITS
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `CREDITS_REQUIRED` | 402 | Not enough credits | `modules/billing/credits.service.ts` |
+
+## DISTRICT
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `DISTRICT_NOT_FOUND` | 404 | District not found | `modules/admin/admin.service.ts` |
+
+## DIVISION
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `DIVISION_NOT_FOUND` | 404 | Division not found | `modules/admin/admin.service.ts` |
+
+## EVENT
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `EVENT_RECRUITERS_ONLY` | 403 | Only recruiters can launch events | `modules/requests/requests.service.ts` |
+
 ## INTERNAL
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `INTERNAL_ERROR` | 500 | Internal server error | `(shared middleware)` |
+
+## INVALID
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `INVALID_PASSWORD` | 401 | Current password is incorrect | `modules/admin/admin.service.ts` |
+
+## INVITE
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `INVITE_ALREADY_PENDING` | 409 | You've already invited this player; wait for their answer | `modules/invites/invites.service.ts` |
+| `INVITE_COOLDOWN` | 409 | This player declined recently; try again after… | `modules/invites/invites.service.ts` |
+| `INVITE_LIMIT` | 429 | You can send up to… | `modules/invites/invites.service.ts` |
+| `INVITE_NOT_FOUND` | 404 | Invitation not found | `modules/invites/invites.service.ts` |
+| `INVITE_NOT_PENDING` | 409 | This invitation is already… | `modules/invites/invites.service.ts` |
 
 ## LOCATION
 
@@ -88,6 +167,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `MEDIA_FILE_REQUIRED` | 422 | Send an image in the "… | `middlewares/upload.ts` |
 | `MEDIA_IN_USE` | 409 | Remove the image from your profile first | `modules/media/media.service.ts` |
 | `MEDIA_INVALID_UPLOAD` | 422 | Malformed multipart upload (details in the message) | `middlewares/upload.ts` |
+| `MEDIA_NOT_FOUND` | 404 | Media not found | `modules/admin/admin.service.ts` |
 | `MEDIA_NOT_OWNED` | 403 | That image is not yours | `modules/media/media.service.ts` |
 | `MEDIA_TOO_LARGE` | 413 | Image must be at most… | `middlewares/upload.ts` |
 | `MEDIA_UNSUPPORTED_TYPE` | 415 | Only jpeg, png, webp and heic images are allowed | `middlewares/upload.ts` |
@@ -110,6 +190,17 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `PAYLOAD_TOO_LARGE` | 413 | Request body too large | `(shared middleware)` |
 
+## PAYMENT
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `PAYMENT_METHOD_UNAVAILABLE` | 503 | That payment method isn't available right now | `modules/billing/billing.service.ts` |
+| `PAYMENT_NOT_FOUND` | 404 | Payment not found | `modules/billing/billing.admin.ts`, `modules/billing/billing.service.ts` |
+| `PAYMENT_NOT_REVIEWABLE` | 409 | This payment is… | `modules/billing/billing.admin.ts` |
+| `PAYMENT_NOT_SUBMITTABLE` | 409 | Nothing to submit for this payment | `modules/billing/billing.service.ts` |
+| `PAYMENT_TOO_MANY_OPEN` | 409 | Finish or wait for your open payments first | `modules/billing/billing.service.ts` |
+| `PAYMENT_TRX_USED` | 409 | That transaction id has already been used | `modules/billing/billing.service.ts` |
+
 ## PLAYER
 
 | Code | HTTP | Developer message | Raised in |
@@ -118,12 +209,20 @@ Every error response has this shape — the app should translate `error.code`, n
 | `PLAYER_ACHIEVEMENT_NOT_FOUND` | 404 | Achievement not found | `modules/players/players.service.ts` |
 | `PLAYER_MEDIA_LIMIT` | 409 | You can have at most… | `modules/players/player-media.service.ts` |
 | `PLAYER_MEDIA_NOT_FOUND` | 404 | Media not found | `modules/players/player-media.service.ts` |
+| `PLAYER_NO_PHONE` | 409 | This player hasn't added a phone number | `modules/contact/contact.service.ts` |
 | `PLAYER_PROFILE_EXISTS` | 409 | You already have a player profile | `modules/players/players.service.ts` |
-| `PLAYER_PROFILE_NOT_FOUND` | 404 | Profile not found | `modules/admin/admin.service.ts`, `modules/players/player-media.service.ts`, `modules/ratings/ratings.service.ts` |
+| `PLAYER_PROFILE_NOT_FOUND` | 404 | Player profile not found | `modules/admin/admin.service.ts`, `modules/chat/chat.service.ts`, `modules/contact/contact.service.ts`, `modules/invites/invites.service.ts`, `modules/players/player-media.service.ts`, `modules/ratings/ratings.service.ts`, `modules/shortlist/shortlist.service.ts` |
 | `PLAYER_PROFILE_REQUIRED` | 409 | Create your player profile before applying | `modules/applications/applications.service.ts` |
 | `PLAYER_SPORT_EXISTS` | 409 | You already added that sport; update it instead | `modules/players/players.service.ts` |
-| `PLAYER_SPORT_NOT_FOUND` | 404 | Sport profile not found | `modules/admin/admin.service.ts`, `modules/players/players.service.ts` |
+| `PLAYER_SPORT_NOT_FOUND` | 404 | Sport profile not found | `modules/admin/admin.service.ts`, `modules/players/players.service.ts`, `modules/verification/verification.service.ts` |
 | `PLAYER_SPORT_REQUIRED` | 409 | Add… | `modules/applications/applications.service.ts` |
+
+## POSITION
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `POSITION_EXISTS` | 409 | Position… | `modules/admin/admin.service.ts` |
+| `POSITION_NOT_FOUND` | 404 | Position not found | `modules/admin/admin.service.ts` |
 
 ## PROFILE
 
@@ -153,7 +252,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `RECRUITER_PROFILE_EXISTS` | 409 | You already have a recruiter profile | `modules/recruiters/recruiters.service.ts` |
-| `RECRUITER_PROFILE_NOT_FOUND` | 404 | Recruiter not found | `modules/admin/admin.service.ts` |
+| `RECRUITER_PROFILE_NOT_FOUND` | 404 | Recruiter not found | `modules/admin/admin.service.ts`, `modules/chat/chat.service.ts`, `modules/verification/verification.service.ts` |
 | `RECRUITER_PROFILE_REQUIRED` | 403 | Complete your recruiter profile to discover players | `modules/recruiters/recruiters.service.ts` |
 
 ## REPORT
@@ -169,9 +268,10 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
+| `REQUEST_ALREADY_CANCELLED` | 409 | Already cancelled | `modules/admin/admin.service.ts` |
 | `REQUEST_ALREADY_HIDDEN` | 409 | Already hidden | `modules/admin/admin.service.ts` |
 | `REQUEST_CLOSED` | 409 | This request is… | `modules/applications/applications.service.ts`, `modules/requests/requests.service.ts` |
-| `REQUEST_EXPIRED` | 409 | This match has already started | `modules/applications/applications.service.ts` |
+| `REQUEST_EXPIRED` | 409 | This match has already started | `modules/applications/applications.service.ts`, `modules/requests/requests.service.ts` |
 | `REQUEST_FILLED` | 409 | This request is already filled | `modules/applications/applications.service.ts` |
 | `REQUEST_LIMIT` | 409 | You can have at most… | `modules/requests/requests.service.ts` |
 | `REQUEST_NO_ACCEPTED_PLAYERS` | 409 | No players were accepted — cancel the request instead | `modules/requests/requests.service.ts` |
@@ -195,6 +295,12 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `SERVICE_UNAVAILABLE` | 503 | Database unreachable | `(shared middleware)`, `modules/health/health.controller.ts` |
 
+## SHORTLIST
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `SHORTLIST_FULL` | 409 | You can save up to… | `modules/shortlist/shortlist.service.ts` |
+
 ## SMS
 
 | Code | HTTP | Developer message | Raised in |
@@ -205,7 +311,10 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
+| `SPORT_CODE_EXISTS` | 409 | Sport with code… | `modules/admin/admin.service.ts` |
+| `SPORT_NOT_FOUND` | 404 | Sport not found | `modules/admin/admin.service.ts` |
 | `SPORT_PROFILE_ALREADY_HIDDEN` | 409 | Already hidden | `modules/admin/admin.service.ts` |
+| `SPORT_PROFILE_NOT_FOUND` | 404 | Sport profile not found | `modules/admin/admin.service.ts` |
 | `SPORT_PROFILE_NOT_HIDDEN` | 409 | Not hidden | `modules/admin/admin.service.ts` |
 
 ## STORAGE
@@ -215,13 +324,39 @@ Every error response has this shape — the app should translate `error.code`, n
 | `STORAGE_NOT_CONFIGURED` | 503 | Image storage is not configured | `lib/storage/cloudinary.ts` |
 | `STORAGE_UPLOAD_FAILED` | 502 | Image upload failed | `lib/storage/cloudinary.ts` |
 
+## TEAM
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `TEAM_ALREADY_MEMBER` | 409 | You're already in this team | `modules/teams/teams.service.ts` |
+| `TEAM_CAPTAIN_CANNOT_LEAVE` | 409 | Delete the team instead — a team needs its captain | `modules/teams/teams.service.ts` |
+| `TEAM_CODE_INVALID` | 404 | No team has that code | `modules/teams/teams.service.ts` |
+| `TEAM_FULL` | 409 | This team is full | `modules/teams/teams.service.ts` |
+| `TEAM_LIMIT` | 409 | You can captain up to… | `modules/teams/teams.service.ts` |
+| `TEAM_MEMBER_NOT_FOUND` | 404 | Member not found | `modules/teams/teams.service.ts` |
+| `TEAM_NOT_CAPTAIN` | 403 | Only the captain can do that | `modules/teams/teams.service.ts` |
+| `TEAM_NOT_FOUND` | 404 | Team not found | `modules/teams/teams.service.ts` |
+
+## UNION
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `UNION_NOT_FOUND` | 404 | Union not found | `modules/admin/admin.service.ts` |
+
+## UPAZILA
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `UPAZILA_NOT_FOUND` | 404 | Upazila not found | `modules/admin/admin.service.ts` |
+
 ## USER
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
+| `USER_ALREADY_DELETED` | 409 | Account already deleted | `modules/admin/admin.service.ts` |
 | `USER_ALREADY_SUSPENDED` | 409 | Already suspended | `modules/admin/admin.service.ts` |
 | `USER_DELETED` | 409 | That account was deleted | `modules/admin/admin.service.ts` |
-| `USER_NOT_FOUND` | 404 | User not found | `modules/admin/admin.service.ts` |
+| `USER_NOT_FOUND` | 404 | User not found | `modules/admin/admin.service.ts`, `modules/billing/billing.admin.ts`, `modules/billing/credits.service.ts` |
 | `USER_NOT_SUSPENDED` | 409 | That user isn't suspended | `modules/admin/admin.service.ts` |
 | `USER_PHONE_LOCKED` | 409 | Your number is used to sign in; change it by verifying a new one | `modules/users/users.service.ts` |
 | `USER_PHONE_TAKEN` | 409 | That phone number is already in use | `modules/users/users.service.ts` |
@@ -232,3 +367,11 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `VALIDATION_ERROR` | 422 | Request validation failed (details lists each field) | `(shared middleware)` |
+
+## VERIFICATION
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `VERIFICATION_ALREADY_REVIEWED` | 409 | Already… | `modules/verification/verification.service.ts` |
+| `VERIFICATION_NOT_FOUND` | 404 | Verification request not found | `modules/verification/verification.service.ts` |
+| `VERIFICATION_PENDING` | 409 | You already have a request waiting for review | `modules/verification/verification.service.ts` |

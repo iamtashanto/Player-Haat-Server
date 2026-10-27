@@ -4,6 +4,8 @@ import { created, ok, valid } from "../../lib/http.js";
 import { authUser, requireRole } from "../../middlewares/auth.js";
 import { validate } from "../../middlewares/validate.js";
 import * as s from "./recruiters.schema.js";
+import * as verification from "../verification/verification.service.js";
+import * as vs from "../verification/verification.schema.js";
 import * as svc from "./recruiters.service.js";
 
 type B<T extends z.ZodType> = z.infer<T>;
@@ -21,6 +23,11 @@ recruitersRoutes.post("/me", validate({ body: s.createRecruiterBody }), async (r
 recruitersRoutes.patch("/me", validate({ body: s.updateRecruiterBody }), async (req, res) => {
   ok(res, await svc.updateRecruiterProfile(me(req), valid<B<typeof s.updateRecruiterBody>>(req).body));
 });
+
+recruitersRoutes.post("/me/verification", validate({ body: vs.submitRecruiterBody }), async (req, res) => {
+  created(res, await verification.submitRecruiter(me(req), valid<B<typeof vs.submitRecruiterBody>>(req).body));
+});
+recruitersRoutes.get("/me/verification", async (req, res) => ok(res, await verification.latestRecruiter(me(req))));
 
 recruitersRoutes.get("/:id", validate({ params: s.recruiterParams }), async (req, res) => {
   ok(res, await svc.getPublicRecruiter(valid<unknown, B<typeof s.recruiterParams>>(req).params.id));

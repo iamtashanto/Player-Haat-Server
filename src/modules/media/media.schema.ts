@@ -3,7 +3,7 @@ import { z } from "../../lib/zod.js";
 
 const binary = z.string().openapi({ type: "string", format: "binary" });
 
-export const uploadBody = z.object({ type: z.enum(["avatar", "player-photo", "team-logo"]) });
+export const uploadBody = z.object({ type: z.enum(["avatar", "player-photo", "team-logo", "verification-doc"]) });
 export const deleteImageBody = z.object({ publicId: z.string().min(10).max(300) });
 
 export const UploadedImageSchema = z.object({

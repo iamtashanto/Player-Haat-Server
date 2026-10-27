@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { requireAppUser } from "./middlewares/auth.js";
 import { createApiLimits } from "./middlewares/rate-limit.js";
+import { adminExtraRoutes } from "./modules/admin/admin-extra.routes.js";
 import { adminRoutes } from "./modules/admin/admin.routes.js";
+import { billingRoutes } from "./modules/billing/billing.routes.js";
+import { chatRoutes } from "./modules/chat/chat.routes.js";
+import { invitesRoutes } from "./modules/invites/invites.routes.js";
+import { shortlistRoutes } from "./modules/shortlist/shortlist.routes.js";
+import { teamsRoutes } from "./modules/teams/teams.routes.js";
 import { appConfigRoutes } from "./modules/app-config/app-config.routes.js";
 import { applicationsRoutes, requestApplicationsRoutes } from "./modules/applications/applications.routes.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
@@ -45,6 +51,12 @@ apiRouter.use("/applications", requireAppUser, applicationsRoutes);
 apiRouter.use("/notifications", requireAppUser, notificationsRoutes);
 apiRouter.use("/ratings", requireAppUser, ratingsRoutes);
 apiRouter.use("/reports", requireAppUser, reportsRoutes);
+apiRouter.use("/billing", requireAppUser, billingRoutes);
+apiRouter.use("/invites", requireAppUser, invitesRoutes);
+apiRouter.use("/shortlist", requireAppUser, shortlistRoutes);
+apiRouter.use("/conversations", requireAppUser, chatRoutes);
+apiRouter.use("/teams", requireAppUser, teamsRoutes);
 
 // The dashboard's API: ADMIN only (its own login lives inside this router).
 apiRouter.use("/admin", adminRoutes);
+apiRouter.use("/admin", adminExtraRoutes); // verification, payments, credits, chat reports (same ADMIN-only guard)

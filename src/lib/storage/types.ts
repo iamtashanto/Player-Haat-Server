@@ -1,5 +1,5 @@
 /** What an image is for — decides folder, size and crop. */
-export type ImageKind = "avatar" | "player-photo" | "team-logo";
+export type ImageKind = "avatar" | "player-photo" | "team-logo" | "verification-doc";
 
 export interface StoredImage {
   /** Delivery URL (https, auto format/quality). Always derived server-side, never taken from a client. */

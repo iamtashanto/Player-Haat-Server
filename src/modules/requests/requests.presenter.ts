@@ -18,6 +18,8 @@ export interface ViewerContext {
   myApplications?: Map<string, { id: string; status: "PENDING" | "ACCEPTED" | "REJECTED" | "WITHDRAWN" }>;
   /** requestId → pending applicant count (owner views). */
   pendingCounts?: Map<string, number>;
+  /** requestId → how many are interested/applied, plus a few visible players (events). */
+  interest?: Map<string, { count: number; preview: { profileId: string; name: string; avatarUrl: string | null }[] }>;
 }
 
 /** The creator's user id is deliberately not exposed — `isOwner` tells the app what it needs. */
@@ -38,6 +40,10 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
     budgetMin: r.budgetMin,
     budgetMax: r.budgetMax,
     notes: r.notes,
+    kind: r.kind,
+    title: r.title,
+    boostedUntil: r.boostedUntil && r.boostedUntil.getTime() > Date.now() ? r.boostedUntil.toISOString() : null,
+    interested: ctx.interest?.get(r.id) ?? { count: 0, preview: [] },
     team: r.team,
     captain: {
       name: r.createdBy.name,

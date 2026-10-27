@@ -348,11 +348,11 @@ describe("audit log", () => {
 
 describe("app config (admin)", () => {
   it("reads all values with defaults and sets valid ones", async () => {
-    expect((await get(admin.auth, "/admin/app-config")).body.data).toEqual({ ads_enabled: false, boost_enabled: false, min_app_version: "0.0.0" });
+    expect((await get(admin.auth, "/admin/app-config")).body.data).toEqual({ ads_enabled: false, boost_enabled: false, min_app_version: "0.0.0", contact_credits_enabled: false, contact_free_per_day: 5, contact_credit_cost: 1, boost_credit_cost: 10, boost_hours: 48 });
     const res = await put(admin.auth, "/admin/app-config/min_app_version", { value: "1.4.0" });
     expect(res.body.data.min_app_version).toBe("1.4.0");
     await put(admin.auth, "/admin/app-config/ads_enabled", { value: true });
-    expect((await api().get(`${V1}/app-config`)).body.data).toEqual({ flags: { ads_enabled: true, boost_enabled: false }, minAppVersion: "1.4.0" });
+    expect((await api().get(`${V1}/app-config`)).body.data).toMatchObject({ flags: { ads_enabled: true, boost_enabled: false }, minAppVersion: "1.4.0" });
   });
 
   it("rejects unknown keys, wrong types and malformed versions — and extra body fields", async () => {

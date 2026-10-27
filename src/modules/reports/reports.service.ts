@@ -29,6 +29,12 @@ async function assertReportable(userId: string, t: Pick<Body, "targetType" | "ta
       if (team.captainId === userId) throw own();
       return;
     }
+    case "CONVERSATION": {
+      // Only a participant can report a conversation, and the moderator reads it only because of that report.
+      const c = await prisma.conversation.findFirst({ where: { id: t.targetId, OR: [{ recruiterId: userId }, { playerId: userId }] }, select: { id: true } });
+      if (!c) throw missing();
+      return;
+    }
     case "RATING": {
       const r = await prisma.rating.findUnique({ where: { id: t.targetId }, select: { raterId: true } });
       if (!r) throw missing();

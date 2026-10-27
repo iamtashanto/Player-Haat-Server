@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertValidLocation } from "../locations/location.service.js";
+import { shortlistedAmong } from "../shortlist/shortlist.service.js";
 import { toMyProfile, toPublicProfile, profileInclude, type FullProfile } from "./players.presenter.js";
 import { MAX_ACHIEVEMENTS, type addAchievementBody, type addSportBody, type createProfileBody, type updateProfileBody, type updateSportBody } from "./players.schema.js";
 import { parseStats } from "./sport-stats.js";
@@ -31,6 +32,7 @@ export async function createProfile(userId: string, input: z.infer<typeof create
         upazilaId: input.upazilaId,
         unionId: input.unionId ?? null,
         isVisible: input.isVisible ?? true,
+        ...(input.contactVisibility && { contactVisibility: input.contactVisibility }),
       },
       include: profileInclude,
     });
@@ -58,6 +60,7 @@ export async function updateProfile(userId: string, patch: z.infer<typeof update
     data: {
       ...(patch.bio !== undefined && { bio: patch.bio }),
       ...(patch.isVisible !== undefined && { isVisible: patch.isVisible }),
+      ...(patch.contactVisibility !== undefined && { contactVisibility: patch.contactVisibility }),
       districtId,
       upazilaId,
       unionId,
@@ -69,13 +72,14 @@ export async function updateProfile(userId: string, patch: z.infer<typeof update
 }
 
 /** Public view: only visible profiles of active users. Hidden ones are indistinguishable from missing. */
-export async function getPublicProfile(profileId: string) {
+export async function getPublicProfile(profileId: string, viewerId?: string) {
   const profile = await prisma.playerProfile.findFirst({
     where: { id: profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE", role: "PLAYER" } },
     include: profileInclude,
   });
   if (!profile) throw AppError.notFound(NOT_FOUND, "Player not found");
-  return toPublicProfile(profile);
+  const saved = viewerId ? await shortlistedAmong(viewerId, [profile.id]) : new Set<string>();
+  return toPublicProfile(profile, saved.has(profile.id));
 }
 
 // ─────────────────────────── sports ───────────────────────────
@@ -125,6 +129,12 @@ function normalizeAvailability(a: Record<string, string[] | undefined> | null | 
   }
   return Object.keys(out).length ? out : null;
 }
+
+/** Key order isn't meaningful (Postgres reorders JSON keys), so compare by sorted entries. */
+const sameStats = (a: Record<string, number> | null, b: Record<string, number> | null) => {
+  const norm = (o: Record<string, number> | null) => JSON.stringify(Object.entries(o ?? {}).sort(([x], [y]) => x.localeCompare(y)));
+  return norm(a) === norm(b);
+};
 
 const toDb = (v: Prisma.InputJsonValue | null) => (v === null ? Prisma.DbNull : v);
 /** Json columns need DbNull (not null) to clear; everything else in SportState maps straight onto the row. */
@@ -204,7 +214,9 @@ export async function updateSport(userId: string, sportId: number, patch: z.infe
   };
   validateSportState(existing.sport, state);
 
-  await prisma.playerSport.update({ where: { id: existing.id }, data: toRow(state) });
+  // Verified numbers must stay the numbers an admin checked: changing them removes the mark.
+  const statsChanged = patch.stats !== undefined && !sameStats(state.stats, existing.stats as Record<string, number> | null);
+  await prisma.playerSport.update({ where: { id: existing.id }, data: { ...toRow(state), ...(statsChanged && { statsVerifiedAt: null }) } });
   await touch(profileId);
   return getMyProfile(userId);
 }

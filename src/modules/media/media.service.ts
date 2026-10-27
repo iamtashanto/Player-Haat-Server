@@ -20,11 +20,12 @@ export function uploadOwnedImage(userId: string, kind: ImageKind, buffer: Buffer
 export async function deleteOwnedImage(userId: string, publicId: string): Promise<void> {
   if (!isOwnedBy(userId, publicId)) throw AppError.forbidden("MEDIA_NOT_OWNED", "That image is not yours");
 
-  const [asAvatar, asPhoto] = await Promise.all([
+  const [asAvatar, asPhoto, asEvidence] = await Promise.all([
     prisma.user.findFirst({ where: { avatarPublicId: publicId }, select: { id: true } }),
     prisma.playerMedia.findFirst({ where: { publicId }, select: { id: true } }),
+    prisma.$queryRaw<{ id: string }[]>`SELECT id FROM "VerificationRequest" WHERE "evidenceImages" @> ${JSON.stringify([{ publicId }])}::jsonb LIMIT 1`,
   ]);
-  if (asAvatar || asPhoto) {
+  if (asAvatar || asPhoto || asEvidence.length > 0) {
     throw AppError.conflict("MEDIA_IN_USE", "Remove the image from your profile first");
   }
   await storage.deleteImage(publicId);

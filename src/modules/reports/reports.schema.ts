@@ -3,12 +3,12 @@ import { z } from "../../lib/zod.js";
 
 export const REPORT_REASONS = ["FAKE_PROFILE", "HARASSMENT", "SPAM", "SCAM_OR_PAYMENT", "INAPPROPRIATE_CONTENT", "FALSE_NO_SHOW", "OTHER"] as const;
 /** What a client can report. People are reported through their profile or request — user ids are never exposed. */
-export const REPORTABLE = ["PLAYER_PROFILE", "REQUEST", "TEAM", "RATING"] as const;
+export const REPORTABLE = ["PLAYER_PROFILE", "REQUEST", "TEAM", "RATING", "CONVERSATION"] as const;
 
 export const createReportBody = z
   .strictObject({
     targetType: z.enum(REPORTABLE),
-    targetId: z.string().min(1).max(40).openapi({ description: "Profile id, request id, team id or rating id." }),
+    targetId: z.string().min(1).max(40).openapi({ description: "Profile id, request id, team id, rating id or conversation id." }),
     reason: z.enum(REPORT_REASONS),
     details: z.string().trim().max(500).nullable().optional(),
   })

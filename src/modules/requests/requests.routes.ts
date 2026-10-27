@@ -28,6 +28,9 @@ requestsRoutes.get("/mine", validate({ query: s.mineQuery }), async (req, res) =
   const { items, nextCursor } = await svc.myRequests(me(req), query);
   ok(res, items, { nextCursor, limit: query.limit });
 });
+requestsRoutes.get("/featured", feedLimiter, validate({ query: s.featuredQuery }), async (req, res) => {
+  ok(res, await svc.featured(me(req), valid<unknown, unknown, z.infer<typeof s.featuredQuery>>(req).query));
+});
 requestsRoutes.get("/", feedLimiter, validate({ query: s.feedQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof s.feedQuery>>(req);
   const { items, nextCursor } = await svc.feed(me(req), query);
@@ -38,6 +41,7 @@ requestsRoutes.get("/:id", validate({ params: s.requestParams }), async (req, re
 requestsRoutes.patch("/:id", mutateLimiter, validate({ params: s.requestParams, body: s.updateRequestBody }), async (req, res) => {
   ok(res, await svc.updateRequest(me(req), idOf(req), valid<z.infer<typeof s.updateRequestBody>>(req).body));
 });
+requestsRoutes.post("/:id/boost", mutateLimiter, validate({ params: s.requestParams }), async (req, res) => ok(res, await svc.boostRequest(me(req), idOf(req))));
 requestsRoutes.post("/:id/cancel", mutateLimiter, validate({ params: s.requestParams }), async (req, res) => ok(res, await svc.cancelRequest(me(req), idOf(req))));
 requestsRoutes.post("/:id/fill", mutateLimiter, validate({ params: s.requestParams }), async (req, res) => ok(res, await svc.fillRequest(me(req), idOf(req))));
 requestsRoutes.post("/:id/complete", mutateLimiter, validate({ params: s.requestParams }), async (req, res) => ok(res, await svc.completeRequest(me(req), idOf(req))));

@@ -28,6 +28,7 @@ export const createProfileBody = z.strictObject({
   upazilaId: intId,
   unionId: intId.nullable().optional(),
   isVisible: z.boolean().optional(),
+  contactVisibility: z.enum(["ON_TAP", "AFTER_ACCEPT"]).optional(),
 });
 export const updateProfileBody = z
   .strictObject({
@@ -36,6 +37,7 @@ export const updateProfileBody = z
     upazilaId: intId,
     unionId: intId.nullable(),
     isVisible: z.boolean(),
+    contactVisibility: z.enum(["ON_TAP", "AFTER_ACCEPT"]).openapi({ description: "ON_TAP (default): anyone signed in can tap to see your number. AFTER_ACCEPT: only people you've accepted." }),
   })
   .partial()
   .refine((b) => Object.keys(b).length > 0, "Send at least one field")
@@ -138,6 +140,7 @@ export const searchQuery = z
     minRating: z.coerce.number().min(0).max(5).optional().openapi({ description: "Excludes unrated players. With `sportId` it applies to that sport's own rating, otherwise to the overall one." }),
     minExperienceYears: z.coerce.number().int().min(0).max(60).optional().openapi({ description: "Matched against the same sport profile as the other sport-level filters." }),
     minSkillLevel: z.coerce.number().int().min(1).max(5).optional(),
+    statsVerified: z.stringbool().optional().openapi({ description: "true = only sport profiles whose stats an admin has verified." }),
     q: z.string().trim().min(2).max(60).optional().openapi({ description: "Part of the player's name." }),
     availabilityDay: z.enum(WEEKDAYS).optional(),
     sort: z.enum(["rating", "active"]).default("rating"),
@@ -166,6 +169,7 @@ const SportEntry = z.object({
   currentTeam: z.string().nullable(),
   stats: z.record(z.string(), z.number()).nullable(),
   rating: z.object({ average: z.number(), count: z.number().int() }),
+  statsVerified: z.boolean().openapi({ description: "An admin checked these stats against the player's evidence." }),
   achievements: z.array(z.object({ id: z.string(), title: z.string(), year: z.number().int().nullable(), description: z.string().nullable() })).optional(),
   preferredFoot: z.string().nullable().optional(),
   battingStyle: z.string().nullable().optional(),
@@ -184,6 +188,7 @@ const PlayerCard = z
     lastActiveAt: z.string().datetime(),
     location: Location,
     sports: z.array(SportEntry),
+    shortlisted: z.boolean().openapi({ description: "true when the signed-in recruiter has saved this player." }),
     matchedSportIds: z.array(z.number().int()).openapi({ description: "Search only: the sport profiles that satisfied the sport-level filters (empty when none were used)." }),
   })
   .openapi("PlayerCard");
@@ -193,7 +198,7 @@ const PlayerProfile = PlayerCard.extend({
   media: z.array(MediaItem),
   memberSince: z.string().datetime(),
 }).openapi("PlayerProfile");
-const MyProfile = PlayerProfile.extend({ isVisible: z.boolean(), hiddenByAdmin: z.boolean() }).openapi("MyPlayerProfile");
+const MyProfile = PlayerProfile.extend({ isVisible: z.boolean(), hiddenByAdmin: z.boolean(), contactVisibility: z.enum(["ON_TAP", "AFTER_ACCEPT"]) }).openapi("MyPlayerProfile");
 const binary = z.string().openapi({ type: "string", format: "binary" });
 
 const T = "Players";

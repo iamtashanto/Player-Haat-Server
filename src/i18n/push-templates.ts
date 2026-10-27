@@ -8,8 +8,12 @@ export interface PushParams {
   venue?: string;
   /** Match time; rendered in Asia/Dhaka. */
   when?: Date;
-  /** Display name of the other party (applicant / captain). */
+  /** Display name of the other party (applicant / captain / sender). */
   actor?: string;
+  /** A short piece of user text, e.g. the start of a chat message. */
+  text?: string;
+  /** Which outcome a SYSTEM notification reports; the copy lives here so it can be localized. */
+  code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED";
 }
 
 const fmt = (when: Date, locale: Locale) =>
@@ -61,7 +65,43 @@ const templates: Record<NotificationType, Template> = {
     title: l === "bn" ? "ম্যাচ কেমন ছিল? রেটিং দিন" : "How was the match? Leave a rating",
     body: line(p, l),
   }),
-  SYSTEM: (_p, l) => ({ title: "PlayerHaat", body: l === "bn" ? "নতুন বার্তা" : "New message" }),
+  INVITE_RECEIVED: (p, l) => ({
+    title: l === "bn" ? "আপনাকে আমন্ত্রণ জানানো হয়েছে" : "You've been invited",
+    body: [p.actor, line(p, l)].filter(Boolean).join(" · "),
+  }),
+  INVITE_ACCEPTED: (p, l) => ({
+    title: l === "bn" ? "আমন্ত্রণ গৃহীত হয়েছে 🎉" : "Invitation accepted 🎉",
+    body: p.actor ?? "",
+  }),
+  INVITE_DECLINED: (p, l) => ({
+    title: l === "bn" ? "আমন্ত্রণ গৃহীত হয়নি" : "Invitation declined",
+    body: p.actor ?? "",
+  }),
+  CONTACT_VIEWED: (p, l) => ({
+    title: l === "bn" ? "কেউ আপনার নম্বর দেখেছেন" : "Someone viewed your number",
+    body: p.actor ?? "",
+  }),
+  NEW_MESSAGE: (p, l) => ({ title: p.actor ?? (l === "bn" ? "নতুন বার্তা" : "New message"), body: p.text ?? "" }),
+  VERIFICATION_RESULT: (p, l) => ({
+    title: l === "bn" ? "ভেরিফিকেশন আপডেট" : "Verification update",
+    body:
+      p.code === "VERIFICATION_APPROVED"
+        ? l === "bn" ? "আপনার ভেরিফিকেশন অনুমোদিত হয়েছে ✓" : "Your verification was approved ✓"
+        : l === "bn" ? "আপনার ভেরিফিকেশন অনুমোদিত হয়নি" : "Your verification wasn't approved",
+  }),
+  TEAM_JOINED: (p, l) => ({
+    title: l === "bn" ? "দলে নতুন সদস্য" : "New team member",
+    body: p.actor ?? "",
+  }),
+  SYSTEM: (p, l) => ({
+    title: "PlayerHaat",
+    body:
+      p.code === "PAYMENT_APPROVED"
+        ? l === "bn" ? "আপনার পেমেন্ট নিশ্চিত হয়েছে, ক্রেডিট যোগ হয়েছে ✓" : "Payment confirmed — credits added ✓"
+        : p.code === "PAYMENT_REJECTED"
+          ? l === "bn" ? "আপনার পেমেন্ট যাচাই করা যায়নি" : "We couldn't verify your payment"
+          : l === "bn" ? "নতুন বার্তা" : "New message",
+  }),
 };
 
 export const renderPush = (type: NotificationType, params: PushParams, locale: Locale) => templates[type](params, locale);
@@ -74,6 +114,8 @@ export function paramsToData(p: PushParams): Record<string, string> {
     ...(p.venue && { venue: p.venue }),
     ...(p.when && { matchAt: p.when.toISOString() }),
     ...(p.actor && { actor: p.actor }),
+    ...(p.text && { text: p.text }),
+    ...(p.code && { code: p.code }),
   };
 }
 
@@ -84,5 +126,7 @@ export function paramsFromData(d: Record<string, unknown>): PushParams {
     venue: str("venue"),
     when: str("matchAt") ? new Date(str("matchAt")!) : undefined,
     actor: str("actor"),
+    text: str("text"),
+    code: str("code") as PushParams["code"],
   };
 }

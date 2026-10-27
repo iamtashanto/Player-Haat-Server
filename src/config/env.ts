@@ -65,6 +65,12 @@ const schema = z
     SMS_HTTP_URL_TEMPLATE: optionalString,
     /** Hard ceiling on OTP texts per rolling 24h across all users: a cost cap against SMS-pumping fraud. */
     SMS_DAILY_LIMIT: z.coerce.number().int().positive().default(2000),
+
+    // Credit top-ups by mobile banking: the number users send money to for each method. A method with no
+    // number configured isn't offered. (A payment-gateway integration would replace this later.)
+    PAYMENT_BKASH_NUMBER: optionalString,
+    PAYMENT_NAGAD_NUMBER: optionalString,
+    PAYMENT_ROCKET_NUMBER: optionalString,
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== "production") return;

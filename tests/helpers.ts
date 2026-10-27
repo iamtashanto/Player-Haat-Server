@@ -26,7 +26,11 @@ export async function resetDb() {
   fakeSms.reset();
   clearConfigCache();
   await prisma.$executeRawUnsafe(
-    `TRUNCATE "User","Division","Sport","AppConfig","VerificationCode" RESTART IDENTITY CASCADE`,
+    `TRUNCATE "User","Division","Sport","AppConfig","VerificationCode","CreditPack" RESTART IDENTITY CASCADE`,
+  );
+  // The migration seeds the starter credit packs; restore them so every test begins from the same catalogue.
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "CreditPack" ("id","code","credits","priceBdt","isActive","order") VALUES ('pack_starter','STARTER',10,99,true,1),('pack_plus','PLUS',30,249,true,2),('pack_pro','PRO',100,699,true,3)`,
   );
 }
 
@@ -303,3 +307,33 @@ export async function recruiterUser(w: World, email = "recruiter@example.com", o
 /** Signs in through the dashboard endpoint (the only way an admin gets a session). */
 export const adminLogin = (email = "admin@example.com", password = DEFAULT_USER.password) =>
   api().post(`${V1}/admin/auth/login`).send({ email, password });
+
+// ───────────────────────── Contact, credits, chat ─────────────────────────
+
+/** A published number for a user (users sign up without one). */
+export const withPhone = (userId: string, phone = "+8801712345678") => prisma.user.update({ where: { id: userId }, data: { phone } });
+
+/** Gives a user credits through the real ledger. */
+export async function giveCredits(userId: string, amount: number) {
+  const { grantCredits } = await import("../src/modules/billing/credits.service.js");
+  await prisma.$transaction((tx) => grantCredits(tx, userId, amount, "ADMIN_GRANT"));
+}
+
+/** Turns pay-per-contact on with explicit prices (the admin does this with /admin/app-config). */
+export async function setPricing(over: Partial<Record<"contact_credits_enabled" | "contact_free_per_day" | "contact_credit_cost" | "boost_enabled" | "boost_credit_cost" | "boost_hours", boolean | number>>) {
+  const { clearConfigCache } = await import("../src/modules/app-config/app-config.service.js");
+  for (const [key, value] of Object.entries(over)) {
+    await prisma.appConfig.upsert({ where: { key }, update: { value: value as never }, create: { key, value: value as never } });
+  }
+  clearConfigCache();
+}
+
+export const notificationsOf = async (userId: string, type?: string) => {
+  await settle();
+  return prisma.notification.findMany({ where: { userId, ...(type && { type: type as never }) }, orderBy: { createdAt: "asc" } });
+};
+
+/** An accepted invite between a recruiter and a player: the strongest "we agreed" relationship. */
+export async function acceptedInvite(recruiterUserId: string, profileId: string) {
+  return prisma.invite.create({ data: { recruiterId: recruiterUserId, profileId, status: "ACCEPTED", respondedAt: new Date() } });
+}

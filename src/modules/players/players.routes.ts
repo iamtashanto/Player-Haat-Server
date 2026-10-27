@@ -6,6 +6,10 @@ import { authUser, requireAuth, requireRole } from "../../middlewares/auth.js";
 import { imageUpload } from "../../middlewares/upload.js";
 import { validate } from "../../middlewares/validate.js";
 import { uploadLimiter } from "../media/media.routes.js";
+import * as contact from "../contact/contact.service.js";
+import { contactViewsQuery } from "../contact/contact.schema.js";
+import * as verification from "../verification/verification.service.js";
+import * as vs from "../verification/verification.schema.js";
 import * as media from "./player-media.service.js";
 import * as svc from "./players.service.js";
 import * as s from "./players.schema.js";
@@ -53,6 +57,20 @@ playersRoutes.delete("/me/sports/:sportId/achievements/:achievementId", validate
   ok(res, await svc.removeAchievement(me(req), params.sportId, params.achievementId));
 });
 
+playersRoutes.get("/me/contact-views", validate({ query: contactViewsQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, B<typeof contactViewsQuery>>(req);
+  const { items, nextCursor } = await contact.myContactViews(me(req), query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
+
+playersRoutes.post("/me/sports/:sportId/verification", validate({ params: vs.sportParams, body: vs.submitStatsBody }), async (req, res) => {
+  const { params, body } = valid<B<typeof vs.submitStatsBody>, B<typeof vs.sportParams>>(req);
+  created(res, await verification.submitStats(me(req), params.sportId, body));
+});
+playersRoutes.get("/me/sports/:sportId/verification", validate({ params: vs.sportParams }), async (req, res) => {
+  ok(res, await verification.latestStats(me(req), valid<unknown, B<typeof vs.sportParams>>(req).params.sportId));
+});
+
 playersRoutes.post("/me/media/photos", uploadLimiter, imageUpload("file"), async (req, res) => {
   created(res, await media.addPhoto(me(req), req.image!.buffer));
 });
@@ -72,6 +90,14 @@ playersRoutes.get("/", requireOnboardedRecruiter, searchLimiter, validate({ quer
   const { items, nextCursor } = await searchPlayers(me(req), query);
   ok(res, items, { nextCursor, limit: query.limit });
 });
+// Tapping "show number" (and the price check before it). Recruiters finish onboarding first, like search.
+const contactLimiter = createRateLimiter({ windowMs: 60 * 60 * 1000, limit: 120 });
+playersRoutes.get("/:id/contact", requireOnboardedRecruiter, validate({ params: s.profileParams }), async (req, res) => {
+  ok(res, await contact.contactStatus(me(req), valid<unknown, B<typeof s.profileParams>>(req).params.id));
+});
+playersRoutes.post("/:id/contact", requireOnboardedRecruiter, contactLimiter, validate({ params: s.profileParams }), async (req, res) => {
+  ok(res, await contact.revealContact(me(req), valid<unknown, B<typeof s.profileParams>>(req).params.id));
+});
 playersRoutes.get("/:id", requireOnboardedRecruiter, validate({ params: s.profileParams }), async (req, res) => {
-  ok(res, await svc.getPublicProfile(valid<unknown, B<typeof s.profileParams>>(req).params.id));
+  ok(res, await svc.getPublicProfile(valid<unknown, B<typeof s.profileParams>>(req).params.id, me(req)));
 });
