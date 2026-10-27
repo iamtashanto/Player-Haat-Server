@@ -31,11 +31,29 @@ export const STATS_SCHEMAS: Record<string, z.ZodType<Record<string, number>>> = 
 
 const DECIMAL_STATS = new Set(["battingAverage"]);
 
-/** What the app should render for a sport's stats form — derived from the validation schema above, so they can't drift. */
-export function statFieldsFor(sportCode: string): Array<{ key: string; decimal: boolean }> {
+/** Display names for every stat key above, in both app languages. A test fails if a schema key has no entry. */
+export const STAT_LABELS: Record<string, { nameEn: string; nameBn: string }> = {
+  matches: { nameEn: "Matches", nameBn: "ম্যাচ" },
+  goals: { nameEn: "Goals", nameBn: "গোল" },
+  assists: { nameEn: "Assists", nameBn: "অ্যাসিস্ট" },
+  cleanSheets: { nameEn: "Clean sheets", nameBn: "ক্লিন শিট" },
+  runs: { nameEn: "Runs", nameBn: "রান" },
+  wickets: { nameEn: "Wickets", nameBn: "উইকেট" },
+  highestScore: { nameEn: "Highest score", nameBn: "সর্বোচ্চ স্কোর" },
+  battingAverage: { nameEn: "Batting average", nameBn: "ব্যাটিং গড়" },
+};
+
+/** Every stat key any sport accepts. */
+export const allStatKeys = (): string[] => [...new Set([...Object.values(STATS_SCHEMAS).flatMap((s) => Object.keys((s as unknown as { shape: object }).shape)), "matches"])];
+
+/**
+ * What the app renders for a sport's stats form — derived from the validation schema above (so the form and
+ * the API can't drift), with labels so the app needs no translations of its own for stats.
+ */
+export function statFieldsFor(sportCode: string): Array<{ key: string; decimal: boolean; nameEn: string; nameBn: string }> {
   const schema = STATS_SCHEMAS[sportCode] as unknown as { shape?: Record<string, unknown> } | undefined;
   const keys = schema?.shape ? Object.keys(schema.shape) : ["matches"];
-  return keys.map((key) => ({ key, decimal: DECIMAL_STATS.has(key) }));
+  return keys.map((key) => ({ key, decimal: DECIMAL_STATS.has(key), nameEn: STAT_LABELS[key]?.nameEn ?? key, nameBn: STAT_LABELS[key]?.nameBn ?? key }));
 }
 
 /** Returns the cleaned stats (or null when there's nothing to store); throws a 422 on `stats` otherwise. */

@@ -9,6 +9,7 @@ import { locationsRoutes } from "./modules/locations/locations.routes.js";
 import { mediaRoutes } from "./modules/media/media.routes.js";
 import { notificationsRoutes } from "./modules/notifications/notifications.routes.js";
 import { playersRoutes } from "./modules/players/players.routes.js";
+import { recruiterTypesRoutes } from "./modules/recruiters/recruiter-types.routes.js";
 import { recruitersRoutes } from "./modules/recruiters/recruiters.routes.js";
 import { playerRatingsRoutes, ratingsRoutes, requestRatingsRoutes } from "./modules/ratings/ratings.routes.js";
 import { reportsRoutes } from "./modules/reports/reports.routes.js";
@@ -27,6 +28,7 @@ apiRouter.use(createApiLimits());
 apiRouter.use("/auth", authRoutes);
 apiRouter.use("/locations", locationsRoutes);
 apiRouter.use("/sports", sportsRoutes);
+apiRouter.use("/recruiter-types", recruiterTypesRoutes);
 apiRouter.use("/app-config", appConfigRoutes);
 
 // The mobile app's API. Mounted behind the role guard so a new router can't be exposed to admins by

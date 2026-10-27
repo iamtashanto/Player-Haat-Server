@@ -1,10 +1,11 @@
+import { RecruiterType } from "@prisma/client";
 import { registerRoute } from "../../lib/openapi.js";
 import { z } from "../../lib/zod.js";
 
 const intId = z.number().int().positive();
 export const MAX_RECRUITER_SPORTS = 10;
 
-const type = z.enum(["CLUB", "ACADEMY", "SCOUT", "AGENT", "ORGANIZER", "OTHER"]);
+const type = z.enum(Object.values(RecruiterType) as [RecruiterType, ...RecruiterType[]]); // one source of truth with the DB enum
 const organization = z.string().trim().min(1).max(100);
 const bio = z.string().trim().min(1).max(500);
 const sportIds = z.array(intId).min(1).max(MAX_RECRUITER_SPORTS).refine((a) => new Set(a).size === a.length, "Duplicate sport");

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { sniffImageType } from "../src/lib/image-sniff.js";
 import { normalizeBdPhone } from "../src/lib/phone.js";
+import { STAT_LABELS, allStatKeys } from "../src/modules/players/sport-stats.js";
 import { HEIC, JPEG, NOT_AN_IMAGE, PNG, WEBP } from "./images.js";
 import { V1, api, resetDb, seedWorld, type World } from "./helpers.js";
 
@@ -79,9 +80,28 @@ describe("sports", () => {
     expect(res.body.data[0].positions.map((p: { code: string }) => p.code)).toEqual(["GK", "CB", "CM", "ST"]);
     // the app builds each sport's stats form from this, so it must match what the API accepts
     expect(res.body.data[0].statFields).toEqual([
-      { key: "matches", decimal: false }, { key: "goals", decimal: false }, { key: "assists", decimal: false }, { key: "cleanSheets", decimal: false },
+      { key: "matches", decimal: false, nameEn: "Matches", nameBn: "ম্যাচ" },
+      { key: "goals", decimal: false, nameEn: "Goals", nameBn: "গোল" },
+      { key: "assists", decimal: false, nameEn: "Assists", nameBn: "অ্যাসিস্ট" },
+      { key: "cleanSheets", decimal: false, nameEn: "Clean sheets", nameBn: "ক্লিন শিট" },
     ]);
-    expect(res.body.data[1].statFields.find((f: { key: string }) => f.key === "battingAverage")).toEqual({ key: "battingAverage", decimal: true });
+    expect(res.body.data[1].statFields.find((f: { key: string }) => f.key === "battingAverage")).toMatchObject({ decimal: true, nameEn: "Batting average" });
+  });
+
+  it("labels every stat key in both languages, so the app never shows a raw key", () => {
+    for (const key of allStatKeys()) {
+      expect(STAT_LABELS[key], key).toBeDefined();
+      expect(STAT_LABELS[key]!.nameEn.length).toBeGreaterThan(0);
+      expect(STAT_LABELS[key]!.nameBn.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("lists recruiter types with display names, matching what the API accepts", async () => {
+    const res = await api().get(`${V1}/recruiter-types`);
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toMatch(/public/);
+    expect(res.body.data.map((t: { code: string }) => t.code)).toEqual(["CLUB", "ACADEMY", "SCOUT", "AGENT", "ORGANIZER", "OTHER"]);
+    for (const t of res.body.data) expect(t.nameEn && t.nameBn).toBeTruthy();
   });
 });
 

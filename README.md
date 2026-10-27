@@ -81,7 +81,7 @@ unless `DOCS_ENABLED=true`. 70+ endpoints; the groups:
 | **ratings** | two-way, 7-day window, no-show strikes, pending list, public reviews |
 | **notifications** | register FCM token, inbox, mark read |
 | **reports / admin** | report content; admin: users + role changes, player/recruiter directories, suspend, hide profile / sport profile / request, verified badges, report queue, platform stats, audit log, app config |
-| **reference** | `/locations/*` (division → union, bn/en search), `/sports`, `/app-config` (flags + min version) |
+| **reference** | `/locations/*` (division → union, bn/en search), `/sports` (positions + the stat fields each sport accepts, with bn/en labels), `/recruiter-types` (codes + bn/en labels), `/app-config` (flags + min version) |
 
 ### Roles & access control
 
@@ -95,7 +95,7 @@ unless `DOCS_ENABLED=true`. 70+ endpoints; the groups:
 * The role is read from the database on every request, never trusted from the token. Mobile routers are mounted behind `requireAppUser` in `src/routes.ts`, so a new router is closed to admins by default; stricter guards (`requirePlayer`, `requireRecruiter`) sit on the routes that need them.
 * Admin accounts can't use `/auth/login`, Google/Apple or phone sign-in (403 `AUTH_ADMIN_DASHBOARD_ONLY`); the dashboard signs in at `POST /admin/auth/login` (email + password, throttled, identical 401 for non-admins) and then uses `/auth/refresh`.
 * Recruiters must complete their profile before `GET /players` / `GET /players/:id` (403 `RECRUITER_PROFILE_REQUIRED`).
-* A **sport profile** is a `PlayerSport` row: unique per (player, sport), with its own positions, skill, experience, headline, current team, per-sport stats (shape validated per sport in `src/modules/players/sport-stats.ts`; self-declared, not verified), achievements (max 20), visibility switch, admin-hide flag and rating earned in that sport's matches. Adding a sport is a seed row, plus an optional stats entry.
+* A **sport profile** is a `PlayerSport` row: unique per (player, sport), with its own positions, skill, experience, headline, current team, per-sport stats (shape validated per sport in `src/modules/players/sport-stats.ts`; self-declared, not verified), achievements (max 20), visibility switch, admin-hide flag and rating earned in that sport's matches. Adding a sport is a seed row, plus an optional stats entry. The app builds each sport's stats form from `GET /sports` → `statFields` and takes recruiter types from `GET /recruiter-types`, both with bn/en labels, so new sports, stats and recruiter types need no app release (a test fails if a stat has no label; a missing recruiter-type label is a compile error).
 * Search known limits: the name filter `q` is an unindexed `ILIKE` (add `pg_trgm` if it gets hot); stats aren't filterable; player-to-player search still works for `PLAYER` accounts (captains use it).
 
 ### Conventions
