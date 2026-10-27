@@ -26,6 +26,7 @@ async function main() {
   const role = revoke ? "PLAYER" : "ADMIN";
   await prisma.user.update({ where: { id: user.id }, data: { role } });
   console.log(`${email}: ${user.role} → ${role}`);
+  if (!revoke) console.log("Admins sign in through the dashboard only and can no longer use the mobile app with this account.");
 }
 
 main().finally(() => prisma.$disconnect());

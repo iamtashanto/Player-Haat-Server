@@ -73,20 +73,36 @@ unless `DOCS_ENABLED=true`. 70+ endpoints; the groups:
 | Group | Highlights |
 |---|---|
 | **auth** | email + password · **phone OTP** · Google · Apple · refresh rotation · logout / logout-all · forgot/reset · link/unlink methods · delete account |
-| **users** | `GET/PATCH /users/me`, avatar upload, delete |
-| **players** | create/update my profile, sports (positions, khep, rate range, availability, travel radius), photos + video links, public profile, **search** (cursor-paginated) |
+| **users** | `GET/PATCH /users/me` (includes `role` and the next `onboardingStep`), avatar upload, delete |
+| **recruiters** | recruiter onboarding profile (`/recruiters/me`), public recruiter card |
+| **players** | create/update my profile, **sport profiles** (one per sport: positions, experience, headline, stats, achievements, own visibility and rating, khep, availability), photos + video links, public profile, **search** (cursor-paginated; says which sport profile matched) |
 | **requests** | create, edit, cancel, fill, complete, nearby feed, mine |
 | **applications** | apply, withdraw, applicants, accept/reject (atomic fill), mine |
 | **ratings** | two-way, 7-day window, no-show strikes, pending list, public reviews |
 | **notifications** | register FCM token, inbox, mark read |
-| **reports / admin** | report content; admin: users, suspend, hide profile/request, verified badge, report queue, audit log, app config |
+| **reports / admin** | report content; admin: users + role changes, player/recruiter directories, suspend, hide profile / sport profile / request, verified badges, report queue, platform stats, audit log, app config |
 | **reference** | `/locations/*` (division → union, bn/en search), `/sports`, `/app-config` (flags + min version) |
+
+### Roles & access control
+
+| Role | Where | Can |
+|---|---|---|
+| `PLAYER` | mobile app | own a player profile with one **sport profile per sport**, apply to requests, search/view players, post requests, rate |
+| `RECRUITER` | mobile app | finish recruiter onboarding (`/recruiters/me`), then search/view players, post requests, rate. Cannot create or edit player profiles, or apply |
+| `ADMIN` | dashboard only (`/api/v1/admin/*`, UI in `../web/admin`) | everything under `/admin`; **refused (403) on every mobile endpoint** |
+
+* Chosen once at sign-up (`role: PLAYER \| RECRUITER` on register / Google / Apple / phone verify; default `PLAYER`, applies to new accounts only). `ADMIN` is not accepted there. Admins are made with `npm run admin:grant` (shell access) and can't be created, changed or removed through the API.
+* The role is read from the database on every request, never trusted from the token. Mobile routers are mounted behind `requireAppUser` in `src/routes.ts`, so a new router is closed to admins by default; stricter guards (`requirePlayer`, `requireRecruiter`) sit on the routes that need them.
+* Admin accounts can't use `/auth/login`, Google/Apple or phone sign-in (403 `AUTH_ADMIN_DASHBOARD_ONLY`); the dashboard signs in at `POST /admin/auth/login` (email + password, throttled, identical 401 for non-admins) and then uses `/auth/refresh`.
+* Recruiters must complete their profile before `GET /players` / `GET /players/:id` (403 `RECRUITER_PROFILE_REQUIRED`).
+* A **sport profile** is a `PlayerSport` row: unique per (player, sport), with its own positions, skill, experience, headline, current team, per-sport stats (shape validated per sport in `src/modules/players/sport-stats.ts`; self-declared, not verified), achievements (max 20), visibility switch, admin-hide flag and rating earned in that sport's matches. Adding a sport is a seed row, plus an optional stats entry.
+* Search known limits: the name filter `q` is an unindexed `ILIKE` (add `pg_trgm` if it gets hot); stats aren't filterable; player-to-player search still works for `PLAYER` accounts (captains use it).
 
 ### Conventions
 
 * **Envelope.** Success `{ "data": …, "meta": { nextCursor, limit, … } }`; failure
   `{ "error": { "code", "message", "details" } }`. Clients translate `code` ([`docs/ERROR_CODES.md`](docs/ERROR_CODES.md),
-  87 codes, generated from the source and checked by a test) — `message` is for developers.
+  96 codes, generated from the source and checked by a test) — `message` is for developers.
 * **Auth.** `Authorization: Bearer <access JWT>` (15 min). Refresh tokens are opaque, single-use and rotated;
   replaying a used one revokes the whole session family. **Clients must serialize refreshes** (two parallel
   refreshes look like a replay and log the user out). Suspensions and role changes apply immediately — the

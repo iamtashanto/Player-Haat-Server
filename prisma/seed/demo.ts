@@ -86,9 +86,31 @@ export async function seedDemo(prisma: PrismaClient) {
         rateMax: p.sport.rateMax,
         availability: { fri: ["afternoon", "evening"], sat: ["morning"] },
         travelRadius: "UPAZILA",
+        headline: `Demo ${p.name} — reliable and punctual`,
+        experienceYears: p.sport.skillLevel + 1,
       },
     });
   }
+
+  // A recruiter who has finished onboarding, so search works out of the box with the demo logins.
+  const scout = await prisma.user.upsert({
+    where: { email: "scout@demo.playerhaat.test" },
+    update: {},
+    create: {
+      name: "Nasir Uddin",
+      email: "scout@demo.playerhaat.test",
+      emailVerifiedAt: new Date(),
+      locale: "bn",
+      role: "RECRUITER",
+      passwordHash,
+      authAccounts: { create: { provider: "EMAIL", providerUserId: "scout@demo.playerhaat.test" } },
+    },
+  });
+  await prisma.recruiterProfile.upsert({
+    where: { userId: scout.id },
+    update: {},
+    create: { userId: scout.id, type: "ACADEMY", organization: "Barishal Football Academy", districtId: home.districtId, sportIds: [football.id, cricket.id] },
+  });
 
   const captainId = users["Rakib Hasan"]!;
   const requests = [
