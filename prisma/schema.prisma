@@ -1,0 +1,642 @@
+// PlayerHaat — Prisma schema (PostgreSQL)
+//
+// Conventions
+//  - ids are cuid() strings for entities we create, Int for static reference data we seed
+//  - money is whole BDT (Int); all timestamps are UTC (timestamptz)
+//  - phone numbers are stored in E.164 (+8801XXXXXXXXX)
+//  - "…Code" columns on reference tables (Sport, Position, locations) are stable machine keys
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Locale {
+  bn
+  en
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum AuthProvider {
+  EMAIL
+  PHONE // reserved: phone-OTP login is not planned for v1 but kept so adding it needs no migration
+  GOOGLE
+  APPLE
+}
+
+enum VerificationType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+  PHONE_OTP
+}
+
+enum MediaType {
+  PHOTO
+  VIDEO_LINK
+}
+
+enum TravelRadius {
+  UNION
+  UPAZILA
+  DISTRICT
+}
+
+enum PreferredFoot {
+  LEFT
+  RIGHT
+  BOTH
+}
+
+enum BattingStyle {
+  RIGHT_HAND
+  LEFT_HAND
+}
+
+enum TeamMemberRole {
+  CAPTAIN
+  VICE_CAPTAIN
+  PLAYER
+}
+
+enum RequestStatus {
+  OPEN
+  FILLED
+  CANCELLED
+  COMPLETED
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum RatingDirection {
+  CAPTAIN_TO_PLAYER
+  PLAYER_TO_CAPTAIN
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
+enum NotificationType {
+  NEW_MATCHING_REQUEST
+  NEW_APPLICANT
+  APPLICATION_ACCEPTED
+  APPLICATION_REJECTED
+  REQUEST_CANCELLED
+  REQUEST_UPDATED
+  APPLICATION_WITHDRAWN
+  RATING_REMINDER
+  SYSTEM
+}
+
+enum ReportTargetType {
+  USER
+  PLAYER_PROFILE
+  REQUEST
+  TEAM
+  RATING
+}
+
+enum AdminActionType {
+  USER_SUSPEND
+  USER_UNSUSPEND
+  PROFILE_HIDE
+  PROFILE_UNHIDE
+  PROFILE_VERIFY
+  PROFILE_UNVERIFY
+  REQUEST_HIDE
+  REQUEST_UNHIDE
+  REPORT_RESOLVE
+  REPORT_DISMISS
+  CONFIG_SET
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Identity & auth
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id              String     @id @default(cuid())
+  name            String
+  email           String?    @unique // lower-cased; Apple private-relay addresses allowed
+  emailVerifiedAt DateTime?
+  phone           String?    @unique // E.164
+  phoneVerifiedAt DateTime?
+  passwordHash    String? // null for users who only use social login
+  avatarUrl       String?
+  avatarPublicId  String? // Cloudinary public id, needed to delete the old avatar
+  locale          Locale     @default(bn)
+  role            UserRole   @default(USER)
+  status          UserStatus @default(ACTIVE)
+  birthYear       Int?
+  deletedAt       DateTime?
+
+  // Captain-side reputation (players rate captains too). Player-side lives on PlayerProfile.
+  captainAvgRating   Float @default(0)
+  captainRatingCount Int   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authAccounts      AuthAccount[]
+  refreshTokens     RefreshToken[]
+  verificationCodes VerificationCode[]
+  playerProfile     PlayerProfile?
+  teamsCaptained    Team[]             @relation("TeamCaptain")
+  teamMemberships   TeamMember[]
+  requestsCreated   PlayerRequest[]
+  applications      Application[]
+  ratingsGiven      Rating[]           @relation("RatingRater")
+  ratingsReceived   Rating[]           @relation("RatingRatee")
+  deviceTokens      DeviceToken[]
+  notifications     Notification[]
+  reportsFiled      Report[]           @relation("ReportReporter")
+  reportsResolved   Report[]           @relation("ReportResolver")
+  adminActions      AdminAction[]
+
+  @@index([status])
+}
+
+model AuthAccount {
+  id             String       @id @default(cuid())
+  userId         String
+  provider       AuthProvider
+  // EMAIL: the lower-cased email · GOOGLE: `sub` · APPLE: `sub` · PHONE: E.164 number
+  providerUserId String
+  createdAt      DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+model RefreshToken {
+  id           String    @id @default(cuid())
+  userId       String
+  tokenHash    String    @unique // sha256 of the opaque token; the raw token is never stored
+  // All tokens descended from one login share a family. Reuse of a rotated token revokes the family.
+  familyId     String
+  deviceId     String?
+  userAgent    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?   @unique
+  createdAt    DateTime  @default(now())
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy RefreshToken? @relation("TokenRotation", fields: [replacedById], references: [id])
+  replaces   RefreshToken? @relation("TokenRotation")
+
+  @@index([userId, deviceId])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+model VerificationCode {
+  id         String           @id @default(cuid())
+  userId     String?
+  type       VerificationType
+  target     String // email address or E.164 phone
+  codeHash   String
+  attempts   Int              @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([type, target, createdAt])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Locations — Division → District → Upazila → Union (seeded, read-only at runtime)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Division {
+  id     Int     @id @default(autoincrement())
+  code   String? @unique // BBS geocode when known (filled by the full dataset)
+  nameBn String
+  nameEn String
+  slug   String  @unique
+
+  districts District[]
+}
+
+model District {
+  id         Int     @id @default(autoincrement())
+  code       String? @unique // BBS geocode when known (filled by the full dataset)
+  divisionId Int
+  nameBn     String
+  nameEn     String
+  slug       String
+  lat        Float?
+  lng        Float?
+
+  division Division        @relation(fields: [divisionId], references: [id])
+  upazilas Upazila[]
+  profiles PlayerProfile[]
+  requests PlayerRequest[]
+  teams    Team[]
+
+  @@unique([divisionId, slug])
+  @@index([nameEn])
+}
+
+model Upazila {
+  id         Int     @id @default(autoincrement())
+  code       String? @unique // BBS geocode when known (filled by the full dataset)
+  districtId Int
+  nameBn     String
+  nameEn     String
+  slug       String
+  lat        Float?
+  lng        Float?
+
+  district District        @relation(fields: [districtId], references: [id])
+  unions   Union[]
+  profiles PlayerProfile[]
+  requests PlayerRequest[]
+  teams    Team[]
+
+  @@unique([districtId, slug])
+  @@index([nameEn])
+}
+
+model Union {
+  id        Int     @id @default(autoincrement())
+  code      String? @unique // BBS geocode when known (filled by the full dataset)
+  upazilaId Int
+  nameBn    String
+  nameEn    String
+  slug      String
+
+  upazila  Upazila         @relation(fields: [upazilaId], references: [id])
+  profiles PlayerProfile[]
+  requests PlayerRequest[]
+  teams    Team[]
+
+  @@unique([upazilaId, slug])
+  @@index([nameEn])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sports catalogue
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Sport {
+  id       Int     @id @default(autoincrement())
+  code     String  @unique // FOOTBALL, CRICKET — a string (not enum) so adding BADMINTON is just a seed row
+  nameBn   String
+  nameEn   String
+  isActive Boolean @default(true)
+
+  positions    Position[]
+  playerSports PlayerSport[]
+  teams        Team[]
+  requests     PlayerRequest[]
+}
+
+model Position {
+  id      Int    @id @default(autoincrement())
+  sportId Int
+  code    String // GK, CB, … / BATTER, BOWLER, …
+  nameBn  String
+  nameEn  String
+  order   Int    @default(0)
+
+  sport Sport @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@unique([sportId, code])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Players
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PlayerProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  bio             String?
+  // Home location. District + upazila are required so every profile is searchable by area.
+  districtId      Int
+  upazilaId       Int
+  unionId         Int?
+  isVisible       Boolean   @default(true) // player's own switch; admin hiding sets this false too
+  verifiedBadge   Boolean   @default(false)
+  // Set by an admin; unlike isVisible (the player's own switch) the player cannot clear it.
+  hiddenByAdminAt DateTime?
+
+  avgRating    Float    @default(0)
+  ratingCount  Int      @default(0)
+  noShowCount  Int      @default(0)
+  lastActiveAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district District      @relation(fields: [districtId], references: [id])
+  upazila  Upazila       @relation(fields: [upazilaId], references: [id])
+  union    Union?        @relation(fields: [unionId], references: [id])
+  sports   PlayerSport[]
+  media    PlayerMedia[]
+
+  // Player search: filter by place, then walk the sort order — each index ends in `id`, the unique
+  // tie-breaker the keyset cursor uses, so Postgres never has to sort. (Without the location-first
+  // ones it walked the NATIONAL rating index and threw away 43k rows to fill a page for one upazila.)
+  @@index([upazilaId, avgRating(sort: Desc), ratingCount(sort: Desc), id])
+  @@index([districtId, avgRating(sort: Desc), ratingCount(sort: Desc), id])
+  @@index([upazilaId, lastActiveAt(sort: Desc), id])
+  @@index([districtId, lastActiveAt(sort: Desc), id])
+  @@index([avgRating(sort: Desc), ratingCount(sort: Desc), id])
+  @@index([lastActiveAt(sort: Desc), id])
+  @@index([unionId])
+}
+
+model PlayerSport {
+  id            String         @id @default(cuid())
+  profileId     String
+  sportId       Int
+  positions     String[] // Position.code values; validated against the Position table in the service layer
+  preferredFoot PreferredFoot? // football
+  battingStyle  BattingStyle? // cricket
+  skillLevel    Int // 1–5 self-declared (range enforced by Zod; CHECK constraint added in the migration)
+  khepAvailable Boolean        @default(false) // available for paid one-off matches ("khep")
+  rateMin       Int? // BDT per match
+  rateMax       Int?
+  // e.g. { "mon": ["morning","evening"], "fri": ["afternoon"] } — shape validated by Zod
+  availability  Json?
+  travelRadius  TravelRadius   @default(UPAZILA)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  sport   Sport         @relation(fields: [sportId], references: [id])
+
+  @@unique([profileId, sportId])
+  @@index([sportId, khepAvailable])
+  @@index([sportId, skillLevel])
+  @@index([positions], type: Gin)
+}
+
+model PlayerMedia {
+  id        String    @id @default(cuid())
+  profileId String
+  type      MediaType
+  url       String
+  publicId  String? // Cloudinary public id (PHOTO only)
+  order     Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, order])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Teams
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Team {
+  id           String   @id @default(cuid())
+  name         String
+  sportId      Int
+  districtId   Int
+  upazilaId    Int
+  unionId      Int?
+  captainId    String
+  logoUrl      String?
+  logoPublicId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sport    Sport           @relation(fields: [sportId], references: [id])
+  district District        @relation(fields: [districtId], references: [id])
+  upazila  Upazila         @relation(fields: [upazilaId], references: [id])
+  union    Union?          @relation(fields: [unionId], references: [id])
+  captain  User            @relation("TeamCaptain", fields: [captainId], references: [id])
+  members  TeamMember[]
+  requests PlayerRequest[]
+
+  @@index([captainId])
+  @@index([sportId, upazilaId])
+}
+
+model TeamMember {
+  id       String         @id @default(cuid())
+  teamId   String
+  userId   String
+  role     TeamMemberRole @default(PLAYER)
+  joinedAt DateTime       @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Player needed" requests & applications
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PlayerRequest {
+  id              String        @id @default(cuid())
+  createdById     String
+  teamId          String?
+  sportId         Int
+  matchAt         DateTime
+  venueText       String
+  districtId      Int
+  upazilaId       Int
+  unionId         Int?
+  positionsNeeded String[] // Position.code values
+  playersNeeded   Int           @default(1)
+  playersAccepted Int           @default(0) // maintained transactionally when applications are accepted
+  budgetMin       Int?
+  budgetMax       Int?
+  isPaid          Boolean       @default(false)
+  notes           String?
+  status          RequestStatus @default(OPEN)
+  isHidden        Boolean       @default(false) // admin moderation
+  completedAt     DateTime? // starts the 7-day rating window
+  boostedUntil    DateTime? // reserved for paid boost; unused for now
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy    User          @relation(fields: [createdById], references: [id])
+  team         Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  sport        Sport         @relation(fields: [sportId], references: [id])
+  district     District      @relation(fields: [districtId], references: [id])
+  upazila      Upazila       @relation(fields: [upazilaId], references: [id])
+  union        Union?        @relation(fields: [unionId], references: [id])
+  applications Application[]
+  ratings      Rating[]
+
+  @@index([status, matchAt])
+  @@index([upazilaId, status, matchAt])
+  @@index([districtId, status, matchAt])
+  @@index([sportId, status, matchAt])
+  @@index([createdById, createdAt(sort: Desc)])
+  @@index([status, completedAt]) // rating-reminder job and rating windows
+  @@index([positionsNeeded], type: Gin)
+}
+
+model Application {
+  id           String            @id @default(cuid())
+  requestId    String
+  playerId     String // User.id of the applicant
+  proposedRate Int?
+  message      String?
+  status       ApplicationStatus @default(PENDING)
+  respondedAt  DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  request PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  player  User          @relation(fields: [playerId], references: [id])
+
+  @@unique([requestId, playerId])
+  @@index([playerId, status])
+  @@index([requestId, status])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ratings
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Rating {
+  id        String          @id @default(cuid())
+  requestId String
+  raterId   String
+  rateeId   String
+  direction RatingDirection
+  // CAPTAIN_TO_PLAYER: { skill, punctuality, behavior }   PLAYER_TO_CAPTAIN: { payment, behavior, organization }
+  // each 1–5. Shape enforced by Zod per direction.
+  scores    Json
+  overall   Float // mean of `scores`, stored so aggregates are a cheap AVG()
+  comment   String?
+  noShow    Boolean         @default(false) // only valid for CAPTAIN_TO_PLAYER
+  createdAt DateTime        @default(now())
+
+  request PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  rater   User          @relation("RatingRater", fields: [raterId], references: [id])
+  ratee   User          @relation("RatingRatee", fields: [rateeId], references: [id])
+
+  @@unique([requestId, raterId, rateeId])
+  @@index([rateeId, direction])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DeviceToken {
+  id         String         @id @default(cuid())
+  userId     String
+  token      String         @unique // FCM registration token
+  platform   DevicePlatform
+  lastSeenAt DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  data      Json // deep-link payload, e.g. { requestId, applicationId }
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, readAt])
+  @@index([createdAt]) // retention purge
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Moderation & config
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Report {
+  id           String           @id @default(cuid())
+  reporterId   String
+  targetType   ReportTargetType
+  targetId     String
+  reason       String
+  details      String?
+  status       ReportStatus     @default(OPEN)
+  resolvedById String?
+  resolvedAt   DateTime?
+  resolution   String?
+  createdAt    DateTime         @default(now())
+
+  reporter   User  @relation("ReportReporter", fields: [reporterId], references: [id])
+  resolvedBy User? @relation("ReportResolver", fields: [resolvedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+}
+
+model AppConfig {
+  key       String   @id // ads_enabled, boost_enabled, min_app_version, …
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+/// Append-only trail of moderator actions: who did what to whom, and why.
+model AdminAction {
+  id         String          @id @default(cuid())
+  adminId    String
+  action     AdminActionType
+  targetType String // USER | PLAYER_PROFILE | REQUEST | REPORT | CONFIG
+  targetId   String
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime        @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([targetType, targetId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([adminId])
+}

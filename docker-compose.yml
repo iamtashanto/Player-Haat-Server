@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: playerhaat-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: playerhaat
+      POSTGRES_PASSWORD: playerhaat
+      POSTGRES_DB: playerhaat
+    ports:
+      - "5442:5432" # unusual host port so it never clashes with a local Postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U playerhaat -d playerhaat"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Throwaway DB used only by the test suite (tmpfs = fast, nothing persisted).
+  db-test:
+    image: postgres:17-alpine
+    container_name: playerhaat-db-test
+    environment:
+      POSTGRES_USER: playerhaat
+      POSTGRES_PASSWORD: playerhaat
+      POSTGRES_DB: playerhaat_test
+    ports:
+      - "5443:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    profiles: ["test"]
+
+volumes:
+  pgdata:

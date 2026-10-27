@@ -1,0 +1,554 @@
+
+===== search: national, no filters, by rating =====
+Limit  (cost=6.95..20.98 rows=21 width=27) (actual time=11.473..11.477 rows=21.00 loops=1)
+  Buffers: shared hit=387 read=130
+  ->  Incremental Sort  (cost=6.95..56311.42 rows=84270 width=27) (actual time=11.472..11.474 rows=21.00 loops=1)
+        Sort Key: p."avgRating" DESC, p."ratingCount" DESC, p.id
+        Presorted Key: p."avgRating", p."ratingCount"
+        Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 27kB  Peak Memory: 27kB
+        Pre-sorted Groups: 1  Sort Method: top-N heapsort  Average Memory: 27kB  Peak Memory: 27kB
+        Buffers: shared hit=387 read=130
+        ->  Nested Loop  (cost=0.83..53718.43 rows=84270 width=27) (actual time=0.412..11.010 rows=97.00 loops=1)
+              Buffers: shared hit=375 read=130
+              ->  Index Scan using "PlayerProfile_avgRating_ratingCount_idx" on "PlayerProfile" p  (cost=0.42..8027.68 rows=85090 width=34) (actual time=0.267..0.931 rows=100.00 loops=1)
+                    Filter: ("isVisible" AND ("hiddenByAdminAt" IS NULL) AND ("userId" <> 'bu1'::text))
+                    Rows Removed by Filter: 6
+                    Index Searches: 1
+                    Buffers: shared hit=61 read=44
+              ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..0.54 rows=1 width=7) (actual time=0.100..0.100 rows=0.97 loops=100)
+                    Index Cond: (id = p."userId")
+                    Filter: (status = 'ACTIVE'::"UserStatus")
+                    Rows Removed by Filter: 0
+                    Index Searches: 100
+                    Buffers: shared hit=314 read=86
+Planning:
+  Buffers: shared hit=275 read=11
+Planning Time: 3.043 ms
+Execution Time: 11.527 ms
+
+===== search: hot upazila, football GK + khep =====
+Limit  (cost=1157.89..4415.22 rows=21 width=27) (actual time=180.319..181.594 rows=21.00 loops=1)
+  Buffers: shared hit=66125 read=1939 written=1563
+  ->  Incremental Sort  (cost=1157.89..16824.10 rows=101 width=27) (actual time=180.318..181.591 rows=21.00 loops=1)
+        Sort Key: p."avgRating" DESC, p."ratingCount" DESC, p.id
+        Presorted Key: p."avgRating", p."ratingCount"
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 26kB  Peak Memory: 26kB
+        Buffers: shared hit=66125 read=1939 written=1563
+        ->  Gather Merge  (cost=1001.26..16819.56 rows=101 width=27) (actual time=179.659..181.574 rows=22.00 loops=1)
+              Workers Planned: 1
+              Workers Launched: 1
+              Buffers: shared hit=66125 read=1939 written=1563
+              ->  Nested Loop  (cost=1.25..15808.18 rows=59 width=27) (actual time=5.508..87.892 rows=70.50 loops=2)
+                    Buffers: shared hit=66125 read=1939 written=1563
+                    ->  Nested Loop  (cost=0.83..15659.62 rows=60 width=34) (actual time=5.373..81.803 rows=70.50 loops=2)
+                          Buffers: shared hit=65656 read=1843 written=1497
+                          ->  Parallel Index Scan using "PlayerProfile_avgRating_ratingCount_idx" on "PlayerProfile" p  (cost=0.42..7696.72 rows=2442 width=34) (actual time=0.176..43.602 rows=1993.50 loops=2)
+                                Filter: ("isVisible" AND ("hiddenByAdminAt" IS NULL) AND ("userId" <> 'bu1'::text) AND ("upazilaId" = '1'::bigint))
+                                Rows Removed by Filter: 43016
+                                Index Searches: 1
+                                Buffers: shared hit=51066 read=1198 written=908
+                          ->  Index Scan using "PlayerSport_profileId_sportId_key" on "PlayerSport" ps  (cost=0.42..3.26 rows=1 width=7) (actual time=0.019..0.019 rows=0.04 loops=3987)
+                                Index Cond: (("profileId" = p.id) AND ("sportId" = '1'::bigint))
+                                Filter: ("khepAvailable" AND (positions @> '{GK}'::text[]))
+                                Rows Removed by Filter: 1
+                                Index Searches: 3987
+                                Buffers: shared hit=14590 read=645 written=589
+                    ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..2.48 rows=1 width=7) (actual time=0.086..0.086 rows=1.00 loops=141)
+                          Index Cond: (id = p."userId")
+                          Filter: (status = 'ACTIVE'::"UserStatus")
+                          Index Searches: 141
+                          Buffers: shared hit=469 read=96 written=66
+Planning:
+  Buffers: shared hit=153 read=5
+Planning Time: 1.721 ms
+Execution Time: 181.642 ms
+
+===== search: cold upazila =====
+Limit  (cost=934.59..934.65 rows=21 width=27) (actual time=8.106..8.109 rows=21.00 loops=1)
+  Buffers: shared hit=319 read=45 written=45
+  ->  Sort  (cost=934.59..934.83 rows=94 width=27) (actual time=8.105..8.106 rows=21.00 loops=1)
+        Sort Key: p."avgRating" DESC, p."ratingCount" DESC, p.id
+        Sort Method: top-N heapsort  Memory: 27kB
+        Buffers: shared hit=319 read=45 written=45
+        ->  Nested Loop  (cost=0.71..932.06 rows=94 width=27) (actual time=0.367..8.056 rows=90.00 loops=1)
+              Buffers: shared hit=319 read=45 written=45
+              ->  Index Scan using "PlayerProfile_upazilaId_isVisible_idx" on "PlayerProfile" p  (cost=0.29..170.50 rows=95 width=34) (actual time=0.209..0.280 rows=90.00 loops=1)
+                    Index Cond: (("upazilaId" = '494'::bigint) AND ("isVisible" = true))
+                    Filter: (("hiddenByAdminAt" IS NULL) AND ("userId" <> 'bu1'::text))
+                    Index Searches: 1
+                    Buffers: shared hit=3 read=1 written=1
+              ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..8.02 rows=1 width=7) (actual time=0.086..0.086 rows=1.00 loops=90)
+                    Index Cond: (id = p."userId")
+                    Filter: (status = 'ACTIVE'::"UserStatus")
+                    Index Searches: 90
+                    Buffers: shared hit=316 read=44 written=44
+Planning:
+  Buffers: shared hit=15
+Planning Time: 0.297 ms
+Execution Time: 8.126 ms
+
+===== search: district + minRating 4, by activity =====
+Limit  (cost=4.76..90.46 rows=21 width=27) (actual time=1.791..1.794 rows=21.00 loops=1)
+  Buffers: shared hit=427 read=13 written=13
+  ->  Incremental Sort  (cost=4.76..18986.57 rows=4651 width=27) (actual time=1.791..1.792 rows=21.00 loops=1)
+        Sort Key: p."lastActiveAt" DESC, p.id
+        Presorted Key: p."lastActiveAt"
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 26kB  Peak Memory: 26kB
+        Buffers: shared hit=427 read=13 written=13
+        ->  Nested Loop  (cost=0.71..18777.27 rows=4651 width=27) (actual time=0.062..1.775 rows=22.00 loops=1)
+              Buffers: shared hit=421 read=13 written=13
+              ->  Index Scan using "PlayerProfile_lastActiveAt_idx" on "PlayerProfile" p  (cost=0.29..8258.77 rows=4696 width=34) (actual time=0.014..0.572 rows=23.00 loops=1)
+                    Filter: ("isVisible" AND ("hiddenByAdminAt" IS NULL) AND ("userId" <> 'bu1'::text) AND ("avgRating" >= '4'::double precision) AND ("ratingCount" > 0) AND ("districtId" = '11'::bigint))
+                    Rows Removed by Filter: 334
+                    Index Searches: 1
+                    Buffers: shared hit=341 read=1 written=1
+              ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..2.24 rows=1 width=7) (actual time=0.052..0.052 rows=0.96 loops=23)
+                    Index Cond: (id = p."userId")
+                    Filter: (status = 'ACTIVE'::"UserStatus")
+                    Rows Removed by Filter: 0
+                    Index Searches: 23
+                    Buffers: shared hit=80 read=12 written=12
+Planning:
+  Buffers: shared hit=27
+Planning Time: 0.221 ms
+Execution Time: 1.814 ms
+
+===== search: sport + budget + Friday (national) =====
+Limit  (cost=12.22..243.17 rows=21 width=27) (actual time=4.973..4.976 rows=21.00 loops=1)
+  Buffers: shared hit=1467 read=20 written=20
+  ->  Incremental Sort  (cost=12.22..62490.24 rows=5681 width=27) (actual time=4.973..4.974 rows=21.00 loops=1)
+        Sort Key: p."avgRating" DESC, p."ratingCount" DESC, p.id
+        Presorted Key: p."avgRating", p."ratingCount"
+        Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 26kB  Peak Memory: 26kB
+        Buffers: shared hit=1467 read=20 written=20
+        ->  Nested Loop  (cost=1.25..62234.60 rows=5681 width=27) (actual time=0.235..4.921 rows=48.00 loops=1)
+              Buffers: shared hit=1467 read=20 written=20
+              ->  Nested Loop  (cost=0.83..59154.00 rows=5737 width=34) (actual time=0.227..2.759 rows=51.00 loops=1)
+                    Buffers: shared hit=1279 read=4 written=4
+                    ->  Index Scan using "PlayerProfile_avgRating_ratingCount_idx" on "PlayerProfile" p  (cost=0.42..8027.68 rows=85090 width=34) (actual time=0.006..0.239 rows=268.00 loops=1)
+                          Filter: ("isVisible" AND ("hiddenByAdminAt" IS NULL) AND ("userId" <> 'bu1'::text))
+                          Rows Removed by Filter: 15
+                          Index Searches: 1
+                          Buffers: shared hit=268
+                    ->  Index Scan using "PlayerSport_profileId_sportId_key" on "PlayerSport" ps  (cost=0.42..0.60 rows=1 width=7) (actual time=0.009..0.009 rows=0.19 loops=268)
+                          Index Cond: (("profileId" = p.id) AND ("sportId" = '1'::bigint))
+                          Filter: ("khepAvailable" AND (("rateMin" IS NULL) OR ("rateMin" <= '500'::bigint)) AND (("rateMax" IS NULL) OR ("rateMax" >= '300'::bigint)) AND (jsonb_array_length(COALESCE((availability -> 'fri'::text), '[]'::jsonb)) > 0))
+                          Rows Removed by Filter: 1
+                          Index Searches: 268
+                          Buffers: shared hit=1011 read=4 written=4
+              ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..0.54 rows=1 width=7) (actual time=0.042..0.042 rows=0.94 loops=51)
+                    Index Cond: (id = p."userId")
+                    Filter: (status = 'ACTIVE'::"UserStatus")
+                    Rows Removed by Filter: 0
+                    Index Searches: 51
+                    Buffers: shared hit=188 read=16 written=16
+Planning:
+  Buffers: shared hit=36
+Planning Time: 0.376 ms
+Execution Time: 4.997 ms
+
+===== search: national sport+GK, page 3 (rating cursor) =====
+Limit  (cost=15.74..320.65 rows=21 width=27) (actual time=15.721..15.724 rows=21.00 loops=1)
+  Buffers: shared hit=32277 read=19 written=19
+  ->  Incremental Sort  (cost=15.74..48132.74 rows=3314 width=27) (actual time=15.720..15.721 rows=21.00 loops=1)
+        Sort Key: p."avgRating" DESC, p."ratingCount" DESC, p.id
+        Presorted Key: p."avgRating", p."ratingCount"
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 27kB  Peak Memory: 27kB
+        Buffers: shared hit=32277 read=19 written=19
+        ->  Nested Loop  (cost=1.25..47983.61 rows=3314 width=27) (actual time=11.230..15.680 rows=35.00 loops=1)
+              Buffers: shared hit=32277 read=19 written=19
+              ->  Nested Loop  (cost=0.83..46000.79 rows=3346 width=34) (actual time=11.151..13.994 rows=35.00 loops=1)
+                    Buffers: shared hit=32154 read=2 written=2
+                    ->  Index Scan using "PlayerProfile_avgRating_ratingCount_idx" on "PlayerProfile" p  (cost=0.42..9152.93 rows=54573 width=34) (actual time=11.119..11.294 rows=339.00 loops=1)
+                          Filter: ("isVisible" AND ("hiddenByAdminAt" IS NULL) AND ("userId" <> 'bu1'::text) AND (("avgRating" < '3.2'::double precision) OR (("avgRating" = '3.2'::double precision) AND (("ratingCount" < '20'::bigint) OR (("ratingCount" = '20'::bigint) AND (id > 'bp50000'::text))))))
+                          Rows Removed by Filter: 32430
+                          Index Searches: 1
+                          Buffers: shared hit=30877
+                    ->  Index Scan using "PlayerSport_profileId_sportId_key" on "PlayerSport" ps  (cost=0.42..0.68 rows=1 width=7) (actual time=0.008..0.008 rows=0.10 loops=339)
+                          Index Cond: (("profileId" = p.id) AND ("sportId" = '1'::bigint))
+                          Filter: (positions @> '{GK}'::text[])
+                          Rows Removed by Filter: 1
+                          Index Searches: 339
+                          Buffers: shared hit=1277 read=2 written=2
+              ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..0.59 rows=1 width=7) (actual time=0.048..0.048 rows=1.00 loops=35)
+                    Index Cond: (id = p."userId")
+                    Filter: (status = 'ACTIVE'::"UserStatus")
+                    Index Searches: 35
+                    Buffers: shared hit=123 read=17 written=17
+Planning:
+  Buffers: shared hit=37
+Planning Time: 0.807 ms
+Execution Time: 15.742 ms
+
+===== search: hot upazila, page 2 (active cursor) =====
+Limit  (cost=7.54..151.69 rows=21 width=27) (actual time=28.318..28.321 rows=21.00 loops=1)
+  Buffers: shared hit=31181 read=109 written=109
+  ->  Incremental Sort  (cost=7.54..18568.08 rows=2704 width=27) (actual time=28.318..28.319 rows=21.00 loops=1)
+        Sort Key: p."lastActiveAt" DESC, p.id
+        Presorted Key: p."lastActiveAt"
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 26kB  Peak Memory: 26kB
+        Buffers: shared hit=31181 read=109 written=109
+        ->  Nested Loop  (cost=0.71..18446.40 rows=2704 width=27) (actual time=26.458..28.309 rows=22.00 loops=1)
+              Buffers: shared hit=31181 read=109 written=109
+              ->  Index Scan using "PlayerProfile_lastActiveAt_idx" on "PlayerProfile" p  (cost=0.29..9384.02 rows=2730 width=34) (actual time=26.429..26.871 rows=22.00 loops=1)
+                    Filter: ("isVisible" AND ("hiddenByAdminAt" IS NULL) AND ("userId" <> 'bu1'::text) AND ("upazilaId" = '1'::bigint) AND (("lastActiveAt" < ('2026-09-27T11:07:17.602Z'::cstring)::timestamp without time zone) OR (("lastActiveAt" = ('2026-09-27T11:07:17.602Z'::cstring)::timestamp without time zone) AND (id > 'bp500'::text))))
+                    Rows Removed by Filter: 31118
+                    Index Searches: 1
+                    Buffers: shared hit=31105 read=97 written=97
+              ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..3.32 rows=1 width=7) (actual time=0.065..0.065 rows=1.00 loops=22)
+                    Index Cond: (id = p."userId")
+                    Filter: (status = 'ACTIVE'::"UserStatus")
+                    Index Searches: 22
+                    Buffers: shared hit=76 read=12 written=12
+Planning:
+  Buffers: shared hit=28 read=2 written=2
+Planning Time: 0.775 ms
+Execution Time: 28.338 ms
+
+===== matching: paid GK request, hot upazila =====
+Limit  (cost=5728.18..5728.64 rows=185 width=30) (actual time=35.922..35.951 rows=200.00 loops=1)
+  Buffers: shared hit=4732 read=141 written=141
+  ->  Sort  (cost=5728.18..5728.64 rows=185 width=30) (actual time=35.921..35.938 rows=200.00 loops=1)
+        Sort Key: p."avgRating" DESC, p."lastActiveAt" DESC, p.id
+        Sort Method: top-N heapsort  Memory: 49kB
+        Buffers: shared hit=4732 read=141 written=141
+        ->  Nested Loop  (cost=3529.47..5721.21 rows=185 width=30) (actual time=13.747..35.729 rows=447.00 loops=1)
+              Buffers: shared hit=4732 read=141 written=141
+              ->  Hash Join  (cost=3529.05..5601.21 rows=187 width=30) (actual time=13.726..22.629 rows=448.00 loops=1)
+                    Hash Cond: (p.id = ps."profileId")
+                    Join Filter: (((ps."travelRadius" = 'DISTRICT'::"TravelRadius") AND (p."districtId" = '11'::bigint)) OR ((ps."travelRadius" = 'UPAZILA'::"TravelRadius") AND (p."upazilaId" = '1'::bigint)))
+                    Rows Removed by Join Filter: 895
+                    Buffers: shared hit=3015 read=66 written=66
+                    ->  Bitmap Heap Scan on "PlayerProfile" p  (cost=640.95..2604.32 rows=41443 width=38) (actual time=3.046..8.408 rows=39402.00 loops=1)
+                          Recheck Cond: ((("districtId" = '11'::bigint) AND "isVisible") OR (("upazilaId" = '1'::bigint) AND "isVisible"))
+                          Filter: (("hiddenByAdminAt" IS NULL) AND ("userId" <> 'bu1'::text))
+                          Rows Removed by Filter: 1
+                          Heap Blocks: exact=555
+                          Buffers: shared hit=558 read=34 written=34
+                          ->  BitmapOr  (cost=640.95..640.95 rows=43564 width=0) (actual time=2.986..2.987 rows=0.00 loops=1)
+                                Buffers: shared hit=3 read=34 written=34
+                                ->  Bitmap Index Scan on "PlayerProfile_districtId_isVisible_idx"  (cost=0.00..562.21 rows=39392 width=0) (actual time=2.336..2.336 rows=39403.00 loops=1)
+                                      Index Cond: (("districtId" = '11'::bigint) AND ("isVisible" = true))
+                                      Index Searches: 1
+                                      Buffers: shared hit=2 read=30 written=30
+                                ->  Bitmap Index Scan on "PlayerProfile_upazilaId_isVisible_idx"  (cost=0.00..58.01 rows=4172 width=0) (actual time=0.650..0.650 rows=3987.00 loops=1)
+                                      Index Cond: (("upazilaId" = '1'::bigint) AND ("isVisible" = true))
+                                      Index Searches: 1
+                                      Buffers: shared hit=1 read=4 written=4
+                    ->  Hash  (cost=2875.83..2875.83 rows=982 width=11) (actual time=10.662..10.662 rows=3028.00 loops=1)
+                          Buckets: 4096 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 163kB
+                          Buffers: shared hit=2457 read=32 written=32
+                          ->  Bitmap Heap Scan on "PlayerSport" ps  (cost=66.26..2875.83 rows=982 width=11) (actual time=0.823..10.268 rows=3028.00 loops=1)
+                                Recheck Cond: (positions && '{GK}'::text[])
+                                Filter: ("khepAvailable" AND (("rateMin" IS NULL) OR ("rateMin" <= '600'::bigint)) AND (("rateMax" IS NULL) OR ("rateMax" >= '300'::bigint)) AND ("sportId" = '1'::bigint) AND (("travelRadius" = 'DISTRICT'::"TravelRadius") OR ("travelRadius" = 'UPAZILA'::"TravelRadius")))
+                                Rows Removed by Filter: 5911
+                                Heap Blocks: exact=2484
+                                Buffers: shared hit=2457 read=32 written=32
+                                ->  Bitmap Index Scan on "PlayerSport_positions_idx"  (cost=0.00..66.01 rows=9023 width=0) (actual time=0.528..0.528 rows=8939.00 loops=1)
+                                      Index Cond: (positions && '{GK}'::text[])
+                                      Index Searches: 1
+                                      Buffers: shared hit=5
+              ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..0.64 rows=1 width=7) (actual time=0.029..0.029 rows=1.00 loops=448)
+                    Index Cond: (id = p."userId")
+                    Filter: (status = 'ACTIVE'::"UserStatus")
+                    Rows Removed by Filter: 0
+                    Index Searches: 448
+                    Buffers: shared hit=1717 read=75 written=75
+Planning:
+  Buffers: shared hit=37
+Planning Time: 0.419 ms
+Execution Time: 36.012 ms
+
+===== matching: free any-position, cold upazila =====
+Limit  (cost=6291.24..6309.02 rows=156 width=30) (actual time=18.048..19.887 rows=171.00 loops=1)
+  Buffers: shared hit=4460 read=23 written=23
+  ->  Gather Merge  (cost=6291.24..6309.02 rows=156 width=30) (actual time=18.047..19.876 rows=171.00 loops=1)
+        Workers Planned: 1
+        Workers Launched: 1
+        Buffers: shared hit=4460 read=23 written=23
+        ->  Sort  (cost=5291.23..5291.46 rows=92 width=30) (actual time=15.188..15.191 rows=85.50 loops=2)
+              Sort Key: p."avgRating" DESC, p."lastActiveAt" DESC, p.id
+              Sort Method: quicksort  Memory: 31kB
+              Buffers: shared hit=4460 read=23 written=23
+              Worker 0:  Sort Method: quicksort  Memory: 30kB
+              ->  Nested Loop  (cost=0.83..5288.23 rows=92 width=30) (actual time=4.324..15.121 rows=85.50 loops=2)
+                    Buffers: shared hit=4438 read=23 written=23
+                    ->  Nested Loop  (cost=0.42..4718.11 rows=93 width=30) (actual time=4.307..10.934 rows=86.50 loops=2)
+                          Buffers: shared hit=3768
+                          ->  Parallel Seq Scan on "PlayerProfile" p  (cost=0.00..2127.68 rows=391 width=38) (actual time=4.230..6.638 rows=338.00 loops=2)
+                                Filter: ("isVisible" AND ("hiddenByAdminAt" IS NULL) AND ("userId" <> 'bu1'::text) AND (("districtId" = '1'::bigint) OR ("upazilaId" = '494'::bigint)))
+                                Rows Removed by Filter: 44672
+                                Buffers: shared hit=1201
+                          ->  Index Scan using "PlayerSport_profileId_sportId_key" on "PlayerSport" ps  (cost=0.42..6.62 rows=1 width=11) (actual time=0.012..0.012 rows=0.26 loops=676)
+                                Index Cond: (("profileId" = p.id) AND ("sportId" = '1'::bigint))
+                                Filter: ((("travelRadius" = 'DISTRICT'::"TravelRadius") OR ("travelRadius" = 'UPAZILA'::"TravelRadius")) AND ((("travelRadius" = 'DISTRICT'::"TravelRadius") AND (p."districtId" = '1'::bigint)) OR (("travelRadius" = 'UPAZILA'::"TravelRadius") AND (p."upazilaId" = '494'::bigint))))
+                                Rows Removed by Filter: 1
+                                Index Searches: 676
+                                Buffers: shared hit=2567
+                    ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..6.13 rows=1 width=7) (actual time=0.047..0.047 rows=0.99 loops=173)
+                          Index Cond: (id = p."userId")
+                          Filter: (status = 'ACTIVE'::"UserStatus")
+                          Rows Removed by Filter: 0
+                          Index Searches: 173
+                          Buffers: shared hit=670 read=23 written=23
+Planning:
+  Buffers: shared hit=30
+Planning Time: 0.570 ms
+Execution Time: 19.923 ms
+
+===== feed: open upcoming in hot upazila =====
+Limit  (cost=11.87..243.36 rows=21 width=193) (actual time=1.831..1.833 rows=21.00 loops=1)
+  Buffers: shared hit=88 read=28 written=28
+  ->  Incremental Sort  (cost=11.87..2955.21 rows=267 width=193) (actual time=1.830..1.831 rows=21.00 loops=1)
+        Sort Key: r."matchAt", r.id
+        Presorted Key: r."matchAt"
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 30kB  Peak Memory: 30kB
+        Buffers: shared hit=88 read=28 written=28
+        ->  Nested Loop  (cost=0.83..2943.20 rows=267 width=193) (actual time=0.398..1.814 rows=22.00 loops=1)
+              Buffers: shared hit=88 read=28 written=28
+              ->  Index Scan using "PlayerRequest_upazilaId_status_matchAt_idx" on "PlayerRequest" r  (cost=0.42..981.07 rows=270 width=193) (actual time=0.387..1.062 rows=22.00 loops=1)
+                    Index Cond: (("upazilaId" = '1'::bigint) AND (status = 'OPEN'::"RequestStatus") AND ("matchAt" > now()))
+                    Filter: ((NOT "isHidden") AND ("createdById" <> 'bu1'::text))
+                    Index Searches: 1
+                    Buffers: shared hit=7 read=21 written=21
+              ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..7.27 rows=1 width=7) (actual time=0.034..0.034 rows=1.00 loops=22)
+                    Index Cond: (id = r."createdById")
+                    Filter: (status = 'ACTIVE'::"UserStatus")
+                    Index Searches: 22
+                    Buffers: shared hit=81 read=7 written=7
+Planning:
+  Buffers: shared hit=218 read=3 written=3
+Planning Time: 0.846 ms
+Execution Time: 1.850 ms
+
+===== feed: open upcoming, national, football =====
+Limit  (cost=4.64..85.22 rows=21 width=193) (actual time=0.878..0.880 rows=21.00 loops=1)
+  Buffers: shared hit=116 read=9 written=9
+  ->  Incremental Sort  (cost=4.64..15580.08 rows=4059 width=193) (actual time=0.877..0.878 rows=21.00 loops=1)
+        Sort Key: r."matchAt", r.id
+        Presorted Key: r."matchAt"
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 30kB  Peak Memory: 30kB
+        Buffers: shared hit=116 read=9 written=9
+        ->  Nested Loop  (cost=0.83..15397.43 rows=4059 width=193) (actual time=0.085..0.869 rows=22.00 loops=1)
+              Buffers: shared hit=116 read=9 written=9
+              ->  Index Scan using "PlayerRequest_status_matchAt_idx" on "PlayerRequest" r  (cost=0.42..5140.11 rows=4099 width=193) (actual time=0.078..0.270 rows=22.00 loops=1)
+                    Index Cond: ((status = 'OPEN'::"RequestStatus") AND ("matchAt" > now()))
+                    Filter: ((NOT "isHidden") AND ("createdById" <> 'bu1'::text) AND ("sportId" = '1'::bigint))
+                    Rows Removed by Filter: 12
+                    Index Searches: 1
+                    Buffers: shared hit=31 read=6 written=6
+              ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..2.50 rows=1 width=7) (actual time=0.027..0.027 rows=1.00 loops=22)
+                    Index Cond: (id = r."createdById")
+                    Filter: (status = 'ACTIVE'::"UserStatus")
+                    Index Searches: 22
+                    Buffers: shared hit=85 read=3 written=3
+Planning:
+  Buffers: shared hit=14
+Planning Time: 0.162 ms
+Execution Time: 0.894 ms
+
+===== my requests =====
+Limit  (cost=8.32..8.36 rows=2 width=193) (actual time=0.040..0.040 rows=0.00 loops=1)
+  Buffers: shared hit=1 read=1 written=1
+  ->  Incremental Sort  (cost=8.32..8.36 rows=2 width=193) (actual time=0.040..0.040 rows=0.00 loops=1)
+        Sort Key: "createdAt" DESC, id DESC
+        Presorted Key: "createdAt"
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+        Buffers: shared hit=1 read=1 written=1
+        ->  Index Scan using "PlayerRequest_createdById_createdAt_idx" on "PlayerRequest"  (cost=0.29..8.31 rows=1 width=193) (actual time=0.039..0.039 rows=0.00 loops=1)
+              Index Cond: ("createdById" = 'bu777'::text)
+              Index Searches: 1
+              Buffers: shared hit=1 read=1 written=1
+Planning:
+  Buffers: shared hit=5
+Planning Time: 0.041 ms
+Execution Time: 0.047 ms
+
+===== my applications =====
+Limit  (cost=16.13..16.14 rows=3 width=89) (actual time=0.610..0.610 rows=2.00 loops=1)
+  Buffers: shared hit=2 read=3 written=3
+  ->  Sort  (cost=16.13..16.14 rows=3 width=89) (actual time=0.610..0.610 rows=2.00 loops=1)
+        Sort Key: "createdAt" DESC, id DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=2 read=3 written=3
+        ->  Bitmap Heap Scan on "Application"  (cost=4.44..16.11 rows=3 width=89) (actual time=0.604..0.608 rows=2.00 loops=1)
+              Recheck Cond: ("playerId" = 'bu777'::text)
+              Heap Blocks: exact=2
+              Buffers: shared hit=2 read=3 written=3
+              ->  Bitmap Index Scan on "Application_playerId_status_idx"  (cost=0.00..4.44 rows=3 width=0) (actual time=0.599..0.599 rows=2.00 loops=1)
+                    Index Cond: ("playerId" = 'bu777'::text)
+                    Index Searches: 1
+                    Buffers: shared read=3 written=3
+Planning:
+  Buffers: shared hit=89
+Planning Time: 0.273 ms
+Execution Time: 0.619 ms
+
+===== applicants of a request =====
+Limit  (cost=16.13..16.14 rows=3 width=89) (actual time=0.378..0.379 rows=2.00 loops=1)
+  Buffers: shared hit=2 read=3 written=3
+  ->  Sort  (cost=16.13..16.14 rows=3 width=89) (actual time=0.378..0.378 rows=2.00 loops=1)
+        Sort Key: "createdAt", id
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=2 read=3 written=3
+        ->  Bitmap Heap Scan on "Application"  (cost=4.44..16.11 rows=3 width=89) (actual time=0.374..0.377 rows=2.00 loops=1)
+              Recheck Cond: ("requestId" = 'br100'::text)
+              Heap Blocks: exact=2
+              Buffers: shared hit=2 read=3 written=3
+              ->  Bitmap Index Scan on "Application_requestId_playerId_key"  (cost=0.00..4.44 rows=3 width=0) (actual time=0.369..0.369 rows=2.00 loops=1)
+                    Index Cond: ("requestId" = 'br100'::text)
+                    Index Searches: 1
+                    Buffers: shared read=3 written=3
+Planning Time: 0.022 ms
+Execution Time: 0.383 ms
+
+===== notifications inbox =====
+Limit  (cost=20.14..20.15 rows=4 width=63) (actual time=0.584..0.584 rows=6.00 loops=1)
+  Buffers: shared hit=4 read=5 written=5
+  ->  Sort  (cost=20.14..20.15 rows=4 width=63) (actual time=0.584..0.584 rows=6.00 loops=1)
+        Sort Key: "createdAt" DESC, id DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=4 read=5 written=5
+        ->  Bitmap Heap Scan on "Notification"  (cost=4.45..20.10 rows=4 width=63) (actual time=0.552..0.582 rows=6.00 loops=1)
+              Recheck Cond: ("userId" = 'bu777'::text)
+              Heap Blocks: exact=6
+              Buffers: shared hit=4 read=5 written=5
+              ->  Bitmap Index Scan on "Notification_userId_readAt_idx"  (cost=0.00..4.45 rows=4 width=0) (actual time=0.511..0.512 rows=6.00 loops=1)
+                    Index Cond: ("userId" = 'bu777'::text)
+                    Index Searches: 1
+                    Buffers: shared read=3 written=3
+Planning:
+  Buffers: shared hit=65
+Planning Time: 0.201 ms
+Execution Time: 0.591 ms
+
+===== notifications unread count =====
+Aggregate  (cost=4.47..4.48 rows=1 width=8) (actual time=0.054..0.054 rows=1.00 loops=1)
+  Buffers: shared hit=4
+  ->  Index Only Scan using "Notification_userId_readAt_idx" on "Notification"  (cost=0.42..4.46 rows=2 width=0) (actual time=0.048..0.048 rows=3.00 loops=1)
+        Index Cond: (("userId" = 'bu777'::text) AND ("readAt" IS NULL))
+        Heap Fetches: 0
+        Index Searches: 1
+        Buffers: shared hit=4
+Planning:
+  Buffers: shared hit=4 read=2 written=2
+Planning Time: 0.356 ms
+Execution Time: 0.060 ms
+
+===== public reviews of a player =====
+Limit  (cost=8.32..8.32 rows=1 width=93) (actual time=0.240..0.240 rows=0.00 loops=1)
+  Buffers: shared read=2 written=2
+  ->  Sort  (cost=8.32..8.32 rows=1 width=93) (actual time=0.240..0.240 rows=0.00 loops=1)
+        Sort Key: "createdAt" DESC, id DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared read=2 written=2
+        ->  Index Scan using "Rating_rateeId_direction_idx" on "Rating"  (cost=0.29..8.31 rows=1 width=93) (actual time=0.239..0.239 rows=0.00 loops=1)
+              Index Cond: (("rateeId" = 'bu777'::text) AND (direction = 'CAPTAIN_TO_PLAYER'::"RatingDirection"))
+              Filter: (NOT "noShow")
+              Index Searches: 1
+              Buffers: shared read=2 written=2
+Planning:
+  Buffers: shared hit=80
+Planning Time: 0.230 ms
+Execution Time: 0.246 ms
+
+===== pending ratings (captain side) =====
+Limit  (cost=8.33..8.33 rows=1 width=193) (actual time=0.005..0.005 rows=0.00 loops=1)
+  Buffers: shared hit=2
+  ->  Sort  (cost=8.33..8.33 rows=1 width=193) (actual time=0.005..0.005 rows=0.00 loops=1)
+        Sort Key: "completedAt" DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=2
+        ->  Index Scan using "PlayerRequest_createdById_createdAt_idx" on "PlayerRequest"  (cost=0.29..8.32 rows=1 width=193) (actual time=0.005..0.005 rows=0.00 loops=1)
+              Index Cond: ("createdById" = 'bu777'::text)
+              Filter: ((status = 'COMPLETED'::"RequestStatus") AND ("completedAt" > ('2026-10-20T11:07:17.603Z'::cstring)::timestamp without time zone))
+              Index Searches: 1
+              Buffers: shared hit=2
+Planning Time: 0.046 ms
+Execution Time: 0.012 ms
+
+===== reminder job: followup candidates =====
+Nested Loop Anti Join  (cost=779.19..6993.99 rows=69 width=14) (actual time=137.472..137.475 rows=0.00 loops=1)
+  Buffers: shared hit=3808 read=839 written=739
+  ->  Nested Loop  (cost=778.76..5674.71 rows=69 width=14) (actual time=137.471..137.474 rows=0.00 loops=1)
+        Buffers: shared hit=3808 read=839 written=739
+        ->  Nested Loop Semi Join  (cost=778.35..5139.14 rows=69 width=14) (actual time=137.471..137.473 rows=0.00 loops=1)
+              Buffers: shared hit=3808 read=839 written=739
+              ->  Bitmap Heap Scan on "PlayerRequest" r  (cost=777.93..3334.29 rows=148 width=14) (actual time=6.568..31.369 rows=346.00 loops=1)
+                    Recheck Cond: (status = 'COMPLETED'::"RequestStatus")
+                    Filter: (("completedAt" <= ('2026-10-24T11:07:17.603Z'::cstring)::timestamp without time zone) AND ("completedAt" > ('2026-10-20T11:07:17.603Z'::cstring)::timestamp without time zone))
+                    Rows Removed by Filter: 25288
+                    Heap Blocks: exact=1441
+                    Buffers: shared hit=1291 read=376 written=376
+                    ->  Bitmap Index Scan on "PlayerRequest_sportId_status_matchAt_idx"  (cost=0.00..777.89 rows=25686 width=0) (actual time=5.813..5.814 rows=25634.00 loops=1)
+                          Index Cond: (status = 'COMPLETED'::"RequestStatus")
+                          Index Searches: 3
+                          Buffers: shared hit=6 read=220 written=220
+              ->  Index Scan using "Application_requestId_status_idx" on "Application" a  (cost=0.42..12.18 rows=1 width=14) (actual time=0.306..0.306 rows=0.00 loops=346)
+                    Index Cond: (("requestId" = r.id) AND (status = 'ACCEPTED'::"ApplicationStatus"))
+                    Filter: (NOT EXISTS(SubPlan 1))
+                    Rows Removed by Filter: 2
+                    Index Searches: 346
+                    Buffers: shared hit=2517 read=463 written=363
+                    SubPlan 1
+                      ->  Index Only Scan using "Rating_requestId_raterId_rateeId_key" on "Rating" g  (cost=0.29..4.31 rows=1 width=0) (actual time=0.049..0.049 rows=1.00 loops=647)
+                            Index Cond: (("requestId" = r.id) AND ("raterId" = r."createdById") AND ("rateeId" = a."playerId"))
+                            Heap Fetches: 0
+                            Index Searches: 647
+                            Buffers: shared hit=1098 read=197 written=150
+        ->  Index Scan using "User_pkey" on "User" u  (cost=0.42..7.76 rows=1 width=7) (never executed)
+              Index Cond: (id = r."createdById")
+              Filter: (status = 'ACTIVE'::"UserStatus")
+              Index Searches: 0
+  ->  Index Scan using "Notification_userId_readAt_idx" on "Notification" n  (cost=0.42..19.11 rows=1 width=35) (never executed)
+        Index Cond: ("userId" = r."createdById")
+        Filter: ((type = 'RATING_REMINDER'::"NotificationType") AND ((data ->> 'kind'::text) = 'followup'::text) AND ((data ->> 'requestId'::text) = r.id))
+        Index Searches: 0
+Planning:
+  Buffers: shared hit=50 read=8 written=8
+Planning Time: 1.174 ms
+Execution Time: 137.500 ms
+
+===== expire-stale-requests: find =====
+Limit  (cost=0.00..285.26 rows=500 width=7) (actual time=0.187..4.208 rows=500.00 loops=1)
+  Buffers: shared hit=166 read=84 written=84
+  ->  Seq Scan on "PlayerRequest"  (cost=0.00..3200.00 rows=5609 width=7) (actual time=0.187..4.180 rows=500.00 loops=1)
+        Filter: ((status = 'OPEN'::"RequestStatus") AND ("playersAccepted" = 0) AND ("matchAt" < ('2026-10-26T11:07:17.603Z'::cstring)::timestamp without time zone))
+        Rows Removed by Filter: 3780
+        Buffers: shared hit=166 read=84 written=84
+Planning Time: 0.072 ms
+Execution Time: 4.358 ms
+
+===== purge: expired refresh tokens =====
+Limit  (cost=0.00..301.74 rows=5000 width=8) (actual time=0.005..3.987 rows=5000.00 loops=1)
+  Buffers: shared hit=116
+  ->  Seq Scan on "RefreshToken"  (cost=0.00..5723.00 rows=94832 width=8) (actual time=0.005..3.753 rows=5000.00 loops=1)
+        Filter: ("expiresAt" < ('2026-10-20T11:07:17.603Z'::cstring)::timestamp without time zone)
+        Rows Removed by Filter: 5749
+        Buffers: shared hit=116
+Planning:
+  Buffers: shared hit=86
+Planning Time: 0.357 ms
+Execution Time: 4.124 ms
+
+===== purge: old notifications =====
+Limit  (cost=0.00..1465.08 rows=5000 width=8) (actual time=0.541..25.591 rows=5000.00 loops=1)
+  Buffers: shared hit=93 read=543 written=543
+  ->  Seq Scan on "Notification"  (cost=0.00..8777.00 rows=29954 width=8) (actual time=0.540..25.360 rows=5000.00 loops=1)
+        Filter: ("createdAt" < ('2026-04-30T11:07:17.603Z'::cstring)::timestamp without time zone)
+        Rows Removed by Filter: 46036
+        Buffers: shared hit=93 read=543 written=543
+Planning Time: 0.028 ms
+Execution Time: 25.792 ms
+
+===== location search 'kal' =====
+Limit  (cost=0.00..44.25 rows=20 width=4) (actual time=0.143..0.829 rows=20.00 loops=1)
+  Buffers: shared read=15 written=15
+  ->  Seq Scan on "Union"  (cost=0.00..115.05 rows=52 width=4) (actual time=0.143..0.827 rows=20.00 loops=1)
+        Filter: (("nameEn" ~~* '%kal%'::text) OR ("nameBn" ~~ '%kal%'::text))
+        Rows Removed by Filter: 738
+        Buffers: shared read=15 written=15
+Planning:
+  Buffers: shared hit=89 read=5 written=5
+Planning Time: 1.342 ms
+Execution Time: 1.765 ms

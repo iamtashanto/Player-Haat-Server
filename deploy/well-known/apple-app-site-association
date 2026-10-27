@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_TEAM_ID.com.playerhaat.app"],
+        "components": [{ "/": "/p/*" }, { "/": "/r/*" }]
+      }
+    ]
+  }
+}
