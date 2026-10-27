@@ -1,7 +1,7 @@
 # Deploying PlayerHaat API on an Ubuntu VPS (Nginx + PM2)
 
 Tested path: Ubuntu 22.04/24.04, 2 vCPU / 2 GB RAM is plenty for launch. Everything below is a plain
-command you can read before running. Replace `api.example.com` and the passwords.
+command you can read before running. The API is served at `https://playerhaat-api.tashanto.com`; replace the passwords.
 
 > **What was verified, and what wasn't.** The PM2 config (cluster of 4 workers, `wait_ready`, graceful
 > shutdown, zero-downtime `pm2 reload` under load), the production boot validation, the backup script and the
@@ -68,7 +68,7 @@ npm run db:seed              # locations (full national dataset), sports, defaul
 | `GOOGLE_CLIENT_IDS`, `APPLE_CLIENT_IDS` | OAuth client ids, or social sign-in answers 503 |
 | `CLOUDINARY_*` | image uploads |
 | `FIREBASE_SERVICE_ACCOUNT` | path to the service-account JSON (chmod 600), for push |
-| `PUBLIC_API_URL` | `https://api.example.com` |
+| `PUBLIC_API_URL` | `https://playerhaat-api.tashanto.com` |
 
 Create the first admin (there's no API for it, on purpose), after that person has registered in the app:
 
@@ -98,7 +98,8 @@ curl -s localhost:4000/health/ready
 
 ```bash
 sudo cp deploy/nginx/playerhaat-api.conf /etc/nginx/sites-available/playerhaat-api
-sudo sed -i 's/api.example.com/YOUR.DOMAIN/g' /etc/nginx/sites-available/playerhaat-api
+# the file already names playerhaat-api.tashanto.com; only run this if you use a different domain:
+# sudo sed -i 's/playerhaat-api.tashanto.com/YOUR.DOMAIN/g' /etc/nginx/sites-available/playerhaat-api
 sudo certbot certonly --nginx -d YOUR.DOMAIN           # obtains the certificate (and sets up auto-renew)
 sudo ln -s /etc/nginx/sites-available/playerhaat-api /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
@@ -140,3 +141,26 @@ and is reachable from the box only.
 - [ ] A backup ran and a restore into a scratch DB worked
 - [ ] `DOCS_ENABLED` is unset/false (Swagger off) — or restricted in Nginx
 - [ ] Flutter release build points at `https://YOUR.DOMAIN/api/v1`
+
+
+## Domains and environments
+
+| | Local | Release |
+|---|---|---|
+| API | `http://localhost:4000` (Android emulator: `http://10.0.2.2:4000`, handled by the app) | `https://playerhaat-api.tashanto.com` |
+| Mobile app | `env/dev.json` → `API_BASE_URL=http://localhost:4000/api/v1` | `env/prod.json` → `API_BASE_URL=https://playerhaat-api.tashanto.com/api/v1` |
+| Admin dashboard | served from any static host or `python3 -m http.server 3001`; `config.js` picks `localhost:4000` automatically | same files on a static host; `config.js` picks `playerhaat-api.tashanto.com` automatically |
+
+* Add the dashboard's origin to `CORS_ORIGINS` on the server (mobile apps send no Origin and need nothing).
+* Docs (`/docs`) are off in production unless `DOCS_ENABLED=true`.
+
+## Taking payments (credits)
+
+Credits are bought by mobile banking, checked by an admin — no gateway account is needed to start:
+
+1. Put the numbers customers should send money to in `.env`: `PAYMENT_BKASH_NUMBER`, `PAYMENT_NAGAD_NUMBER`, `PAYMENT_ROCKET_NUMBER` (leave a method empty to hide it).
+2. A customer picks a pack in the app, sends the amount, and submits the transaction id.
+3. In the dashboard, an admin compares the transaction id and amount with the account statement and approves (credits are added, once) or rejects.
+4. Nothing costs credits until an admin turns on `contact_credits_enabled` (pay-per-contact) and/or `boost_enabled` (paid boost) in app config, and sets the prices.
+
+The `SANDBOX` method (instant, free) exists only when `NODE_ENV` is not `production`. A real gateway (bKash tokenised checkout, SSLCommerz) would replace step 2–3 and needs merchant credentials; the credit ledger and `Payment` records are already shaped for it.

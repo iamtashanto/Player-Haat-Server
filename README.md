@@ -74,7 +74,15 @@ unless `DOCS_ENABLED=true`. 70+ endpoints; the groups:
 |---|---|
 | **auth** | email + password · **phone OTP** · Google · Apple · refresh rotation · logout / logout-all · forgot/reset · link/unlink methods · delete account |
 | **users** | `GET/PATCH /users/me` (includes `role` and the next `onboardingStep`), avatar upload, delete |
-| **recruiters** | recruiter onboarding profile (`/recruiters/me`), public recruiter card |
+| **recruiters** | recruiter onboarding profile (`/recruiters/me`), public recruiter card, ask for verification |
+| **contact** | `POST /players/:id/contact` shows a number in one tap (the player chooses *anyone* or *only people I accept*); `GET /players/me/contact-views` is who looked |
+| **invites** | recruiter invites a player (optionally to an event); accepting shares both numbers and opens chat |
+| **shortlist** | a recruiter's private saved players, with notes; `shortlisted` on every search card |
+| **events** | recruiters launch events (`kind: EVENT`); players tap *interested* (an application without the form); count + faces on the event; owners can **boost** (paid) and `/requests/featured` lists running boosts |
+| **chat** | recruiter ⇄ player over REST (poll while open, push otherwise); respects the contact setting; player can block; reportable |
+| **teams** | create, join by code, captain tools; posts can be made for a team |
+| **verification** | recruiters and player *stats* can be verified by an admin from links / document photos |
+| **billing** | credits, packs, pay by bKash / Nagad / Rocket and submit the transaction id (admin confirms); sandbox outside production |
 | **players** | create/update my profile, **sport profiles** (one per sport: positions, experience, headline, stats, achievements, own visibility and rating, khep, availability), photos + video links, public profile, **search** (cursor-paginated; says which sport profile matched) |
 | **requests** | create, edit, cancel, fill, complete, nearby feed, mine |
 | **applications** | apply, withdraw, applicants, accept/reject (atomic fill), mine |
@@ -97,6 +105,10 @@ unless `DOCS_ENABLED=true`. 70+ endpoints; the groups:
 * Recruiters must complete their profile before `GET /players` / `GET /players/:id` (403 `RECRUITER_PROFILE_REQUIRED`).
 * A **sport profile** is a `PlayerSport` row: unique per (player, sport), with its own positions, skill, experience, headline, current team, per-sport stats (shape validated per sport in `src/modules/players/sport-stats.ts`; self-declared, not verified), achievements (max 20), visibility switch, admin-hide flag and rating earned in that sport's matches. Adding a sport is a seed row, plus an optional stats entry. The app builds each sport's stats form from `GET /sports` → `statFields` and takes recruiter types from `GET /recruiter-types`, both with bn/en labels, so new sports, stats and recruiter types need no app release (a test fails if a stat has no label; a missing recruiter-type label is a compile error).
 * Search known limits: the name filter `q` is an unindexed `ILIKE` (add `pg_trgm` if it gets hot); stats aren't filterable; player-to-player search still works for `PLAYER` accounts (captains use it).
+
+### Money: contact, boost and credits
+
+Everything is free until an admin turns it on in app config. Then: `contact_credits_enabled` + `contact_free_per_day` + `contact_credit_cost` price *opening a number* (free allowance first, re-opening is free, people the player accepted are always free); `boost_enabled` + `boost_credit_cost` + `boost_hours` price boosting a request. Credits live in an append-only ledger (`CreditTransaction`) whose sum is `User.creditBalance` (never negative, even under concurrent spends). Top-ups are mobile-banking payments an admin verifies in `GET /admin/payments`; each transaction id can buy credits once. See `docs/DEPLOYMENT.md` for the payment numbers and the domains.
 
 ### Conventions
 

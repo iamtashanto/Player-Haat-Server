@@ -117,12 +117,15 @@ export async function messages(userId: string, id: string, q: z.infer<typeof mes
     });
     return rows.map((m) => toMessage(m, userId));
   }
+  // Scrolling back: everything strictly older than the message the app already has.
+  const anchor = q.before ? await prisma.message.findFirst({ where: { id: q.before, conversationId: id }, select: { createdAt: true, id: true } }) : null;
+  if (q.before && !anchor) throw AppError.invalid("before", "Unknown message");
   const rows = await prisma.message.findMany({
-    where: { conversationId: id },
+    where: { conversationId: id, ...(anchor && { OR: [{ createdAt: { lt: anchor.createdAt } }, { createdAt: anchor.createdAt, id: { lt: anchor.id } }] }) },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    ...cursorArgs(q.before, q.limit),
+    take: q.limit,
   });
-  return toPage(rows, q.limit).items.map((m) => toMessage(m, userId));
+  return rows.map((m) => toMessage(m, userId));
 }
 
 export async function send(userId: string, id: string, text: string) {
