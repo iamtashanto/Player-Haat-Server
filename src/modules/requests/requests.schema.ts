@@ -75,7 +75,7 @@ const RequestItem = z
     budgetMax: z.number().nullable(),
     notes: z.string().nullable(),
     team: z.object({ id: z.string(), name: z.string(), logoUrl: z.string().nullable() }).nullable(),
-    captain: z.object({ name: z.string(), avatarUrl: z.string().nullable(), rating: z.object({ average: z.number(), count: z.number() }) }),
+    captain: z.object({ name: z.string(), avatarUrl: z.string().nullable(), rating: z.object({ average: z.number(), count: z.number() }), recruiterId: z.string().nullable(), recruiterVerified: z.boolean() }),
     isOwner: z.boolean(),
     myApplication: z.object({ id: z.string(), status: z.enum(["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN"]) }).nullable(),
     pendingApplicants: z.number().int().optional().openapi({ description: "Owner only." }),

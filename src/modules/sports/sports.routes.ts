@@ -10,8 +10,8 @@ registerRoute({
   method: "get",
   path: "/sports",
   tag: "Reference",
-  summary: "Active sports with their positions",
-  response: z.array(Named.extend({ id: z.number(), code: z.string(), positions: z.array(Named.extend({ code: z.string() })) })),
+  summary: "Active sports with their positions and the stat fields a sport profile can hold",
+  response: z.array(Named.extend({ id: z.number(), code: z.string(), positions: z.array(Named.extend({ code: z.string() })), statFields: z.array(z.object({ key: z.string(), decimal: z.boolean() })) })),
 });
 
 export const sportsRoutes = Router();

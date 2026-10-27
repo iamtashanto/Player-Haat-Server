@@ -29,6 +29,15 @@ export const STATS_SCHEMAS: Record<string, z.ZodType<Record<string, number>>> = 
   }),
 };
 
+const DECIMAL_STATS = new Set(["battingAverage"]);
+
+/** What the app should render for a sport's stats form — derived from the validation schema above, so they can't drift. */
+export function statFieldsFor(sportCode: string): Array<{ key: string; decimal: boolean }> {
+  const schema = STATS_SCHEMAS[sportCode] as unknown as { shape?: Record<string, unknown> } | undefined;
+  const keys = schema?.shape ? Object.keys(schema.shape) : ["matches"];
+  return keys.map((key) => ({ key, decimal: DECIMAL_STATS.has(key) }));
+}
+
 /** Returns the cleaned stats (or null when there's nothing to store); throws a 422 on `stats` otherwise. */
 export function parseStats(sportCode: string, raw: unknown): Record<string, number> | null {
   if (raw === null || raw === undefined) return null;

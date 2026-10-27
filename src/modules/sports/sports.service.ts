@@ -1,7 +1,8 @@
 import { prisma } from "../../lib/prisma.js";
+import { statFieldsFor } from "../players/sport-stats.js";
 
-export const listSports = () =>
-  prisma.sport.findMany({
+export const listSports = async () =>
+  (await prisma.sport.findMany({
     where: { isActive: true },
     orderBy: { id: "asc" },
     select: {
@@ -11,4 +12,4 @@ export const listSports = () =>
       nameEn: true,
       positions: { orderBy: { order: "asc" }, select: { code: true, nameBn: true, nameEn: true } },
     },
-  });
+  })).map((sp) => ({ ...sp, statFields: statFieldsFor(sp.code) }));

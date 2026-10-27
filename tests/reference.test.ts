@@ -77,6 +77,11 @@ describe("sports", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.map((s: { code: string }) => s.code)).toEqual(["FOOTBALL", "CRICKET"]); // BADMINTON inactive
     expect(res.body.data[0].positions.map((p: { code: string }) => p.code)).toEqual(["GK", "CB", "CM", "ST"]);
+    // the app builds each sport's stats form from this, so it must match what the API accepts
+    expect(res.body.data[0].statFields).toEqual([
+      { key: "matches", decimal: false }, { key: "goals", decimal: false }, { key: "assists", decimal: false }, { key: "cleanSheets", decimal: false },
+    ]);
+    expect(res.body.data[1].statFields.find((f: { key: string }) => f.key === "battingAverage")).toEqual({ key: "battingAverage", decimal: true });
   });
 });
 

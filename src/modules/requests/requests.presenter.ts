@@ -5,7 +5,7 @@ export const requestInclude = {
   sport: { select: { id: true, code: true, nameBn: true, nameEn: true } },
   ...locationInclude,
   team: { select: { id: true, name: true, logoUrl: true } },
-  createdBy: { select: { name: true, avatarUrl: true, captainAvgRating: true, captainRatingCount: true } },
+  createdBy: { select: { name: true, avatarUrl: true, captainAvgRating: true, captainRatingCount: true, recruiterProfile: { select: { id: true, verifiedBadge: true } } } },
 } satisfies Prisma.PlayerRequestInclude;
 
 export type RequestRow = Prisma.PlayerRequestGetPayload<{ include: typeof requestInclude }>;
@@ -43,6 +43,9 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
       name: r.createdBy.name,
       avatarUrl: r.createdBy.avatarUrl,
       rating: { average: round2(r.createdBy.captainAvgRating), count: r.createdBy.captainRatingCount },
+      // Set when the poster is a recruiter with a profile: the app links to their public card.
+      recruiterId: r.createdBy.recruiterProfile?.id ?? null,
+      recruiterVerified: r.createdBy.recruiterProfile?.verifiedBadge ?? false,
     },
     isOwner,
     myApplication: isOwner ? null : (ctx.myApplications?.get(r.id) ?? null),

@@ -200,3 +200,16 @@ describe("onboarding state on /users/me", () => {
     expect((await call("get", "/users/me", done.auth)).body.data).toMatchObject({ onboardingStep: null, hasRecruiterProfile: true });
   });
 });
+
+describe("request poster", () => {
+  it("links a recruiter's request to their public card, and leaves players' as null", async () => {
+    const rec = await recruiterUser(w);
+    const player = await playerUser(w, "p@example.com");
+    const body = { sportId: w.football.id, matchAt: new Date(Date.now() + 48 * 3_600_000).toISOString(), venueText: "Ground", districtId: w.patuakhali.id, upazilaId: w.kalapara.id, positionsNeeded: ["ST"], playersNeeded: 1 };
+    const fromRec = await call("post", "/requests", rec.auth, body);
+    const fromPlayer = await call("post", "/requests", player.auth, body);
+    const viewer = await playerUser(w, "viewer2@example.com");
+    expect((await call("get", `/requests/${fromRec.body.data.id}`, viewer.auth)).body.data.captain).toMatchObject({ recruiterId: rec.recruiterId, recruiterVerified: false });
+    expect((await call("get", `/requests/${fromPlayer.body.data.id}`, viewer.auth)).body.data.captain.recruiterId).toBeNull();
+  });
+});
