@@ -4,7 +4,7 @@ import { prisma } from "../../lib/prisma.js";
 import { deleteImagesQuietly } from "../../lib/storage/safe-delete.js";
 import { uploadOwnedImage } from "../media/media.service.js";
 
-type UserWithProfile = User & { playerProfile: { id: string } | null };
+type UserWithProfile = User & { playerProfile: { id: string } | null; recruiterProfile: { id: string } | null };
 
 export function toMe(u: UserWithProfile) {
   return {
@@ -19,12 +19,15 @@ export function toMe(u: UserWithProfile) {
     role: u.role,
     birthYear: u.birthYear,
     hasPlayerProfile: u.playerProfile !== null,
+    hasRecruiterProfile: u.recruiterProfile !== null,
+    // What the app should show next: the role-specific onboarding step, or nothing once it's done.
+    onboardingStep: u.role === "PLAYER" && !u.playerProfile ? "PLAYER_PROFILE" : u.role === "RECRUITER" && !u.recruiterProfile ? "RECRUITER_PROFILE" : null,
     captainRating: { average: u.captainAvgRating, count: u.captainRatingCount },
     createdAt: u.createdAt.toISOString(),
   };
 }
 
-const withProfile = { playerProfile: { select: { id: true } } } as const;
+const withProfile = { playerProfile: { select: { id: true } }, recruiterProfile: { select: { id: true } } } as const;
 
 export async function getMe(userId: string) {
   return toMe(await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: withProfile }));

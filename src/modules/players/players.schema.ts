@@ -51,6 +51,11 @@ const availability = z
 const rate = z.number().int().min(0).max(1_000_000);
 
 const sportFields = {
+  headline: z.string().trim().min(1).max(160),
+  experienceYears: z.number().int().min(0).max(60),
+  currentTeam: z.string().trim().min(1).max(80),
+  stats: z.record(z.string(), z.number()).openapi({ example: { matches: 40, goals: 12, assists: 7 }, description: "Self-declared numbers; allowed keys depend on the sport (football: matches, goals, assists, cleanSheets · cricket: matches, runs, wickets, highestScore, battingAverage)." }),
+  isVisible: z.boolean().openapi({ description: "Hide just this sport profile from search and public view." }),
   positions: z.array(z.string().trim().min(1).max(20)).min(1).max(4),
   preferredFoot: z.enum(["LEFT", "RIGHT", "BOTH"]).nullable(),
   battingStyle: z.enum(["RIGHT_HAND", "LEFT_HAND"]).nullable(),
@@ -72,12 +77,32 @@ export const addSportBody = z.strictObject({
   rateMax: sportFields.rateMax.optional(),
   availability: sportFields.availability.optional(),
   travelRadius: sportFields.travelRadius.optional(),
+  headline: sportFields.headline.nullable().optional(),
+  experienceYears: sportFields.experienceYears.nullable().optional(),
+  currentTeam: sportFields.currentTeam.nullable().optional(),
+  stats: sportFields.stats.nullable().optional(),
+  isVisible: sportFields.isVisible.optional(),
 });
 export const updateSportBody = z
-  .strictObject(sportFields)
+  .strictObject({
+    ...sportFields,
+    headline: sportFields.headline.nullable(),
+    experienceYears: sportFields.experienceYears.nullable(),
+    currentTeam: sportFields.currentTeam.nullable(),
+    stats: sportFields.stats.nullable(),
+  })
   .partial()
   .refine((b) => Object.keys(b).length > 0, "Send at least one field");
 export const sportParams = z.object({ sportId: id });
+
+// ───────── achievements ─────────
+export const MAX_ACHIEVEMENTS = 20;
+export const addAchievementBody = z.strictObject({
+  title: z.string().trim().min(1).max(100),
+  year: z.number().int().min(1950).max(new Date().getUTCFullYear() + 1).nullable().optional(),
+  description: z.string().trim().min(1).max(300).nullable().optional(),
+});
+export const achievementParams = z.object({ sportId: id, achievementId: z.string().min(1).max(40) });
 
 // ───────── media ─────────
 export const addVideoBody = z.strictObject({
@@ -110,7 +135,10 @@ export const searchQuery = z
     khepAvailable: z.stringbool().optional(),
     rateMin: z.coerce.number().int().min(0).optional().openapi({ description: "Your budget floor (BDT). Implies khepAvailable; khep players with no stated rate count as negotiable and match." }),
     rateMax: z.coerce.number().int().min(0).optional().openapi({ description: "Your budget ceiling (BDT)." }),
-    minRating: z.coerce.number().min(0).max(5).optional().openapi({ description: "Excludes unrated players." }),
+    minRating: z.coerce.number().min(0).max(5).optional().openapi({ description: "Excludes unrated players. With `sportId` it applies to that sport's own rating, otherwise to the overall one." }),
+    minExperienceYears: z.coerce.number().int().min(0).max(60).optional().openapi({ description: "Matched against the same sport profile as the other sport-level filters." }),
+    minSkillLevel: z.coerce.number().int().min(1).max(5).optional(),
+    q: z.string().trim().min(2).max(60).optional().openapi({ description: "Part of the player's name." }),
     availabilityDay: z.enum(WEEKDAYS).optional(),
     sort: z.enum(["rating", "active"]).default("rating"),
     cursor: z.string().max(300).optional(),
@@ -133,6 +161,12 @@ const SportEntry = z.object({
   rateMin: z.number().nullable(),
   rateMax: z.number().nullable(),
   travelRadius: z.enum(["UNION", "UPAZILA", "DISTRICT"]),
+  headline: z.string().nullable(),
+  experienceYears: z.number().int().nullable(),
+  currentTeam: z.string().nullable(),
+  stats: z.record(z.string(), z.number()).nullable(),
+  rating: z.object({ average: z.number(), count: z.number().int() }),
+  achievements: z.array(z.object({ id: z.string(), title: z.string(), year: z.number().int().nullable(), description: z.string().nullable() })).optional(),
   preferredFoot: z.string().nullable().optional(),
   battingStyle: z.string().nullable().optional(),
   availability: z.record(z.string(), z.array(z.string())).nullable().optional(),
@@ -150,6 +184,7 @@ const PlayerCard = z
     lastActiveAt: z.string().datetime(),
     location: Location,
     sports: z.array(SportEntry),
+    matchedSportIds: z.array(z.number().int()).openapi({ description: "Search only: the sport profiles that satisfied the sport-level filters (empty when none were used)." }),
   })
   .openapi("PlayerCard");
 const MediaItem = z.object({ id: z.string(), type: z.enum(["PHOTO", "VIDEO_LINK"]), url: z.string(), order: z.number().int() });
@@ -168,6 +203,8 @@ registerRoute({ method: "patch", path: "/players/me", tag: T, summary: "Update m
 registerRoute({ method: "post", path: "/players/me/sports", tag: T, summary: "Add a sport", description: "`positions` must be codes from GET /sports for that sport. Rates are only allowed with `khepAvailable: true`.", auth: true, body: addSportBody, response: MyProfile, status: 201, errors: [404, 409, 422] });
 registerRoute({ method: "patch", path: "/players/me/sports/{sportId}", tag: T, summary: "Update a sport", description: "Turning `khepAvailable` off also clears the rates.", auth: true, params: sportParams, body: updateSportBody, response: MyProfile, errors: [404, 422] });
 registerRoute({ method: "delete", path: "/players/me/sports/{sportId}", tag: T, summary: "Remove a sport", auth: true, params: sportParams, response: MyProfile, errors: [404] });
+registerRoute({ method: "post", path: "/players/me/sports/{sportId}/achievements", tag: T, summary: "Add an achievement to a sport profile", description: `Up to ${MAX_ACHIEVEMENTS} per sport profile.`, auth: true, params: sportParams, body: addAchievementBody, response: MyProfile, status: 201, errors: [404, 409, 422] });
+registerRoute({ method: "delete", path: "/players/me/sports/{sportId}/achievements/{achievementId}", tag: T, summary: "Remove an achievement", auth: true, params: achievementParams, response: MyProfile, errors: [404] });
 registerRoute({ method: "post", path: "/players/me/media/photos", tag: T, summary: "Add a photo", description: `multipart/form-data, field \`file\`. Up to ${MAX_PHOTOS} photos.`, auth: true, multipart: z.object({ file: binary }), response: MyProfile, status: 201, errors: [404, 409, 413, 415, 422, 502, 503] });
 registerRoute({ method: "post", path: "/players/me/media/videos", tag: T, summary: "Add a video link", description: `Up to ${MAX_VIDEOS}. https links on YouTube, Facebook or Vimeo only.`, auth: true, body: addVideoBody, response: MyProfile, status: 201, errors: [404, 409, 422] });
 registerRoute({ method: "put", path: "/players/me/media/order", tag: T, summary: "Reorder my media", description: "`ids` must list every media item exactly once.", auth: true, body: reorderBody, response: MyProfile, errors: [404, 422] });

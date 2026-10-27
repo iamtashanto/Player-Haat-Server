@@ -41,7 +41,7 @@ describe("access control", () => {
 
   it("reads the role from the database, so revoking admin takes effect immediately", async () => {
     expect((await get(admin.auth, "/admin/users")).status).toBe(200);
-    await prisma.user.update({ where: { id: admin.user.id }, data: { role: "USER" } });
+    await prisma.user.update({ where: { id: admin.user.id }, data: { role: "PLAYER" } });
     expect((await get(admin.auth, "/admin/users")).status).toBe(403);
   });
 });

@@ -12,6 +12,7 @@ interface Row {
   avgRating: number;
   ratingCount: number;
   lastActiveAt: Date;
+  matchedSportIds: number[];
 }
 
 // ── opaque cursor: the sort keys of the last row returned ──
@@ -53,17 +54,23 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
     Prisma.sql`p."isVisible" = true`,
     Prisma.sql`p."hiddenByAdminAt" IS NULL`,
     Prisma.sql`u.status = 'ACTIVE'`,
+    Prisma.sql`u.role = 'PLAYER'`, // an account switched to another role drops out of discovery
     Prisma.sql`p."userId" <> ${viewerId}`,
   ];
 
   if (q.districtId !== undefined) where.push(Prisma.sql`p."districtId" = ${q.districtId}`);
   if (q.upazilaId !== undefined) where.push(Prisma.sql`p."upazilaId" = ${q.upazilaId}`);
   if (q.unionId !== undefined) where.push(Prisma.sql`p."unionId" = ${q.unionId}`);
-  if (q.minRating !== undefined) where.push(Prisma.sql`p."avgRating" >= ${q.minRating} AND p."ratingCount" > 0`);
+  if (q.q) where.push(Prisma.sql`u.name ILIKE ${`%${q.q.replace(/[\\%_]/g, "\\$&")}%`}`);
+  // With a sport chosen, "rated 4+" means rated 4+ *in that sport*; otherwise the overall rating decides.
+  if (q.minRating !== undefined && q.sportId === undefined) where.push(Prisma.sql`p."avgRating" >= ${q.minRating} AND p."ratingCount" > 0`);
 
   // All sport-level conditions must hold on the SAME PlayerSport row.
   const sport: Prisma.Sql[] = [];
   if (q.sportId !== undefined) sport.push(Prisma.sql`ps."sportId" = ${q.sportId}`);
+  if (q.minRating !== undefined && q.sportId !== undefined) sport.push(Prisma.sql`ps."avgRating" >= ${q.minRating} AND ps."ratingCount" > 0`);
+  if (q.minExperienceYears !== undefined) sport.push(Prisma.sql`ps."experienceYears" >= ${q.minExperienceYears}`);
+  if (q.minSkillLevel !== undefined) sport.push(Prisma.sql`ps."skillLevel" >= ${q.minSkillLevel}`);
   if (q.position) sport.push(Prisma.sql`ps.positions @> ARRAY[${q.position}]::text[]`);
   if (q.khepAvailable !== undefined) sport.push(Prisma.sql`ps."khepAvailable" = ${q.khepAvailable}`);
   // Rates only mean something for khep (paid) players, so a budget filter implies khepAvailable.
@@ -76,11 +83,18 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
   if (q.availabilityDay) {
     sport.push(Prisma.sql`jsonb_array_length(COALESCE(ps.availability -> ${q.availabilityDay}::text, '[]'::jsonb)) > 0`);
   }
-  if (sport.length) {
-    where.push(
-      Prisma.sql`EXISTS (SELECT 1 FROM "PlayerSport" ps WHERE ps."profileId" = p.id AND ${Prisma.join(sport, " AND ")})`,
-    );
+  // Sport profiles the player or an admin has hidden never match. (Only enforced when a sport-level
+  // filter is in play: a player with no matching filter is still found by name/place via the account.)
+  const sportMatch = sport.length
+    ? Prisma.sql`ps."isVisible" = true AND ps."hiddenByAdminAt" IS NULL AND ${Prisma.join(sport, " AND ")}`
+    : undefined;
+  if (sportMatch) {
+    where.push(Prisma.sql`EXISTS (SELECT 1 FROM "PlayerSport" ps WHERE ps."profileId" = p.id AND ${sportMatch})`);
   }
+  // Which of this player's sport profiles matched, so the card can lead with the relevant one.
+  const matched = sportMatch
+    ? Prisma.sql`ARRAY(SELECT ps."sportId" FROM "PlayerSport" ps WHERE ps."profileId" = p.id AND ${sportMatch})`
+    : Prisma.sql`ARRAY[]::int[]`;
 
   if (q.cursor) {
     const c = decode(q.cursor, q.sort);
@@ -105,7 +119,7 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
       : Prisma.sql`p."lastActiveAt" DESC, p.id ASC`;
 
   return Prisma.sql`
-    SELECT p.id, p."avgRating", p."ratingCount", p."lastActiveAt"
+    SELECT p.id, p."avgRating", p."ratingCount", p."lastActiveAt", ${matched} AS "matchedSportIds"
     FROM "PlayerProfile" p
     JOIN "User" u ON u.id = p."userId"
     WHERE ${Prisma.join(where, " AND ")}
@@ -125,7 +139,7 @@ export async function searchPlayers(viewerId: string, q: Query) {
     include: profileInclude,
   });
   const byId = new Map(profiles.map((p) => [p.id, p]));
-  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!)] : []));
+  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!, r.matchedSportIds)] : []));
 
   return { items, nextCursor: hasMore ? encode(rowCursor(q.sort, page[page.length - 1]!)) : null };
 }

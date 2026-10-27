@@ -84,7 +84,7 @@ describe("blanket API limits (tiny budgets on a throwaway app)", () => {
     app.all("/ping", (_req, res) => res.json({ ok: true }));
     return app;
   };
-  const token = (userId: string) => signAccessToken({ userId, role: "USER" });
+  const token = (userId: string) => signAccessToken({ userId, role: "PLAYER" });
 
   it("anonymous callers are limited per IP", async () => {
     const app = mini({ ip: 5, reads: 100, writes: 100 });

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { z } from "zod";
 import { created, ok, valid } from "../../lib/http.js";
-import { authUser, requireAuth } from "../../middlewares/auth.js";
+import { authUser, requireAuth, requireRole } from "../../middlewares/auth.js";
 import { createRateLimiter } from "../../middlewares/rate-limit.js";
 import { validate } from "../../middlewares/validate.js";
 import * as s from "./applications.schema.js";
@@ -16,7 +16,7 @@ const appId = (req: Parameters<typeof valid>[0]) => valid<unknown, z.infer<typeo
 export const requestApplicationsRoutes = Router({ mergeParams: true });
 requestApplicationsRoutes.use(requireAuth);
 
-requestApplicationsRoutes.post("/", applyLimiter, validate({ params: s.requestIdParams, body: s.applyBody }), async (req, res) => {
+requestApplicationsRoutes.post("/", requireRole("PLAYER"), applyLimiter, validate({ params: s.requestIdParams, body: s.applyBody }), async (req, res) => {
   const { params, body } = valid<z.infer<typeof s.applyBody>, z.infer<typeof s.requestIdParams>>(req);
   created(res, await svc.apply(me(req), params.requestId, body));
 });

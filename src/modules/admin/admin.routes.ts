@@ -2,9 +2,11 @@ import { Router } from "express";
 import type { z } from "zod";
 import { ok, valid } from "../../lib/http.js";
 import { authUser, requireAuth, requireRole } from "../../middlewares/auth.js";
-import { createRateLimiter } from "../../middlewares/rate-limit.js";
+import { createRateLimiter, ipAndEmailKey } from "../../middlewares/rate-limit.js";
 import { validate } from "../../middlewares/validate.js";
 import type { ConfigKey } from "../app-config/app-config.service.js";
+import { adminLogin } from "../auth/auth.controller.js";
+import { loginBody } from "../auth/auth.schema.js";
 import * as s from "./admin.schema.js";
 import * as svc from "./admin.service.js";
 
@@ -13,9 +15,35 @@ const adminId = (req: Parameters<typeof authUser>[0]) => authUser(req).userId;
 const idOf = (req: Parameters<typeof valid>[0]) => valid<unknown, { id: string }>(req).params.id;
 
 export const adminRoutes = Router();
+
+// The one unauthenticated route: the dashboard's own sign-in, throttled per IP + email like the app's.
+adminRoutes.post("/auth/login", createRateLimiter({ windowMs: 15 * 60 * 1000, limit: 10, keyGenerator: ipAndEmailKey }), validate({ body: loginBody }), adminLogin);
+
 adminRoutes.use(requireAuth, requireRole("ADMIN"), createRateLimiter({ windowMs: 15 * 60 * 1000, limit: 600 }));
 
+adminRoutes.get("/me", async (req, res) => ok(res, await svc.me(adminId(req))));
+adminRoutes.get("/stats", async (_req, res) => ok(res, await svc.stats()));
+
+// directories
+adminRoutes.get("/players", validate({ query: s.playersQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, B<typeof s.playersQuery>>(req);
+  const { items, nextCursor } = await svc.listPlayers(query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
+adminRoutes.get("/recruiters", validate({ query: s.recruitersQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, B<typeof s.recruitersQuery>>(req);
+  const { items, nextCursor } = await svc.listRecruiters(query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
+adminRoutes.post("/recruiters/:id/verify", validate({ params: s.recruiterParams, body: s.verifyBody }), async (req, res) => {
+  ok(res, await svc.setRecruiterVerified(adminId(req), idOf(req), valid<B<typeof s.verifyBody>>(req).body.verified));
+});
+
 // users
+adminRoutes.put("/users/:id/role", validate({ params: s.userParams, body: s.roleBody }), async (req, res) => {
+  const { body } = valid<B<typeof s.roleBody>>(req);
+  ok(res, await svc.setUserRole(adminId(req), idOf(req), body.role, body.reason));
+});
 adminRoutes.get("/users", validate({ query: s.usersQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, B<typeof s.usersQuery>>(req);
   const { items, nextCursor } = await svc.listUsers(query);
@@ -39,6 +67,14 @@ adminRoutes.post("/players/:profileId/unhide", validate({ params: s.profileParam
 });
 adminRoutes.post("/players/:profileId/verify", validate({ params: s.profileParams, body: s.verifyBody }), async (req, res) => {
   ok(res, await svc.setProfileVerified(adminId(req), profileId(req), valid<B<typeof s.verifyBody>>(req).body.verified));
+});
+
+// sport profiles (one per sport, under a player's profile)
+adminRoutes.post("/sport-profiles/:id/hide", validate({ params: s.sportProfileParams, body: s.reasonBody }), async (req, res) => {
+  ok(res, await svc.setSportProfileHidden(adminId(req), idOf(req), true, valid<B<typeof s.reasonBody>>(req).body.reason));
+});
+adminRoutes.post("/sport-profiles/:id/unhide", validate({ params: s.sportProfileParams, body: s.optionalReasonBody }), async (req, res) => {
+  ok(res, await svc.setSportProfileHidden(adminId(req), idOf(req), false, valid<B<typeof s.optionalReasonBody>>(req).body.reason));
 });
 
 // requests

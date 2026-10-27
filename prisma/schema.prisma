@@ -25,8 +25,18 @@ enum Locale {
 }
 
 enum UserRole {
-  USER
-  ADMIN
+  PLAYER // mobile app: owns player profile(s), applies to requests
+  RECRUITER // mobile app: discovers and evaluates players, posts requests
+  ADMIN // web dashboard only; never created through public registration
+}
+
+enum RecruiterType {
+  CLUB
+  ACADEMY
+  SCOUT
+  AGENT
+  ORGANIZER
+  OTHER
 }
 
 enum UserStatus {
@@ -128,6 +138,11 @@ enum AdminActionType {
   PROFILE_UNHIDE
   PROFILE_VERIFY
   PROFILE_UNVERIFY
+  SPORT_PROFILE_HIDE
+  SPORT_PROFILE_UNHIDE
+  RECRUITER_VERIFY
+  RECRUITER_UNVERIFY
+  USER_ROLE_CHANGE
   REQUEST_HIDE
   REQUEST_UNHIDE
   REPORT_RESOLVE
@@ -156,7 +171,7 @@ model User {
   avatarUrl       String?
   avatarPublicId  String? // Cloudinary public id, needed to delete the old avatar
   locale          Locale     @default(bn)
-  role            UserRole   @default(USER)
+  role            UserRole   @default(PLAYER)
   status          UserStatus @default(ACTIVE)
   birthYear       Int?
   deletedAt       DateTime?
@@ -172,6 +187,7 @@ model User {
   refreshTokens     RefreshToken[]
   verificationCodes VerificationCode[]
   playerProfile     PlayerProfile?
+  recruiterProfile  RecruiterProfile?
   teamsCaptained    Team[]             @relation("TeamCaptain")
   teamMemberships   TeamMember[]
   requestsCreated   PlayerRequest[]
@@ -185,6 +201,7 @@ model User {
   adminActions      AdminAction[]
 
   @@index([status])
+  @@index([role, status])
 }
 
 model AuthAccount {
@@ -264,11 +281,12 @@ model District {
   lat        Float?
   lng        Float?
 
-  division Division        @relation(fields: [divisionId], references: [id])
-  upazilas Upazila[]
-  profiles PlayerProfile[]
-  requests PlayerRequest[]
-  teams    Team[]
+  division   Division           @relation(fields: [divisionId], references: [id])
+  upazilas   Upazila[]
+  profiles   PlayerProfile[]
+  requests   PlayerRequest[]
+  teams      Team[]
+  recruiters RecruiterProfile[]
 
   @@unique([divisionId, slug])
   @@index([nameEn])
@@ -400,16 +418,44 @@ model PlayerSport {
   availability  Json?
   travelRadius  TravelRadius   @default(UPAZILA)
 
+  // ── what makes this a sport profile in its own right ──
+  headline        String? // one-line pitch for this sport, e.g. "Left-footed winger, 6 seasons in Dhaka leagues"
+  experienceYears Int? // 0–60 (CHECK constraint in the migration)
+  currentTeam     String?
+  // Self-declared numbers; the shape is validated per sport (see sport-stats.ts).
+  stats           Json?
+  // The player's own switch for this one sport profile; the account-level isVisible still applies on top.
+  isVisible       Boolean   @default(true)
+  // Set by an admin; the player cannot clear it.
+  hiddenByAdminAt DateTime?
+  // Earned in matches of this sport only (the account-level rating on PlayerProfile blends all sports).
+  avgRating       Float     @default(0)
+  ratingCount     Int       @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  sport   Sport         @relation(fields: [sportId], references: [id])
+  profile      PlayerProfile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  sport        Sport               @relation(fields: [sportId], references: [id])
+  achievements PlayerAchievement[]
 
   @@unique([profileId, sportId])
   @@index([sportId, khepAvailable])
   @@index([sportId, skillLevel])
   @@index([positions], type: Gin)
+}
+
+model PlayerAchievement {
+  id            String   @id @default(cuid())
+  playerSportId String
+  title         String // "District league top scorer"
+  year          Int?
+  description   String?
+  createdAt     DateTime @default(now())
+
+  playerSport PlayerSport @relation(fields: [playerSportId], references: [id], onDelete: Cascade)
+
+  @@index([playerSportId, year(sort: Desc)])
 }
 
 model PlayerMedia {
@@ -424,6 +470,31 @@ model PlayerMedia {
   profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId, order])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recruiters
+// ─────────────────────────────────────────────────────────────────────────────
+
+model RecruiterProfile {
+  id            String        @id @default(cuid())
+  userId        String        @unique
+  type          RecruiterType
+  organization  String? // club / academy / company name; null for independent scouts
+  bio           String?
+  districtId    Int
+  // Sport.id values this recruiter scouts for (validated against active sports in the service layer).
+  sportIds      Int[]
+  // Set by an admin after checking who they are; players can see it on the recruiter's public card.
+  verifiedBadge Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district District @relation(fields: [districtId], references: [id])
+
+  @@index([districtId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

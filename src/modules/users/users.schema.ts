@@ -44,9 +44,11 @@ const MeSchema = z
     phoneVerified: z.boolean(),
     avatarUrl: z.string().nullable(),
     locale: z.enum(["bn", "en"]),
-    role: z.enum(["USER", "ADMIN"]),
+    role: z.enum(["PLAYER", "RECRUITER", "ADMIN"]),
     birthYear: z.number().nullable(),
     hasPlayerProfile: z.boolean(),
+    hasRecruiterProfile: z.boolean(),
+    onboardingStep: z.enum(["PLAYER_PROFILE", "RECRUITER_PROFILE"]).nullable().openapi({ description: "The next role-specific onboarding step, or null when the account is set up." }),
     captainRating: z.object({ average: z.number(), count: z.number() }),
     createdAt: z.string().datetime(),
   })

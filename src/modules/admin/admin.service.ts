@@ -7,7 +7,7 @@ import { CONFIG_SCHEMAS, clearConfigCache, readAll, type ConfigKey } from "../ap
 import { retireParticipation } from "../moderation/participation.js";
 import { notify } from "../notifications/notifier.js";
 import { revokeAllForUser } from "../auth/token.service.js";
-import type { actionsQuery, reportsQuery, usersQuery } from "./admin.schema.js";
+import type { actionsQuery, playersQuery, recruitersQuery, reportsQuery, usersQuery } from "./admin.schema.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -20,6 +20,7 @@ const audit = (tx: Tx, adminId: string, action: AdminActionType, targetType: str
 const userSelect = {
   id: true, name: true, email: true, phone: true, status: true, role: true, emailVerifiedAt: true, createdAt: true,
   playerProfile: { select: { id: true } },
+  recruiterProfile: { select: { id: true, verifiedBadge: true } },
 } satisfies Prisma.UserSelect;
 
 const toUserSummary = (u: Prisma.UserGetPayload<{ select: typeof userSelect }>) => ({
@@ -31,6 +32,7 @@ const toUserSummary = (u: Prisma.UserGetPayload<{ select: typeof userSelect }>) 
   role: u.role,
   emailVerified: u.emailVerifiedAt !== null,
   profileId: u.playerProfile?.id ?? null,
+  recruiterId: u.recruiterProfile?.id ?? null,
   createdAt: u.createdAt.toISOString(),
 });
 
@@ -63,6 +65,7 @@ export async function getUser(id: string) {
       captainAvgRating: true,
       captainRatingCount: true,
       playerProfile: { select: { id: true, isVisible: true, hiddenByAdminAt: true, verifiedBadge: true, avgRating: true, ratingCount: true, noShowCount: true } },
+      recruiterProfile: { select: { id: true, type: true, organization: true, verifiedBadge: true } },
       _count: { select: { requestsCreated: true, applications: true, ratingsReceived: true, reportsFiled: true } },
     },
   });
@@ -73,6 +76,7 @@ export async function getUser(id: string) {
   return {
     ...toUserSummary(u),
     captainRating: { average: u.captainAvgRating, count: u.captainRatingCount },
+    recruiter: u.recruiterProfile,
     profile: u.playerProfile && { ...u.playerProfile, hiddenByAdmin: u.playerProfile.hiddenByAdminAt !== null, hiddenByAdminAt: undefined },
     counts: { requestsPosted: u._count.requestsCreated, applications: u._count.applications, ratingsReceived: u._count.ratingsReceived, reportsFiled: u._count.reportsFiled, reportsAgainst },
   };
@@ -110,6 +114,165 @@ export async function unsuspendUser(adminId: string, id: string, reason?: string
     await audit(tx, adminId, "USER_UNSUSPEND", "USER", id, reason);
   });
   return getUser(id);
+}
+
+export async function me(adminId: string) {
+  const u = await prisma.user.findUniqueOrThrow({ where: { id: adminId }, select: { id: true, name: true, email: true, role: true } });
+  return u;
+}
+
+/**
+ * Player ⇄ recruiter. Admin is deliberately not reachable from here: those accounts are made and
+ * removed with `npm run admin:grant` by someone with shell access.
+ */
+export async function setUserRole(adminId: string, id: string, role: "PLAYER" | "RECRUITER", reason: string) {
+  const target = await loadTargetUser(adminId, id);
+  if (target.status === "DELETED") throw AppError.conflict("USER_DELETED", "That account was deleted");
+  if (target.role === role) throw AppError.conflict("USER_ROLE_UNCHANGED", `Already a ${role.toLowerCase()}`);
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id }, data: { role } });
+    await audit(tx, adminId, "USER_ROLE_CHANGE", "USER", id, reason, { from: target.role, to: role });
+  });
+  return getUser(id);
+}
+
+// ───────────────────────── player & recruiter directories ─────────────────────────
+
+const playerListInclude = {
+  user: { select: { id: true, name: true, email: true, status: true } },
+  district: { select: { nameEn: true } },
+  upazila: { select: { nameEn: true } },
+  sports: { orderBy: { createdAt: "asc" }, include: { sport: { select: { code: true } }, _count: { select: { achievements: true } } } },
+} satisfies Prisma.PlayerProfileInclude;
+
+export async function listPlayers(q: z.infer<typeof playersQuery>) {
+  const rows = await prisma.playerProfile.findMany({
+    where: {
+      ...(q.q && { user: { OR: [{ name: { contains: q.q, mode: "insensitive" } }, { email: { contains: q.q, mode: "insensitive" } }] } }),
+      ...(q.sportId && { sports: { some: { sportId: q.sportId } } }),
+      ...(q.hidden === true && { OR: [{ hiddenByAdminAt: { not: null } }, { sports: { some: { hiddenByAdminAt: { not: null } } } }] }),
+      ...(q.hidden === false && { hiddenByAdminAt: null, sports: { none: { hiddenByAdminAt: { not: null } } } }),
+    },
+    include: playerListInclude,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    ...cursorArgs(q.cursor, q.limit),
+  });
+  const { items, nextCursor } = toPage(rows, q.limit);
+  return {
+    items: items.map((p) => ({
+      id: p.id,
+      user: p.user,
+      location: `${p.upazila.nameEn}, ${p.district.nameEn}`,
+      isVisible: p.isVisible,
+      hiddenByAdmin: p.hiddenByAdminAt !== null,
+      verifiedBadge: p.verifiedBadge,
+      rating: { average: Math.round(p.avgRating * 100) / 100, count: p.ratingCount },
+      noShowCount: p.noShowCount,
+      sportProfiles: p.sports.map((s) => ({
+        id: s.id,
+        sportId: s.sportId,
+        sportCode: s.sport.code,
+        positions: s.positions,
+        headline: s.headline,
+        experienceYears: s.experienceYears,
+        isVisible: s.isVisible,
+        hiddenByAdmin: s.hiddenByAdminAt !== null,
+        rating: { average: Math.round(s.avgRating * 100) / 100, count: s.ratingCount },
+        achievements: s._count.achievements,
+      })),
+      createdAt: p.createdAt.toISOString(),
+    })),
+    nextCursor,
+  };
+}
+
+export async function listRecruiters(q: z.infer<typeof recruitersQuery>) {
+  const rows = await prisma.recruiterProfile.findMany({
+    where: {
+      ...(q.verified !== undefined && { verifiedBadge: q.verified }),
+      ...(q.q && {
+        OR: [
+          { organization: { contains: q.q, mode: "insensitive" } },
+          { user: { name: { contains: q.q, mode: "insensitive" } } },
+          { user: { email: { contains: q.q, mode: "insensitive" } } },
+        ],
+      }),
+    },
+    include: { user: { select: { id: true, name: true, email: true, status: true } }, district: { select: { nameEn: true } } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    ...cursorArgs(q.cursor, q.limit),
+  });
+  const { items, nextCursor } = toPage(rows, q.limit);
+  return {
+    items: items.map((r) => ({
+      id: r.id,
+      user: r.user,
+      type: r.type,
+      organization: r.organization,
+      district: r.district.nameEn,
+      sportIds: r.sportIds,
+      verifiedBadge: r.verifiedBadge,
+      createdAt: r.createdAt.toISOString(),
+    })),
+    nextCursor,
+  };
+}
+
+export async function setRecruiterVerified(adminId: string, recruiterId: string, verified: boolean) {
+  const r = await prisma.recruiterProfile.findUnique({ where: { id: recruiterId }, select: { id: true, verifiedBadge: true } });
+  if (!r) throw AppError.notFound("RECRUITER_PROFILE_NOT_FOUND", "Recruiter not found");
+  if (r.verifiedBadge === verified) return { id: r.id, verifiedBadge: r.verifiedBadge };
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.recruiterProfile.update({ where: { id: recruiterId }, data: { verifiedBadge: verified } });
+    await audit(tx, adminId, verified ? "RECRUITER_VERIFY" : "RECRUITER_UNVERIFY", "RECRUITER", recruiterId);
+    return { id: updated.id, verifiedBadge: updated.verifiedBadge };
+  });
+}
+
+export async function setSportProfileHidden(adminId: string, id: string, hidden: boolean, reason?: string) {
+  const sp = await prisma.playerSport.findUnique({ where: { id }, select: { id: true, hiddenByAdminAt: true } });
+  if (!sp) throw AppError.notFound("PLAYER_SPORT_NOT_FOUND", "Sport profile not found");
+  if (hidden === (sp.hiddenByAdminAt !== null)) {
+    throw AppError.conflict(hidden ? "SPORT_PROFILE_ALREADY_HIDDEN" : "SPORT_PROFILE_NOT_HIDDEN", hidden ? "Already hidden" : "Not hidden");
+  }
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.playerSport.update({ where: { id }, data: { hiddenByAdminAt: hidden ? new Date() : null } });
+    await audit(tx, adminId, hidden ? "SPORT_PROFILE_HIDE" : "SPORT_PROFILE_UNHIDE", "PLAYER_SPORT", id, reason);
+    return { id: updated.id, hiddenByAdmin: updated.hiddenByAdminAt !== null };
+  });
+}
+
+// ───────────────────────── overview ─────────────────────────
+
+const DAY = 86_400_000;
+
+export async function stats() {
+  const now = Date.now();
+  const [byRole, byStatus, new7, new30, profiles, hiddenProfiles, perSport, recruiters, verifiedRecruiters, requestsByStatus, openReports, actions24h] = await Promise.all([
+    prisma.user.groupBy({ by: ["role"], where: { status: { not: "DELETED" } }, _count: { _all: true } }),
+    prisma.user.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.user.count({ where: { createdAt: { gte: new Date(now - 7 * DAY) } } }),
+    prisma.user.count({ where: { createdAt: { gte: new Date(now - 30 * DAY) } } }),
+    prisma.playerProfile.count(),
+    prisma.playerProfile.count({ where: { hiddenByAdminAt: { not: null } } }),
+    prisma.playerSport.groupBy({ by: ["sportId"], _count: { _all: true } }),
+    prisma.recruiterProfile.count(),
+    prisma.recruiterProfile.count({ where: { verifiedBadge: true } }),
+    prisma.playerRequest.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.report.count({ where: { status: "OPEN" } }),
+    prisma.adminAction.count({ where: { createdAt: { gte: new Date(now - DAY) } } }),
+  ]);
+  const sports = await prisma.sport.findMany({ select: { id: true, code: true, nameEn: true } });
+  const count = <K extends string>(rows: Array<Record<K, string> & { _count: { _all: number } }>, key: K) =>
+    Object.fromEntries(rows.map((r) => [r[key], r._count._all]));
+  return {
+    users: { byRole: count(byRole, "role"), byStatus: count(byStatus, "status"), signedUpLast7Days: new7, signedUpLast30Days: new30 },
+    players: { profiles, hiddenByAdmin: hiddenProfiles },
+    sportProfiles: perSport.map((r) => ({ sportId: r.sportId, code: sports.find((s) => s.id === r.sportId)?.code ?? "?", nameEn: sports.find((s) => s.id === r.sportId)?.nameEn ?? "?", count: r._count._all })),
+    recruiters: { profiles: recruiters, verified: verifiedRecruiters },
+    requests: { byStatus: count(requestsByStatus, "status") },
+    moderation: { openReports, actionsLast24h: actions24h },
+  };
 }
 
 // ───────────────────────── profiles & requests ─────────────────────────

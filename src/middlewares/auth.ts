@@ -1,3 +1,4 @@
+import type { UserRole } from "@prisma/client";
 import type { RequestHandler } from "express";
 import { AppError, ErrorCode } from "../lib/errors.js";
 import { verifyAccessToken } from "../lib/jwt.js";
@@ -9,6 +10,8 @@ import { prisma } from "../lib/prisma.js";
  * immediately instead of waiting out the 15-minute token.
  */
 export const requireAuth: RequestHandler = async (req, _res, next) => {
+  // Already authenticated earlier in this request (e.g. a role guard mounted on the parent router).
+  if (req.auth) return next();
   const header = req.headers.authorization;
   const token = header?.startsWith("Bearer ") ? header.slice(7).trim() : undefined;
   if (!token) throw AppError.unauthorized(ErrorCode.AUTH_UNAUTHENTICATED);
@@ -25,13 +28,18 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
   next();
 };
 
-/** Use after `requireAuth`. */
+/** Use after `requireAuth`. The caller's role must be one of `roles`; otherwise 403. */
 export const requireRole =
-  (role: "ADMIN"): RequestHandler =>
+  (...roles: UserRole[]): RequestHandler =>
   (req, _res, next) => {
-    if (req.auth?.role !== role) throw AppError.forbidden(ErrorCode.AUTH_FORBIDDEN);
+    if (!req.auth || !roles.includes(req.auth.role)) throw AppError.forbidden(ErrorCode.AUTH_FORBIDDEN);
     next();
   };
+
+/** Everything the mobile app talks to: players and recruiters. Admins use the dashboard API only. */
+export const requireAppUser: RequestHandler[] = [requireAuth, requireRole("PLAYER", "RECRUITER")];
+export const requirePlayer: RequestHandler[] = [requireAuth, requireRole("PLAYER")];
+export const requireRecruiter: RequestHandler[] = [requireAuth, requireRole("RECRUITER")];
 
 /** Controllers call this to get the caller's id; never trust a client-sent userId. */
 export function authUser(req: Express.Request) {

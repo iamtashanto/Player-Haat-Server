@@ -14,7 +14,7 @@ describe("register", () => {
       emailVerified: false,
       hasPassword: true,
       loginMethods: ["EMAIL"],
-      role: "USER",
+      role: "PLAYER",
       locale: "bn",
     });
     expect(res.body.data.tokens).toMatchObject({ tokenType: "Bearer", expiresIn: 900 });

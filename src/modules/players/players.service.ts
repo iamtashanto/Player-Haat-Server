@@ -4,7 +4,8 @@ import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertValidLocation } from "../locations/location.service.js";
 import { toMyProfile, toPublicProfile, profileInclude, type FullProfile } from "./players.presenter.js";
-import type { addSportBody, createProfileBody, updateProfileBody, updateSportBody } from "./players.schema.js";
+import { MAX_ACHIEVEMENTS, type addAchievementBody, type addSportBody, type createProfileBody, type updateProfileBody, type updateSportBody } from "./players.schema.js";
+import { parseStats } from "./sport-stats.js";
 
 const NOT_FOUND = "PLAYER_PROFILE_NOT_FOUND";
 const isUnique = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
@@ -70,7 +71,7 @@ export async function updateProfile(userId: string, patch: z.infer<typeof update
 /** Public view: only visible profiles of active users. Hidden ones are indistinguishable from missing. */
 export async function getPublicProfile(profileId: string) {
   const profile = await prisma.playerProfile.findFirst({
-    where: { id: profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE" } },
+    where: { id: profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE", role: "PLAYER" } },
     include: profileInclude,
   });
   if (!profile) throw AppError.notFound(NOT_FOUND, "Player not found");
@@ -89,6 +90,11 @@ type SportState = {
   rateMax: number | null;
   availability: Prisma.InputJsonValue | null;
   travelRadius: "UNION" | "UPAZILA" | "DISTRICT";
+  headline: string | null;
+  experienceYears: number | null;
+  currentTeam: string | null;
+  stats: Record<string, number> | null;
+  isVisible: boolean;
 };
 
 /** Rules that depend on which sport it is, or on several fields together. */
@@ -106,6 +112,7 @@ function validateSportState(sport: { code: string; positions: { code: string }[]
   if (s.rateMin !== null && s.rateMax !== null && s.rateMin > s.rateMax) {
     throw AppError.invalid("rateMin", "rateMin must be ≤ rateMax");
   }
+  s.stats = parseStats(sport.code, s.stats); // per-sport shape; normalises {} to null
 }
 
 /** Drops empty days and duplicate slots so stored availability is canonical (and day filters are exact). */
@@ -120,6 +127,8 @@ function normalizeAvailability(a: Record<string, string[] | undefined> | null | 
 }
 
 const toDb = (v: Prisma.InputJsonValue | null) => (v === null ? Prisma.DbNull : v);
+/** Json columns need DbNull (not null) to clear; everything else in SportState maps straight onto the row. */
+const toRow = (s: SportState) => ({ ...s, availability: toDb(s.availability), stats: toDb(s.stats) });
 
 async function loadActiveSport(sportId: number) {
   const sport = await prisma.sport.findFirst({
@@ -149,13 +158,16 @@ export async function addSport(userId: string, input: z.infer<typeof addSportBod
     rateMax: input.rateMax ?? null,
     availability: normalizeAvailability(input.availability),
     travelRadius: input.travelRadius ?? "UPAZILA",
+    headline: input.headline ?? null,
+    experienceYears: input.experienceYears ?? null,
+    currentTeam: input.currentTeam ?? null,
+    stats: input.stats ?? null,
+    isVisible: input.isVisible ?? true,
   };
   validateSportState(sport, state);
 
   try {
-    await prisma.playerSport.create({
-      data: { profileId, sportId: sport.id, ...state, availability: toDb(state.availability) },
-    });
+    await prisma.playerSport.create({ data: { profileId, sportId: sport.id, ...toRow(state) } });
   } catch (err) {
     if (isUnique(err)) throw AppError.conflict("PLAYER_SPORT_EXISTS", "You already added that sport; update it instead");
     throw err;
@@ -184,13 +196,15 @@ export async function updateSport(userId: string, sportId: number, patch: z.infe
     rateMax: patch.rateMax !== undefined ? patch.rateMax : khepAvailable ? existing.rateMax : null,
     availability: patch.availability !== undefined ? normalizeAvailability(patch.availability) : (existing.availability as Prisma.InputJsonValue | null),
     travelRadius: patch.travelRadius ?? existing.travelRadius,
+    headline: patch.headline !== undefined ? patch.headline : existing.headline,
+    experienceYears: patch.experienceYears !== undefined ? patch.experienceYears : existing.experienceYears,
+    currentTeam: patch.currentTeam !== undefined ? patch.currentTeam : existing.currentTeam,
+    stats: patch.stats !== undefined ? patch.stats : (existing.stats as Record<string, number> | null),
+    isVisible: patch.isVisible ?? existing.isVisible,
   };
   validateSportState(existing.sport, state);
 
-  await prisma.playerSport.update({
-    where: { id: existing.id },
-    data: { ...state, availability: toDb(state.availability) },
-  });
+  await prisma.playerSport.update({ where: { id: existing.id }, data: toRow(state) });
   await touch(profileId);
   return getMyProfile(userId);
 }
@@ -199,6 +213,38 @@ export async function removeSport(userId: string, sportId: number) {
   const profileId = await profileIdOf(userId);
   const { count } = await prisma.playerSport.deleteMany({ where: { profileId, sportId } });
   if (count === 0) throw AppError.notFound("PLAYER_SPORT_NOT_FOUND", "You haven't added that sport");
+  return getMyProfile(userId);
+}
+
+// ─────────────────────────── achievements ───────────────────────────
+
+/** The caller's own sport profile, or 404 — ownership is enforced by looking it up through their profile. */
+async function ownSportRow(userId: string, sportId: number) {
+  const row = await prisma.playerSport.findFirst({ where: { sportId, profile: { userId } }, select: { id: true, profileId: true } });
+  if (!row) throw AppError.notFound("PLAYER_SPORT_NOT_FOUND", "You haven't added that sport");
+  return row;
+}
+
+export async function addAchievement(userId: string, sportId: number, input: z.infer<typeof addAchievementBody>) {
+  const row = await ownSportRow(userId, sportId);
+  await prisma.$transaction(async (tx) => {
+    // Lock the sport profile row so two concurrent adds can't both slip past the cap.
+    await tx.$queryRaw`SELECT id FROM "PlayerSport" WHERE id = ${row.id} FOR UPDATE`;
+    if ((await tx.playerAchievement.count({ where: { playerSportId: row.id } })) >= MAX_ACHIEVEMENTS) {
+      throw AppError.conflict("PLAYER_ACHIEVEMENT_LIMIT", `You can list up to ${MAX_ACHIEVEMENTS} achievements per sport`);
+    }
+    await tx.playerAchievement.create({
+      data: { playerSportId: row.id, title: input.title, year: input.year ?? null, description: input.description ?? null },
+    });
+  });
+  await touch(row.profileId);
+  return getMyProfile(userId);
+}
+
+export async function removeAchievement(userId: string, sportId: number, achievementId: string) {
+  const row = await ownSportRow(userId, sportId);
+  const { count } = await prisma.playerAchievement.deleteMany({ where: { id: achievementId, playerSportId: row.id } });
+  if (count === 0) throw AppError.notFound("PLAYER_ACHIEVEMENT_NOT_FOUND", "Achievement not found");
   return getMyProfile(userId);
 }
 

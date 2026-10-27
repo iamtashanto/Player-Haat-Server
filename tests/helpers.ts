@@ -279,3 +279,27 @@ export async function completedMatch(w: World, o: { players?: number; completedH
   }
   return { cap, request, players };
 }
+
+// ───────────────────────── Roles & recruiters ─────────────────────────
+
+/** Registers through the public API with an explicit account type. */
+export async function registerAs(role: "PLAYER" | "RECRUITER", email: string) {
+  const u = await registerUser({ email, name: `${role} ${email.split("@")[0]}`, ...({ role } as object) });
+  return { ...u, auth: bearer(u.accessToken) };
+}
+
+/** A recruiter who has finished onboarding (profile created directly in the DB). */
+export async function recruiterUser(w: World, email = "recruiter@example.com", o: { onboard?: boolean; organization?: string } = {}) {
+  const s = await registerAs("RECRUITER", email);
+  const profile =
+    o.onboard === false
+      ? null
+      : await prisma.recruiterProfile.create({
+          data: { userId: s.user.id, type: "CLUB", organization: o.organization ?? "Barishal United", districtId: w.patuakhali.id, sportIds: [w.football.id] },
+        });
+  return { ...s, recruiterId: profile?.id ?? null };
+}
+
+/** Signs in through the dashboard endpoint (the only way an admin gets a session). */
+export const adminLogin = (email = "admin@example.com", password = DEFAULT_USER.password) =>
+  api().post(`${V1}/admin/auth/login`).send({ email, password });

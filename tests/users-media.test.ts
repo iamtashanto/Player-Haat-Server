@@ -28,7 +28,7 @@ describe("GET /users/me", () => {
       hasPlayerProfile: false,
       captainRating: { average: 0, count: 0 },
       locale: "bn",
-      role: "USER",
+      role: "PLAYER",
     });
     expect(JSON.stringify(before.body)).not.toMatch(/passwordHash|avatarPublicId/);
 
@@ -65,7 +65,7 @@ describe("PATCH /users/me", () => {
       expect(res.status).toBe(422);
     }
     const row = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-    expect(row).toMatchObject({ role: "USER", email: "viewer@example.com", name: "Viewer", captainAvgRating: 0 });
+    expect(row).toMatchObject({ role: "PLAYER", email: "viewer@example.com", name: "Viewer", captainAvgRating: 0 });
   });
 
   it("normalizes the phone to E.164, stores it unverified, and can clear it", async () => {

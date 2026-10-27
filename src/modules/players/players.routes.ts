@@ -2,13 +2,14 @@ import { Router } from "express";
 import type { z } from "zod";
 import { created, ok, valid } from "../../lib/http.js";
 import { createRateLimiter } from "../../middlewares/rate-limit.js";
-import { authUser, requireAuth } from "../../middlewares/auth.js";
+import { authUser, requireAuth, requireRole } from "../../middlewares/auth.js";
 import { imageUpload } from "../../middlewares/upload.js";
 import { validate } from "../../middlewares/validate.js";
 import { uploadLimiter } from "../media/media.routes.js";
 import * as media from "./player-media.service.js";
 import * as svc from "./players.service.js";
 import * as s from "./players.schema.js";
+import { requireOnboardedRecruiter } from "../recruiters/recruiters.service.js";
 import { searchPlayers } from "./search.service.js";
 
 type B<T extends z.ZodType> = z.infer<T>;
@@ -19,6 +20,9 @@ const searchLimiter = createRateLimiter({ windowMs: 60 * 1000, limit: 60 });
 
 export const playersRoutes = Router();
 playersRoutes.use(requireAuth);
+
+// Managing a player profile is for players only; recruiters (and players) can still search and view others.
+playersRoutes.use("/me", requireRole("PLAYER"));
 
 // ── my profile (declared before /:id so "me" is never read as an id) ──
 playersRoutes.get("/me", async (req, res) => ok(res, await svc.getMyProfile(me(req))));
@@ -40,6 +44,15 @@ playersRoutes.delete("/me/sports/:sportId", validate({ params: s.sportParams }),
   ok(res, await svc.removeSport(me(req), valid<unknown, B<typeof s.sportParams>>(req).params.sportId));
 });
 
+playersRoutes.post("/me/sports/:sportId/achievements", validate({ params: s.sportParams, body: s.addAchievementBody }), async (req, res) => {
+  const { params, body } = valid<B<typeof s.addAchievementBody>, B<typeof s.sportParams>>(req);
+  created(res, await svc.addAchievement(me(req), params.sportId, body));
+});
+playersRoutes.delete("/me/sports/:sportId/achievements/:achievementId", validate({ params: s.achievementParams }), async (req, res) => {
+  const { params } = valid<unknown, B<typeof s.achievementParams>>(req);
+  ok(res, await svc.removeAchievement(me(req), params.sportId, params.achievementId));
+});
+
 playersRoutes.post("/me/media/photos", uploadLimiter, imageUpload("file"), async (req, res) => {
   created(res, await media.addPhoto(me(req), req.image!.buffer));
 });
@@ -54,11 +67,11 @@ playersRoutes.delete("/me/media/:mediaId", validate({ params: s.mediaParams }), 
 });
 
 // ── others ──
-playersRoutes.get("/", searchLimiter, validate({ query: s.searchQuery }), async (req, res) => {
+playersRoutes.get("/", requireOnboardedRecruiter, searchLimiter, validate({ query: s.searchQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, B<typeof s.searchQuery>>(req);
   const { items, nextCursor } = await searchPlayers(me(req), query);
   ok(res, items, { nextCursor, limit: query.limit });
 });
-playersRoutes.get("/:id", validate({ params: s.profileParams }), async (req, res) => {
+playersRoutes.get("/:id", requireOnboardedRecruiter, validate({ params: s.profileParams }), async (req, res) => {
   ok(res, await svc.getPublicProfile(valid<unknown, B<typeof s.profileParams>>(req).params.id));
 });

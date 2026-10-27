@@ -1,4 +1,4 @@
-import { Prisma, type User } from "@prisma/client";
+import { Prisma, type User, type UserRole } from "@prisma/client";
 import { env } from "../../config/env.js";
 import { OTP } from "./auth.constants.js";
 import { sms } from "../../lib/sms/index.js";
@@ -22,10 +22,18 @@ async function startSession(user: UserWithAccounts, ctx: SessionContext) {
   return { user: toAuthUser(user), tokens: await issueTokens(user, ctx) };
 }
 
-/** Deleted accounts look like they never existed; suspended ones are told so (after proving identity). */
-function assertCanSignIn(user: Pick<User, "status">) {
+/** Accounts that can be created by signing up. ADMIN is not among them. */
+type SignupRole = Extract<UserRole, "PLAYER" | "RECRUITER">;
+
+/**
+ * Deleted accounts look like they never existed; suspended ones are told so (after proving identity).
+ * Admins are kept off the public sign-in paths (password, Google/Apple, phone) so the most privileged
+ * accounts are only reachable through the dashboard's own, separately rate-limited login.
+ */
+function assertCanSignIn(user: Pick<User, "status" | "role">) {
   if (user.status === "SUSPENDED") throw AppError.forbidden(ErrorCode.AUTH_ACCOUNT_SUSPENDED);
   if (user.status === "DELETED") throw AppError.unauthorized(ErrorCode.AUTH_INVALID_CREDENTIALS);
+  if (user.role === "ADMIN") throw AppError.forbidden(ErrorCode.AUTH_ADMIN_DASHBOARD_ONLY, "Admin accounts sign in through the admin dashboard");
 }
 
 /** Email delivery must never fail a request that already changed state — the user can resend. */
@@ -49,7 +57,7 @@ async function ensureEmailAccount(tx: Prisma.TransactionClient, userId: string, 
 // ─────────────────────────── email + password ───────────────────────────
 
 export async function register(
-  input: { name: string; email: string; password: string; locale?: "bn" | "en" },
+  input: { name: string; email: string; password: string; role?: SignupRole; locale?: "bn" | "en" },
   ctx: SessionContext,
 ) {
   const passwordHash = await hashPassword(input.password);
@@ -60,6 +68,7 @@ export async function register(
         name: input.name,
         email: input.email,
         passwordHash,
+        role: input.role ?? "PLAYER",
         locale: input.locale ?? "bn",
         authAccounts: { create: { provider: "EMAIL", providerUserId: input.email } },
       },
@@ -87,6 +96,23 @@ export async function login(input: { email: string; password: string }, ctx: Ses
     throw AppError.unauthorized(ErrorCode.AUTH_INVALID_CREDENTIALS, "Invalid email or password");
   }
   assertCanSignIn(user);
+  return startSession(user, ctx);
+}
+
+/**
+ * The dashboard's sign-in. Same checks as `login`, plus the account must be an ADMIN — and anyone
+ * else gets the same "invalid credentials" as a wrong password, so this can't be used to find admins.
+ */
+export async function adminLogin(input: { email: string; password: string }, ctx: SessionContext) {
+  const user = await prisma.user.findUnique({ where: { email: input.email }, include: withAccounts });
+  if (!user?.passwordHash || user.status === "DELETED" || user.role !== "ADMIN") {
+    await burnPasswordCheck(input.password);
+    throw AppError.unauthorized(ErrorCode.AUTH_INVALID_CREDENTIALS, "Invalid email or password");
+  }
+  if (!(await verifyPassword(user.passwordHash, input.password))) {
+    throw AppError.unauthorized(ErrorCode.AUTH_INVALID_CREDENTIALS, "Invalid email or password");
+  }
+  if (user.status === "SUSPENDED") throw AppError.forbidden(ErrorCode.AUTH_ACCOUNT_SUSPENDED);
   return startSession(user, ctx);
 }
 
@@ -179,7 +205,7 @@ export async function setPassword(
  * 2. Verified email matches an existing user → link the provider to them.
  * 3. Otherwise → create a new user.
  */
-export async function socialLogin(profile: SocialProfile, ctx: SessionContext, fallbackName?: string) {
+export async function socialLogin(profile: SocialProfile, ctx: SessionContext, opts: { fallbackName?: string; role?: SignupRole } = {}) {
   const lookup = () =>
     prisma.authAccount.findUnique({
       where: { provider_providerUserId: { provider: profile.provider, providerUserId: profile.providerUserId } },
@@ -189,7 +215,7 @@ export async function socialLogin(profile: SocialProfile, ctx: SessionContext, f
   let user = (await lookup())?.user;
   if (!user) {
     try {
-      user = await linkOrCreate(profile, fallbackName);
+      user = await linkOrCreate(profile, opts);
     } catch (err) {
       // Two first-time logins racing: the loser finds the winner's rows.
       if (!isUniqueViolation(err)) throw err;
@@ -201,7 +227,7 @@ export async function socialLogin(profile: SocialProfile, ctx: SessionContext, f
   return startSession(user, ctx);
 }
 
-async function linkOrCreate(profile: SocialProfile, fallbackName?: string): Promise<UserWithAccounts> {
+async function linkOrCreate(profile: SocialProfile, opts: { fallbackName?: string; role?: SignupRole }): Promise<UserWithAccounts> {
   const verifiedEmail = profile.emailVerified ? profile.email : undefined;
 
   return prisma.$transaction(async (tx) => {
@@ -223,10 +249,11 @@ async function linkOrCreate(profile: SocialProfile, fallbackName?: string): Prom
       }
     }
 
-    const name = (profile.name ?? fallbackName)?.trim() || verifiedEmail?.split("@")[0] || "Player";
+    const name = (profile.name ?? opts.fallbackName)?.trim() || verifiedEmail?.split("@")[0] || "Player";
     return tx.user.create({
       data: {
         name: name.slice(0, 80),
+        role: opts.role ?? "PLAYER", // only applies to brand-new accounts; linking never changes an existing role
         email: verifiedEmail ?? null,
         emailVerifiedAt: verifiedEmail ? new Date() : null,
         avatarUrl: profile.picture ?? null,
@@ -268,7 +295,7 @@ export async function requestPhoneCode(phone: string) {
 }
 
 /** Verify the code, then sign in the number's owner — creating the account if this is a new number. */
-export async function phoneLogin(input: { phone: string; code: string; name?: string }, ctx: SessionContext) {
+export async function phoneLogin(input: { phone: string; code: string; name?: string; role?: SignupRole }, ctx: SessionContext) {
   await verifyCode("PHONE_OTP", input.phone, input.code);
 
   const lookup = () =>
@@ -292,6 +319,7 @@ export async function phoneLogin(input: { phone: string; code: string; name?: st
       return tx.user.create({
         data: {
           name: input.name ?? "Player",
+          role: input.role ?? "PLAYER",
           phone: input.phone,
           phoneVerifiedAt: new Date(),
           authAccounts: { create: { provider: "PHONE", providerUserId: input.phone } },

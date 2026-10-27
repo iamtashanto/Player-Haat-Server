@@ -95,6 +95,8 @@ export function collectErrorCodes(): ErrorEntry[] {
     PROFILE_NOT_HIDDEN: "Not hidden",
     REQUEST_ALREADY_HIDDEN: "Already hidden",
     REQUEST_NOT_HIDDEN: "Not hidden",
+    SPORT_PROFILE_ALREADY_HIDDEN: "Already hidden",
+    SPORT_PROFILE_NOT_HIDDEN: "Not hidden",
   };
   for (const e of found.values()) if (!e.message && fallbacks[e.code]) e.message = fallbacks[e.code]!;
   return [...found.values()].sort((a, b) => a.code.localeCompare(b.code));

@@ -24,16 +24,21 @@ export async function login(req: Request, res: Response) {
   ok(res, await auth.login(body, ctxOf(req, body.deviceId)));
 }
 
+export async function adminLogin(req: Request, res: Response) {
+  const { body } = valid<Body<typeof s.loginBody>>(req);
+  ok(res, await auth.adminLogin(body, ctxOf(req, body.deviceId)));
+}
+
 export async function google(req: Request, res: Response) {
   const { body } = valid<Body<typeof s.googleBody>>(req);
   const profile = await verifyGoogleIdToken(body.idToken);
-  ok(res, await auth.socialLogin(profile, ctxOf(req, body.deviceId)));
+  ok(res, await auth.socialLogin(profile, ctxOf(req, body.deviceId), { role: body.role }));
 }
 
 export async function apple(req: Request, res: Response) {
   const { body } = valid<Body<typeof s.appleBody>>(req);
   const profile = await verifyAppleIdentityToken(body.identityToken, { nonce: body.nonce });
-  ok(res, await auth.socialLogin(profile, ctxOf(req, body.deviceId), body.name));
+  ok(res, await auth.socialLogin(profile, ctxOf(req, body.deviceId), { fallbackName: body.name, role: body.role }));
 }
 
 export async function refresh(req: Request, res: Response) {

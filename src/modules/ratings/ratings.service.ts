@@ -54,7 +54,7 @@ function buildScores(direction: Rating["direction"], isPaid: boolean, body: Body
 export async function createRating(userId: string, requestId: string, body: Body) {
   const request = await prisma.playerRequest.findUnique({
     where: { id: requestId },
-    select: { id: true, createdById: true, status: true, completedAt: true, isPaid: true },
+    select: { id: true, createdById: true, sportId: true, status: true, completedAt: true, isPaid: true },
   });
   if (!request) throw AppError.notFound("REQUEST_NOT_FOUND", "Request not found");
 
@@ -105,7 +105,7 @@ export async function createRating(userId: string, requestId: string, body: Body
       }
       throw err;
     }
-    await recomputeAggregates(tx, rateeId, direction);
+    await recomputeAggregates(tx, rateeId, direction, request.sportId);
     return toRating(rating);
   });
 }
@@ -114,7 +114,7 @@ export async function createRating(userId: string, requestId: string, body: Body
  * Recomputes from the rating rows (not incrementally), so it can never drift.
  * No-shows are strikes, not reviews: they raise noShowCount and are excluded from the average and its count.
  */
-async function recomputeAggregates(tx: Prisma.TransactionClient, rateeId: string, direction: Rating["direction"]) {
+async function recomputeAggregates(tx: Prisma.TransactionClient, rateeId: string, direction: Rating["direction"], sportId: number) {
   const reviews = await tx.rating.aggregate({ where: { rateeId, direction, noShow: false }, _avg: { overall: true }, _count: { _all: true } });
   const avg = reviews._avg.overall ?? 0;
   const count = reviews._count._all;
@@ -122,6 +122,16 @@ async function recomputeAggregates(tx: Prisma.TransactionClient, rateeId: string
   if (direction === "CAPTAIN_TO_PLAYER") {
     const noShowCount = await tx.rating.count({ where: { rateeId, direction, noShow: true } });
     await tx.playerProfile.updateMany({ where: { userId: rateeId }, data: { avgRating: avg, ratingCount: count, noShowCount } });
+
+    // The same reviews, narrowed to this match's sport, feed that sport profile's own rating.
+    const [perSport] = await tx.$queryRaw<{ avg: number | null; cnt: number }[]>`
+      SELECT AVG(r.overall)::float AS avg, COUNT(*)::int AS cnt
+      FROM "Rating" r JOIN "PlayerRequest" q ON q.id = r."requestId"
+      WHERE r."rateeId" = ${rateeId} AND r.direction = 'CAPTAIN_TO_PLAYER' AND r."noShow" = false AND q."sportId" = ${sportId}`;
+    await tx.playerSport.updateMany({
+      where: { sportId, profile: { userId: rateeId } },
+      data: { avgRating: perSport?.avg ?? 0, ratingCount: perSport?.cnt ?? 0 },
+    });
   } else {
     await tx.user.update({ where: { id: rateeId }, data: { captainAvgRating: avg, captainRatingCount: count } });
   }

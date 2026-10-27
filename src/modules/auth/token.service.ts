@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient, UserRole } from "@prisma/client";
 import { env } from "../../config/env.js";
 import { randomToken, sha256 } from "../../lib/crypto.js";
 import { AppError, ErrorCode } from "../../lib/errors.js";
@@ -25,7 +25,7 @@ export interface AuthTokens {
 
 async function mint(
   db: Db,
-  user: { id: string; role: "USER" | "ADMIN" },
+  user: { id: string; role: UserRole },
   familyId: string,
   ctx: SessionContext,
 ): Promise<{ id: string; tokens: AuthTokens }> {
@@ -60,7 +60,7 @@ const touchLastActive = (userId: string) =>
 
 /** Starts a brand-new session (a new refresh-token family) after a successful login. */
 export async function issueTokens(
-  user: { id: string; role: "USER" | "ADMIN" },
+  user: { id: string; role: UserRole },
   ctx: SessionContext,
   db: Db = prisma,
 ): Promise<AuthTokens> {

@@ -14,11 +14,18 @@ const code = z.string().regex(/^\d{6}$/, "6-digit code").openapi({ example: "042
 const deviceId = z.string().trim().min(1).max(100).optional().openapi({ description: "Stable per-install id; groups sessions per device." });
 const refreshToken = z.string().min(20).max(200);
 
+// Admins are never created through sign-up, so ADMIN is deliberately not selectable here.
+const signupRole = z
+  .enum(["PLAYER", "RECRUITER"])
+  .optional()
+  .openapi({ description: "Account type, chosen once at sign-up. Defaults to PLAYER. Ignored when signing in to an existing account." });
+
 // ───────── request bodies ─────────
 export const registerBody = z.object({
   name: z.string().trim().min(1).max(80),
   email,
   password,
+  role: signupRole,
   locale: z.enum(["bn", "en"]).optional(),
   deviceId,
 });
@@ -31,10 +38,11 @@ export const setPasswordBody = z.object({
   newPassword: password,
   deviceId,
 });
-export const googleBody = z.object({ idToken: z.string().min(20).max(5000), deviceId });
+export const googleBody = z.object({ idToken: z.string().min(20).max(5000), role: signupRole, deviceId });
 export const appleBody = z.object({
   identityToken: z.string().min(20).max(5000),
   nonce: z.string().max(200).optional().openapi({ description: "Raw nonce, if the app sent one to Apple." }),
+  role: signupRole,
   name: z
     .string()
     .trim()
@@ -56,6 +64,7 @@ export const phoneVerifyBody = z.strictObject({
   phone,
   code,
   name: z.string().trim().min(1).max(80).optional().openapi({ description: "Used only when this creates a new account." }),
+  role: signupRole,
   deviceId,
 });
 export const linkPhoneBody = z.strictObject({ phone, code });
@@ -78,7 +87,7 @@ const AuthUserSchema = z
     phone: z.string().nullable(),
     avatarUrl: z.string().nullable(),
     locale: z.enum(["bn", "en"]),
-    role: z.enum(["USER", "ADMIN"]),
+    role: z.enum(["PLAYER", "RECRUITER", "ADMIN"]),
     hasPassword: z.boolean(),
     loginMethods: z.array(z.enum(["EMAIL", "PHONE", "GOOGLE", "APPLE"])),
   })
@@ -89,7 +98,7 @@ const PhoneSessionSchema = SessionSchema.extend({ isNewUser: z.boolean() }).open
 // ───────── OpenAPI ─────────
 const T = "Auth";
 registerRoute({ method: "post", path: "/auth/register", tag: T, summary: "Register with email + password", description: "Signs the user in immediately and emails a 6-digit verification code.", body: registerBody, response: SessionSchema, status: 201, errors: [409, 422] });
-registerRoute({ method: "post", path: "/auth/login", tag: T, summary: "Log in with email + password", body: loginBody, response: SessionSchema, errors: [401, 403, 422] });
+registerRoute({ method: "post", path: "/auth/login", tag: T, summary: "Log in with email + password", description: "Players and recruiters only. Admin accounts get 403 `AUTH_ADMIN_DASHBOARD_ONLY` and must use `/admin/auth/login`.", body: loginBody, response: SessionSchema, errors: [401, 403, 422] });
 registerRoute({ method: "post", path: "/auth/phone/request", tag: T, summary: "Text a sign-in code to a Bangladeshi mobile number", description: "6-digit code, valid 5 minutes. 60s between texts, 5 per hour per number. Responds the same whether or not the number has an account.", body: phoneRequestBody, errors: [422, 429, 502, 503] });
 registerRoute({ method: "post", path: "/auth/phone/verify", tag: T, summary: "Sign in (or sign up) with the texted code", description: "`isNewUser` tells the app to run the profile wizard. A number someone typed into their profile but never verified is released to whoever proves they hold it.", body: phoneVerifyBody, response: PhoneSessionSchema, errors: [400, 403, 422, 429] });
 registerRoute({ method: "post", path: "/auth/google", tag: T, summary: "Sign in with Google", description: "Send the Google `idToken`. Links to an existing account when the verified email matches.", body: googleBody, response: SessionSchema, errors: [401, 403, 503] });

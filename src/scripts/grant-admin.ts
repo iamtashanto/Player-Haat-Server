@@ -23,7 +23,7 @@ async function main() {
     console.error(`${email} is ${user.status}; only active accounts can be admins`);
     process.exit(1);
   }
-  const role = revoke ? "USER" : "ADMIN";
+  const role = revoke ? "PLAYER" : "ADMIN";
   await prisma.user.update({ where: { id: user.id }, data: { role } });
   console.log(`${email}: ${user.role} → ${role}`);
 }

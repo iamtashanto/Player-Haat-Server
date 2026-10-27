@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-87 codes. Messages are developer-facing English and may change; **codes are stable**.
+96 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -32,6 +32,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `AUTH_ACCOUNT_SUSPENDED` | 403 | The account is suspended | `middlewares/auth.ts`, `modules/auth/auth.service.ts`, `modules/auth/token.service.ts` |
+| `AUTH_ADMIN_DASHBOARD_ONLY` | 403 | Admin accounts sign in through the admin dashboard | `modules/auth/auth.service.ts` |
 | `AUTH_EMAIL_ALREADY_VERIFIED` | 409 | Email is already verified | `modules/auth/auth.service.ts` |
 | `AUTH_EMAIL_TAKEN` | 409 | Email already registered | `modules/auth/auth.service.ts` |
 | `AUTH_FORBIDDEN` | 403 | Signed in, but not allowed to do this | `middlewares/auth.ts` |
@@ -72,7 +73,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
-| `LOCATION_INVALID` | 422 | Unknown upazila | `modules/locations/location.service.ts` |
+| `LOCATION_INVALID` | 422 | Unknown upazila | `modules/locations/location.service.ts`, `modules/recruiters/recruiters.service.ts` |
 
 ## MALFORMED
 
@@ -95,7 +96,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
-| `NOT_FOUND` | 404 | Resource not found | `(shared middleware)`, `modules/players/players.service.ts` |
+| `NOT_FOUND` | 404 | Resource not found | `(shared middleware)`, `modules/players/players.service.ts`, `modules/recruiters/recruiters.service.ts` |
 
 ## NOTIFICATION
 
@@ -113,13 +114,15 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
+| `PLAYER_ACHIEVEMENT_LIMIT` | 409 | You can list up to… | `modules/players/players.service.ts` |
+| `PLAYER_ACHIEVEMENT_NOT_FOUND` | 404 | Achievement not found | `modules/players/players.service.ts` |
 | `PLAYER_MEDIA_LIMIT` | 409 | You can have at most… | `modules/players/player-media.service.ts` |
 | `PLAYER_MEDIA_NOT_FOUND` | 404 | Media not found | `modules/players/player-media.service.ts` |
 | `PLAYER_PROFILE_EXISTS` | 409 | You already have a player profile | `modules/players/players.service.ts` |
 | `PLAYER_PROFILE_NOT_FOUND` | 404 | Profile not found | `modules/admin/admin.service.ts`, `modules/players/player-media.service.ts`, `modules/ratings/ratings.service.ts` |
 | `PLAYER_PROFILE_REQUIRED` | 409 | Create your player profile before applying | `modules/applications/applications.service.ts` |
 | `PLAYER_SPORT_EXISTS` | 409 | You already added that sport; update it instead | `modules/players/players.service.ts` |
-| `PLAYER_SPORT_NOT_FOUND` | 404 | You haven't added that sport | `modules/players/players.service.ts` |
+| `PLAYER_SPORT_NOT_FOUND` | 404 | Sport profile not found | `modules/admin/admin.service.ts`, `modules/players/players.service.ts` |
 | `PLAYER_SPORT_REQUIRED` | 409 | Add… | `modules/applications/applications.service.ts` |
 
 ## PROFILE
@@ -144,6 +147,14 @@ Every error response has this shape — the app should translate `error.code`, n
 | `RATING_NOT_PARTICIPANT` | 403 | Only the poster and accepted players can rate this match | `modules/ratings/ratings.service.ts` |
 | `RATING_TARGET_NOT_FOUND` | 404 | No accepted player with that applicationId on this match | `modules/ratings/ratings.service.ts` |
 | `RATING_WINDOW_CLOSED` | 409 | Ratings close… | `modules/ratings/ratings.service.ts` |
+
+## RECRUITER
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `RECRUITER_PROFILE_EXISTS` | 409 | You already have a recruiter profile | `modules/recruiters/recruiters.service.ts` |
+| `RECRUITER_PROFILE_NOT_FOUND` | 404 | Recruiter not found | `modules/admin/admin.service.ts` |
+| `RECRUITER_PROFILE_REQUIRED` | 403 | Complete your recruiter profile to discover players | `modules/recruiters/recruiters.service.ts` |
 
 ## REPORT
 
@@ -190,6 +201,13 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `SMS_SEND_FAILED` | 502 | Could not send the SMS right now | `lib/sms/index.ts` |
 
+## SPORT
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `SPORT_PROFILE_ALREADY_HIDDEN` | 409 | Already hidden | `modules/admin/admin.service.ts` |
+| `SPORT_PROFILE_NOT_HIDDEN` | 409 | Not hidden | `modules/admin/admin.service.ts` |
+
 ## STORAGE
 
 | Code | HTTP | Developer message | Raised in |
@@ -207,6 +225,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `USER_NOT_SUSPENDED` | 409 | That user isn't suspended | `modules/admin/admin.service.ts` |
 | `USER_PHONE_LOCKED` | 409 | Your number is used to sign in; change it by verifying a new one | `modules/users/users.service.ts` |
 | `USER_PHONE_TAKEN` | 409 | That phone number is already in use | `modules/users/users.service.ts` |
+| `USER_ROLE_UNCHANGED` | 409 | Already a… | `modules/admin/admin.service.ts` |
 
 ## VALIDATION
 
