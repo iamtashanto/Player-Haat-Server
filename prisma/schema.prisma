@@ -68,7 +68,6 @@ enum CreditReason {
 }
 
 enum PaymentMethod {
-  SANDBOX // non-production only: pays instantly, for development and tests
   BKASH
   NAGAD
   ROCKET
@@ -255,6 +254,11 @@ model User {
   playerProfile            PlayerProfile?
   recruiterProfile         RecruiterProfile?
   creditBalance            Int                   @default(0) // maintained with the ledger, never negative (CHECK in the migration)
+  // Admin two-factor sign-in (TOTP). The secret is stored encrypted; backup codes only as hashes.
+  totpSecret       String?
+  totpEnabledAt    DateTime?
+  totpLastStep     Int? // the last 30-second step accepted, so one code can't be replayed
+  totpBackupHashes String[] @default([])
   creditTransactions       CreditTransaction[]
   payments                 Payment[]
   contactReveals           ContactReveal[]       @relation("ContactViewer")

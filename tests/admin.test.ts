@@ -77,7 +77,7 @@ describe("users", () => {
       id: p.user.id,
       email: "player@example.com",
       profileId: p.profileId,
-      profile: { id: p.profileId, isVisible: true, hiddenByAdmin: false, verifiedBadge: false },
+      playerProfile: { id: p.profileId, isVisible: true, hiddenByAdmin: false, verifiedBadge: false, sports: [expect.objectContaining({ sportCode: "FOOTBALL" })] },
       counts: { requestsPosted: 1, applications: 0, reportsAgainst: 0 },
     });
     expect((await get(admin.auth, "/admin/users/nope")).body.error.code).toBe("USER_NOT_FOUND");

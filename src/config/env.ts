@@ -68,6 +68,12 @@ const schema = z
 
     // Credit top-ups by mobile banking: the number users send money to for each method. A method with no
     // number configured isn't offered. (A payment-gateway integration would replace this later.)
+    // Admin sign-in needs a second factor (TOTP). On by default in production; off elsewhere so local development
+    // and tests don't need an authenticator. Refused as `false` in production (see below).
+    ADMIN_REQUIRE_2FA: bool.optional(),
+    // 32+ random chars used to encrypt admin TOTP secrets at rest. Falls back to a key derived from JWT_ACCESS_SECRET.
+    ADMIN_TOTP_KEY: optionalString,
+
     PAYMENT_BKASH_NUMBER: optionalString,
     PAYMENT_NAGAD_NUMBER: optionalString,
     PAYMENT_ROCKET_NUMBER: optionalString,
@@ -80,6 +86,9 @@ const schema = z
         path: ["JWT_ACCESS_SECRET"],
         message: "Refusing to start in production with the example JWT secret",
       });
+    }
+    if (env.ADMIN_REQUIRE_2FA === false) {
+      ctx.addIssue({ code: "custom", path: ["ADMIN_REQUIRE_2FA"], message: "Admin two-factor sign-in can't be disabled in production" });
     }
     if (!env.RATE_LIMIT_ENABLED) {
       ctx.addIssue({ code: "custom", path: ["RATE_LIMIT_ENABLED"], message: "Rate limiting can't be disabled in production" });
@@ -117,6 +126,7 @@ function load() {
     DOCS_ENABLED: env.DOCS_ENABLED ?? env.NODE_ENV !== "production",
     // Background jobs (rating reminders) run in every environment except tests.
     JOBS_ENABLED: env.JOBS_ENABLED ?? env.NODE_ENV !== "test",
+    ADMIN_REQUIRE_2FA: env.ADMIN_REQUIRE_2FA ?? env.NODE_ENV === "production",
   };
 }
 

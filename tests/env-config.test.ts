@@ -30,11 +30,16 @@ describe("production config is validated at boot (fail fast)", () => {
     ["a missing SMTP host", { SMTP_HOST: "" }, "SMTP_HOST"],
     ["no CORS origins", { CORS_ORIGINS: "" }, "CORS_ORIGINS"],
     ["rate limiting switched off", { RATE_LIMIT_ENABLED: "false" }, "RATE_LIMIT_ENABLED"],
+    ["admin two-factor switched off", { ADMIN_REQUIRE_2FA: "false" }, "ADMIN_REQUIRE_2FA"],
     ["a malformed database url", { DATABASE_URL: "not-a-url" }, "DATABASE_URL"],
   ])("refuses to start with %s and names the variable", (_label, override, variable) => {
     const res = boot({ ...prod, ...override });
     expect(res.ok).toBe(false);
     expect(res.stderr).toContain(variable);
+  });
+
+  it("turns admin two-factor on by default in production, and lets development skip it", () => {
+    expect(boot({ ...prod, NODE_ENV: "development", ADMIN_REQUIRE_2FA: "false" }).ok).toBe(true);
   });
 
   it("allows rate limiting to be disabled outside production (load tests)", () => {

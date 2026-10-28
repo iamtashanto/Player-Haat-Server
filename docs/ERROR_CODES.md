@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-144 codes. Messages are developer-facing English and may change; **codes are stable**.
+149 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -39,6 +39,7 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `AUTH_ACCOUNT_SUSPENDED` | 403 | The account is suspended | `middlewares/auth.ts`, `modules/auth/auth.service.ts`, `modules/auth/token.service.ts` |
 | `AUTH_ADMIN_DASHBOARD_ONLY` | 403 | Admin accounts sign in through the admin dashboard | `modules/auth/auth.service.ts` |
+| `AUTH_CHALLENGE_INVALID` | 401 | This sign-in step expired. Start again. | `modules/admin/admin-auth.service.ts` |
 | `AUTH_EMAIL_ALREADY_VERIFIED` | 409 | Email is already verified | `modules/auth/auth.service.ts` |
 | `AUTH_EMAIL_TAKEN` | 409 | Email already registered | `modules/auth/auth.service.ts` |
 | `AUTH_FORBIDDEN` | 403 | Signed in, but not allowed to do this | `middlewares/auth.ts`, `modules/chat/chat.service.ts` |
@@ -46,6 +47,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `AUTH_INVALID_OTP` | 400 | Invalid code | `modules/auth/auth.service.ts`, `modules/auth/otp.service.ts` |
 | `AUTH_INVALID_REFRESH_TOKEN` | 401 | Unknown or logged-out refresh token | `modules/auth/token.service.ts` |
 | `AUTH_INVALID_SOCIAL_TOKEN` | 401 | Invalid Apple token | `lib/social/apple.ts`, `lib/social/google.ts` |
+| `AUTH_INVALID_TOTP` | 401 | That code isn't right | `modules/admin/admin-auth.service.ts` |
 | `AUTH_LAST_LOGIN_METHOD` | 409 | Cannot remove your only login method | `modules/auth/methods.service.ts` |
 | `AUTH_NO_EMAIL` | 409 | Account has no email address | `modules/auth/auth.service.ts` |
 | `AUTH_NO_REFRESH_TOKEN` | 401 | Refresh token missing | `modules/admin/admin.routes.ts` |
@@ -61,6 +63,8 @@ Every error response has this shape — the app should translate `error.code`, n
 | `AUTH_REFRESH_REUSED` | 401 | Refresh token was already used; all sessions for this login were revoked | `modules/auth/token.service.ts` |
 | `AUTH_SMS_UNAVAILABLE` | 503 | Sign-in by SMS is temporarily unavailable | `modules/auth/auth.service.ts` |
 | `AUTH_TOKEN_EXPIRED` | 401 | Access token expired — refresh it and retry | `lib/jwt.ts` |
+| `AUTH_TOTP_ALREADY_ENABLED` | 409 | Two-factor is already set up for this account | `modules/admin/admin-auth.service.ts` |
+| `AUTH_TOTP_NOT_STARTED` | 409 | Start the setup first | `modules/admin/admin-auth.service.ts` |
 | `AUTH_UNAUTHENTICATED` | 401 | Missing, malformed or invalid access token | `lib/jwt.ts`, `middlewares/auth.ts` |
 | `AUTH_WRONG_PASSWORD` | 400 | Password is incorrect | `modules/auth/account.service.ts`, `modules/auth/auth.service.ts` |
 
@@ -197,7 +201,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `PAYMENT_METHOD_UNAVAILABLE` | 503 | That payment method isn't available right now | `modules/billing/billing.service.ts` |
 | `PAYMENT_NOT_FOUND` | 404 | Payment not found | `modules/billing/billing.admin.ts`, `modules/billing/billing.service.ts` |
 | `PAYMENT_NOT_REVIEWABLE` | 409 | This payment is… | `modules/billing/billing.admin.ts` |
-| `PAYMENT_NOT_SUBMITTABLE` | 409 | Nothing to submit for this payment | `modules/billing/billing.service.ts` |
+| `PAYMENT_NOT_SUBMITTABLE` | 409 | This payment is already… | `modules/billing/billing.service.ts` |
 | `PAYMENT_TOO_MANY_OPEN` | 409 | Finish or wait for your open payments first | `modules/billing/billing.service.ts` |
 | `PAYMENT_TRX_USED` | 409 | That transaction id has already been used | `modules/billing/billing.service.ts` |
 
@@ -294,6 +298,12 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `SERVICE_UNAVAILABLE` | 503 | Database unreachable | `(shared middleware)`, `modules/health/health.controller.ts` |
+
+## SESSION
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `SESSION_NOT_FOUND` | 404 | That session isn't active | `modules/admin/admin-auth.service.ts` |
 
 ## SHORTLIST
 

@@ -4,7 +4,7 @@ import { z } from "../../lib/zod.js";
 import { phone } from "../users/users.schema.js";
 
 const id = z.string().min(1).max(40);
-export const METHODS = ["BKASH", "NAGAD", "ROCKET", "SANDBOX"] as const;
+export const METHODS = ["BKASH", "NAGAD", "ROCKET"] as const;
 
 export const checkoutBody = z.strictObject({ packId: id, method: z.enum(METHODS) });
 export const paymentParams = z.object({ id });
@@ -40,6 +40,6 @@ const T = "Billing";
 const A = { tag: T, auth: true } as const;
 registerRoute({ method: "get", path: "/billing/wallet", ...A, summary: "My credits, current prices and the ways I can pay", response: z.object({ balance: z.number().int(), pricing: Pricing, methods: z.array(Method), packs: z.array(Pack) }) });
 registerRoute({ method: "get", path: "/billing/transactions", ...A, summary: "My credit history", query: transactionsQuery, response: z.array(z.object({ id: z.string(), delta: z.number().int(), balanceAfter: z.number().int(), reason: z.string(), createdAt: z.string().datetime() })), errors: [422] });
-registerRoute({ method: "post", path: "/billing/checkout", ...A, summary: "Start buying a credit pack", description: "Mobile-banking top-up: send the amount to `payTo`, then submit the transaction id. `SANDBOX` completes instantly and only exists outside production.", body: checkoutBody, response: Payment, status: 201, errors: [404, 409, 422, 503] });
+registerRoute({ method: "post", path: "/billing/checkout", ...A, summary: "Start buying a credit pack", description: "Mobile-banking top-up: send the amount to `payTo`, then submit the transaction id.", body: checkoutBody, response: Payment, status: 201, errors: [404, 409, 422, 503] });
 registerRoute({ method: "post", path: "/billing/payments/{id}/submit", ...A, summary: "Submit the transaction id for a payment I made", description: "An admin checks it against the account's statement; credits are added on approval. A transaction id can only be used once.", params: paymentParams, body: submitBody, response: Payment, errors: [404, 409, 422] });
 registerRoute({ method: "get", path: "/billing/payments", ...A, summary: "My payments", response: z.array(Payment) });

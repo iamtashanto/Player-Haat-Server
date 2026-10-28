@@ -173,9 +173,13 @@ export const changePasswordBody = z.strictObject({
   newPassword: z.string().min(8).max(128).refine((p) => /[A-Za-z]/.test(p) && /\d/.test(p), "Must contain a letter and a number"),
 });
 
-export const adminRefreshBody = z.strictObject({
-  refreshToken: z.string().min(20).max(200).optional(),
-});
+// The dashboard sends no body at all: its credential is the httpOnly cookie. A missing body must mean "use the cookie",
+// not "invalid request" (which would sign every admin out on each page reload).
+export const adminRefreshBody = z
+  .strictObject({
+    refreshToken: z.string().min(20).max(200).optional(),
+  })
+  .default({});
 
 const Obj = z.record(z.string(), z.unknown());
 const T = "Admin";

@@ -82,7 +82,7 @@ unless `DOCS_ENABLED=true`. 70+ endpoints; the groups:
 | **chat** | recruiter ⇄ player over REST (poll while open, push otherwise); respects the contact setting; player can block; reportable |
 | **teams** | create, join by code, captain tools; posts can be made for a team |
 | **verification** | recruiters and player *stats* can be verified by an admin from links / document photos |
-| **billing** | credits, packs, pay by bKash / Nagad / Rocket and submit the transaction id (admin confirms); sandbox outside production |
+| **billing** | credits, packs, pay by bKash / Nagad / Rocket and submit the transaction id (admin confirms); manual payment only |
 | **players** | create/update my profile, **sport profiles** (one per sport: positions, experience, headline, stats, achievements, own visibility and rating, khep, availability), photos + video links, public profile, **search** (cursor-paginated; says which sport profile matched) |
 | **requests** | create, edit, cancel, fill, complete, nearby feed, mine |
 | **applications** | apply, withdraw, applicants, accept/reject (atomic fill), mine |

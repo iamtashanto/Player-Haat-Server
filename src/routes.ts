@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAppUser } from "./middlewares/auth.js";
 import { createApiLimits } from "./middlewares/rate-limit.js";
+import { adminAuthRoutes } from "./modules/admin/admin-auth.routes.js";
 import { adminExtraRoutes } from "./modules/admin/admin-extra.routes.js";
 import { adminRoutes } from "./modules/admin/admin.routes.js";
 import { billingRoutes } from "./modules/billing/billing.routes.js";
@@ -58,5 +59,6 @@ apiRouter.use("/conversations", requireAppUser, chatRoutes);
 apiRouter.use("/teams", requireAppUser, teamsRoutes);
 
 // The dashboard's API: ADMIN only (its own login lives inside this router).
+apiRouter.use("/admin", adminAuthRoutes); // two-factor steps of the admin sign-in (the challenge token is the credential)
 apiRouter.use("/admin", adminRoutes);
 apiRouter.use("/admin", adminExtraRoutes); // verification, payments, credits, chat reports (same ADMIN-only guard)

@@ -21,7 +21,7 @@ describe("wallet", () => {
     expect(res.balance).toBe(0);
     expect(res.pricing).toMatchObject({ contactCreditsEnabled: false, freeContactsPerDay: 5, boostHours: 48 });
     expect(res.packs.map((x: { code: string }) => x.code)).toEqual(["STARTER", "PLUS", "PRO"]);
-    expect(res.methods.map((m: { method: string }) => m.method)).toEqual(["BKASH", "SANDBOX"]); // bKash is configured in tests; sandbox exists outside production
+    expect(res.methods.map((m: { method: string }) => m.method)).toEqual(["BKASH"]); // only methods with a configured number are offered; payment is manual only
     expect(res.methods[0].payTo).toBe("01700000000");
   });
 
@@ -33,13 +33,13 @@ describe("wallet", () => {
 });
 
 describe("buying credits", () => {
-  it("sandbox pays instantly: credits, ledger row and PAID payment in one step", async () => {
+  it("there is no instant payment: a checkout waits for the customer and an admin", async () => {
     const p = await playerUser(w, "p@example.com");
-    const res = await call("post", "/billing/checkout", p.auth, { packId: await packId("PLUS"), method: "SANDBOX" });
+    const res = await call("post", "/billing/checkout", p.auth, { packId: await packId("PLUS"), method: "BKASH" });
     expect(res.status).toBe(201);
-    expect(res.body.data).toMatchObject({ status: "PAID", credits: 30, amountBdt: 249, payTo: null });
-    expect(await balanceOf(p.user.id)).toBe(30);
-    expect(await prisma.creditTransaction.findMany({ where: { userId: p.user.id } })).toEqual([expect.objectContaining({ delta: 30, balanceAfter: 30, reason: "PURCHASE" })]);
+    expect(res.body.data).toMatchObject({ status: "PENDING", credits: 30, amountBdt: 249, payTo: "01700000000" });
+    expect(await balanceOf(p.user.id)).toBe(0); // nothing is credited until an admin approves
+    expect((await call("post", "/billing/checkout", p.auth, { packId: await packId("PLUS"), method: "SANDBOX" })).status).toBe(422); // the old test method is gone
   });
 
   it("mobile banking: pay, submit the transaction id, an admin approves, credits arrive once", async () => {
@@ -117,7 +117,7 @@ describe("buying credits", () => {
     expect(fourth.status).toBe(409);
     expect(fourth.body.error.code).toBe("PAYMENT_TOO_MANY_OPEN");
     await call("put", `/admin/credit-packs/${await packId("PRO")}`, admin.auth, { isActive: false });
-    expect((await call("post", "/billing/checkout", (await playerUser(w, "q@example.com")).auth, { packId: await packId("PRO"), method: "SANDBOX" })).status).toBe(404);
+    expect((await call("post", "/billing/checkout", (await playerUser(w, "q@example.com")).auth, { packId: await packId("PRO"), method: "BKASH" })).status).toBe(404);
   });
 
   it("editing a pack never rewrites an order already placed", async () => {

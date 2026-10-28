@@ -10,6 +10,8 @@ import type { ConfigKey } from "../app-config/app-config.service.js";
 import * as auth from "../auth/auth.service.js";
 import { loginBody } from "../auth/auth.schema.js";
 import { logout, rotateRefreshToken } from "../auth/token.service.js";
+import * as adminAuth from "./admin-auth.service.js";
+import { clearRefreshCookie, parseCookie, setRefreshCookie } from "./admin-auth.cookie.js";
 import * as s from "./admin.schema.js";
 import * as svc from "./admin.service.js";
 
@@ -17,27 +19,6 @@ type B<T extends z.ZodType> = z.infer<T>;
 const adminId = (req: Parameters<typeof authUser>[0]) => authUser(req).userId;
 const idOf = (req: Parameters<typeof valid>[0]) => valid<unknown, { id: string }>(req).params.id;
 const intIdOf = (req: Parameters<typeof valid>[0]) => valid<unknown, { id: number }>(req).params.id;
-
-function parseCookie(req: Request, name: string): string | null {
-  const header = req.headers.cookie;
-  if (!header) return null;
-  const match = header.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-  return match && match[1] ? decodeURIComponent(match[1]) : null;
-}
-
-function setRefreshCookie(res: Response, token: string, maxAgeMs: number) {
-  res.cookie("ph_admin_refresh", token, {
-    httpOnly: true,
-    secure: env.isProd,
-    sameSite: "lax",
-    path: "/api/v1/admin/auth",
-    maxAge: maxAgeMs,
-  });
-}
-
-function clearRefreshCookie(res: Response) {
-  res.clearCookie("ph_admin_refresh", { path: "/api/v1/admin/auth" });
-}
 
 export const adminRoutes = Router();
 
@@ -49,8 +30,14 @@ adminRoutes.post(
   validate({ body: loginBody }),
   async (req, res) => {
     const { body } = valid<B<typeof loginBody>>(req);
-    const session = await auth.adminLogin(body, { deviceId: body.deviceId, userAgent: req.headers["user-agent"] });
-    setRefreshCookie(res, session.tokens.refreshToken, env.REFRESH_TOKEN_TTL_DAYS * 86_400_000);
+    const user = await auth.checkAdminCredentials(body);
+    if (env.ADMIN_REQUIRE_2FA) {
+      // The password alone never opens a session: the next step is a code from the authenticator app.
+      ok(res, await adminAuth.beginChallenge(user));
+      return;
+    }
+    const session = await auth.startAdminSession(user, { deviceId: body.deviceId, userAgent: req.headers["user-agent"] });
+    setRefreshCookie(res, session.tokens.refreshToken);
     ok(res, session);
   },
 );
@@ -60,7 +47,7 @@ adminRoutes.post("/auth/refresh", validate({ body: s.adminRefreshBody }), async 
   const token = body?.refreshToken || parseCookie(req, "ph_admin_refresh");
   if (!token) throw AppError.unauthorized("AUTH_NO_REFRESH_TOKEN", "Refresh token missing");
   const tokens = await rotateRefreshToken(token, { userAgent: req.headers["user-agent"] });
-  setRefreshCookie(res, tokens.refreshToken, env.REFRESH_TOKEN_TTL_DAYS * 86_400_000);
+  setRefreshCookie(res, tokens.refreshToken);
   ok(res, { accessToken: tokens.accessToken, expiresIn: tokens.expiresIn });
 });
 

@@ -100,10 +100,11 @@ export async function login(input: { email: string; password: string }, ctx: Ses
 }
 
 /**
- * The dashboard's sign-in. Same checks as `login`, plus the account must be an ADMIN — and anyone
- * else gets the same "invalid credentials" as a wrong password, so this can't be used to find admins.
+ * The first step of the dashboard's sign-in: email + password, and the account must be an ADMIN. Anyone else —
+ * wrong password, unknown email, player, recruiter — gets the same "invalid credentials", so this can't be used to
+ * find admins. Returns the user without opening a session: whether that needs a second factor is the caller's call.
  */
-export async function adminLogin(input: { email: string; password: string }, ctx: SessionContext) {
+export async function checkAdminCredentials(input: { email: string; password: string }): Promise<UserWithAccounts> {
   const user = await prisma.user.findUnique({ where: { email: input.email }, include: withAccounts });
   if (!user?.passwordHash || user.status === "DELETED" || user.role !== "ADMIN") {
     await burnPasswordCheck(input.password);
@@ -113,7 +114,14 @@ export async function adminLogin(input: { email: string; password: string }, ctx
     throw AppError.unauthorized(ErrorCode.AUTH_INVALID_CREDENTIALS, "Invalid email or password");
   }
   if (user.status === "SUSPENDED") throw AppError.forbidden(ErrorCode.AUTH_ACCOUNT_SUSPENDED);
-  return startSession(user, ctx);
+  return user;
+}
+
+export const startAdminSession = (user: UserWithAccounts, ctx: SessionContext) => startSession(user, ctx);
+
+/** Password-only sign-in (development / tests, when ADMIN_REQUIRE_2FA is off). */
+export async function adminLogin(input: { email: string; password: string }, ctx: SessionContext) {
+  return startAdminSession(await checkAdminCredentials(input), ctx);
 }
 
 export async function verifyEmail(input: { email: string; code: string }) {

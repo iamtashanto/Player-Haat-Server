@@ -5,6 +5,7 @@ import { authUser, requireAuth, requireRole } from "../../middlewares/auth.js";
 import { createRateLimiter } from "../../middlewares/rate-limit.js";
 import { validate } from "../../middlewares/validate.js";
 import * as billing from "../billing/billing.admin.js";
+import * as adminAuth from "./admin-auth.service.js";
 import * as chat from "../chat/chat.service.js";
 import * as verification from "../verification/verification.service.js";
 import * as vs from "../verification/verification.schema.js";
@@ -51,6 +52,12 @@ adminExtraRoutes.get("/credit-packs", async (_req, res) => ok(res, await billing
 adminExtraRoutes.post("/credit-packs", validate({ body: billing.packBody }), async (req, res) => created(res, await billing.createPack(adminId(req), valid<B<typeof billing.packBody>>(req).body)));
 adminExtraRoutes.put("/credit-packs/:id", validate({ params: idParams, body: billing.packUpdateBody }), async (req, res) => ok(res, await billing.updatePack(adminId(req), idOf(req), valid<B<typeof billing.packUpdateBody>>(req).body)));
 
+// my account: signed-in sessions and backup codes
+adminExtraRoutes.get("/me/sessions", async (req, res) => ok(res, await adminAuth.listSessions(adminId(req))));
+adminExtraRoutes.delete("/me/sessions/:id", validate({ params: idParams }), async (req, res) => ok(res, await adminAuth.revokeSession(adminId(req), idOf(req))));
+const backupBody = zod.strictObject({ code: zod.string().regex(/^\d{6}$/, "6-digit code") });
+adminExtraRoutes.post("/me/2fa/backup-codes", validate({ body: backupBody }), async (req, res) => ok(res, await adminAuth.regenerateBackupCodes(adminId(req), valid<B<typeof backupBody>>(req).body.code)));
+
 // private messages: readable only through this endpoint, and every read is audit-logged
 adminExtraRoutes.get("/conversations/:id/transcript", validate({ params: idParams }), async (req, res) => ok(res, await chat.transcriptForAdmin(adminId(req), idOf(req))));
 
@@ -66,4 +73,7 @@ registerRoute({ method: "post", path: "/admin/users/{id}/credits", ...A, summary
 registerRoute({ method: "get", path: "/admin/credit-packs", ...A, summary: "All credit packs, including inactive", response: zod.array(Obj), errors: [403] });
 registerRoute({ method: "post", path: "/admin/credit-packs", ...A, summary: "Create a credit pack", body: billing.packBody, response: Obj, status: 201, errors: [403, 409, 422] });
 registerRoute({ method: "put", path: "/admin/credit-packs/{id}", ...A, summary: "Change a pack's price, size or availability", description: "Past payments keep the credits and price they were bought at.", params: idParams, body: billing.packUpdateBody, response: Obj, errors: [403, 404, 422] });
+registerRoute({ method: "get", path: "/admin/me/sessions", ...A, summary: "My signed-in sessions", response: zod.array(Obj), errors: [403] });
+registerRoute({ method: "delete", path: "/admin/me/sessions/{id}", ...A, summary: "Sign one of my sessions out", params: idParams, response: Obj, errors: [403, 404] });
+registerRoute({ method: "post", path: "/admin/me/2fa/backup-codes", ...A, summary: "Replace my backup codes", description: "Needs a current authenticator code. The old codes stop working; the new ones are shown once.", body: backupBody, response: Obj, errors: [401, 403, 409, 422] });
 registerRoute({ method: "get", path: "/admin/conversations/{id}/transcript", ...A, summary: "Read a reported conversation", description: "For moderation only. Every read is written to the audit log.", params: idParams, response: Obj, errors: [403, 404] });

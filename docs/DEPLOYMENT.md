@@ -163,4 +163,4 @@ Credits are bought by mobile banking, checked by an admin — no gateway account
 3. In the dashboard, an admin compares the transaction id and amount with the account statement and approves (credits are added, once) or rejects.
 4. Nothing costs credits until an admin turns on `contact_credits_enabled` (pay-per-contact) and/or `boost_enabled` (paid boost) in app config, and sets the prices.
 
-The `SANDBOX` method (instant, free) exists only when `NODE_ENV` is not `production`. A real gateway (bKash tokenised checkout, SSLCommerz) would replace step 2–3 and needs merchant credentials; the credit ledger and `Payment` records are already shaped for it.
+Payment is manual only — there is no instant or test method. A real gateway (bKash tokenised checkout, SSLCommerz) would replace step 2–3 and needs merchant credentials; the credit ledger and `Payment` records are already shaped for it.

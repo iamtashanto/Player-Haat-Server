@@ -1353,6 +1353,12 @@ export async function stats() {
   const timeseries = Array.from(daysMap.values());
   const reqCounts = count(requestsByStatus, "status");
 
+  // Work waiting for a person: shown at the top of the dashboard.
+  const [pendingVerifications, pendingPayments] = await Promise.all([
+    prisma.verificationRequest.count({ where: { status: "PENDING" } }),
+    prisma.payment.count({ where: { status: "SUBMITTED" } }),
+  ]);
+
   return {
     summary: {
       users: {
@@ -1387,6 +1393,8 @@ export async function stats() {
         resolvedReports,
         dismissedReports,
         actionsLast24h: actions24h,
+        pendingVerifications,
+        pendingPayments,
       },
     },
     charts: {

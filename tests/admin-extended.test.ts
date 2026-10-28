@@ -69,15 +69,15 @@ describe("Admin Dashboard Extensions", () => {
 
     // Create new sport
     const createRes = await call("post", "/admin/sports", {
-      code: "BADMINTON",
-      nameEn: "Badminton",
-      nameBn: "ব্যাডমিন্টন",
+      code: "TENNIS",
+      nameEn: "Tennis",
+      nameBn: "টেনিস",
       isActive: true,
     });
     expect(createRes.status).toBe(201);
     const newSportId = createRes.body.data.id;
 
-    // Add position to Badminton
+    // Add a position to the new sport
     const posRes = await call("post", `/admin/sports/${newSportId}/positions`, {
       code: "SINGLES",
       nameEn: "Singles",
@@ -88,10 +88,10 @@ describe("Admin Dashboard Extensions", () => {
 
     // Update sport
     const updateRes = await call("put", `/admin/sports/${newSportId}`, {
-      nameEn: "Badminton Pro",
+      nameEn: "Tennis Pro",
     });
     expect(updateRes.status).toBe(200);
-    expect(updateRes.body.data.nameEn).toBe("Badminton Pro");
+    expect(updateRes.body.data.nameEn).toBe("Tennis Pro");
   });
 
   it("lists divisions and districts", async () => {
