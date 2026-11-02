@@ -32,16 +32,11 @@ Drop a JSON file at `data/locations-full.json` shaped like:
 
 ## Provenance of `data/locations-full.json`
 
-Converted from [nuhil/bangladesh-geocode](https://github.com/nuhil/bangladesh-geocode) (MIT licence;
-names sourced by that project from bangladesh.gov.bd, Wikipedia and Google Maps), `master` branch
-as of 2026-10-27: 8 divisions, 64 districts, 494 upazilas, 4,537 unions.
-
-Conversion notes: district spellings were aligned to `data/districts.ts` (Comilla→Cumilla,
-Coxsbazar→Cox's Bazar, Jhalakathi→Jhalokati, Barisal→Barishal); 3 exact-duplicate union rows were
-dropped (Awajpur/Charfesson, Talimpur/Barlekha, Bhojoanpur/Tetulia); the two distinct "Natai" unions
-in Brahmanbaria Sadar were renamed "Natai (North)" / "Natai (South)". 5 upazilas have no unions in
-the source (Guimara, Naldanga, Eidgaon, Madhyanagar, Dasar). No BBS codes are included.
-Spellings follow the source (e.g. "Mahipur", "Chakamaia") — not an official BBS list.
+Generated from the [`bd-geo-info`](https://www.npmjs.com/package/bd-geo-info) package (BBS-derived) by
+`scripts/build-locations.ts`: 8 divisions, 64 districts, 610 upazilas/thanas (including metropolitan thanas, which have no
+unions) and 4,540 unions, English and Bangla. District spellings are aligned to `data/districts.ts`; the script fails if one
+doesn't match. Four union names repeat inside one upazila and are merged by the seed's (parent, slug) key.
+Regenerate after upgrading the package: `pnpm tsx scripts/build-locations.ts && npm run db:seed`.
 
 ## Demo logins
 
