@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { z } from "zod";
+import { AppError } from "../../lib/errors.js";
 import { ok, valid } from "../../lib/http.js";
 import { registerRoute } from "../../lib/openapi.js";
 import { z as zod } from "../../lib/zod.js";
@@ -34,11 +35,14 @@ publicRoutes.get("/requests", limiter, validate({ query: feedQuery }), async (re
   ok(res, items, { nextCursor, limit: query.limit });
 });
 publicRoutes.get("/requests/:id", limiter, validate({ params: requestParams }), async (req, res) => {
-  ok(res, await getRequest("", valid<unknown, z.infer<typeof requestParams>>(req).params.id));
+  const r = await getRequest("", valid<unknown, z.infer<typeof requestParams>>(req).params.id);
+  // Signed-out visitors only ever see requests that are still open and upcoming (not filled, cancelled, finished or past).
+  if (r.status !== "OPEN" || new Date(r.matchAt).getTime() <= Date.now()) throw AppError.notFound("REQUEST_NOT_FOUND", "Request not found");
+  ok(res, r);
 });
 
 const T = "Public";
 registerRoute({ method: "get", path: "/public/players", tag: T, summary: "Search players (signed out)", description: "Same filters and result shape as `GET /players`, without sign-in. For the website's SEO pages.", query: searchQuery as unknown as zod.ZodObject, response: zod.array(zod.unknown()), errors: [422] });
 registerRoute({ method: "get", path: "/public/players/{id}", tag: T, summary: "A player's public profile (signed out)", description: "Same as `GET /players/{id}` without sign-in.", params: profileParams, response: zod.unknown(), errors: [404] });
 registerRoute({ method: "get", path: "/public/requests", tag: T, summary: "Open requests (signed out)", description: "Same as `GET /requests` without sign-in.", query: feedQuery as unknown as zod.ZodObject, response: zod.array(zod.unknown()), errors: [422] });
-registerRoute({ method: "get", path: "/public/requests/{id}", tag: T, summary: "One request (signed out)", description: "Same as `GET /requests/{id}` without sign-in.", params: requestParams, response: zod.unknown(), errors: [404] });
+registerRoute({ method: "get", path: "/public/requests/{id}", tag: T, summary: "One request (signed out)", description: "Same as `GET /requests/{id}` without sign-in, but only for open, upcoming requests (anything else is 404).", params: requestParams, response: zod.unknown(), errors: [404] });
