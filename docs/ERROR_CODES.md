@@ -180,7 +180,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
-| `NOT_FOUND` | 404 | Resource not found | `(shared middleware)`, `modules/players/players.service.ts`, `modules/recruiters/recruiters.service.ts` |
+| `NOT_FOUND` | 404 | Resource not found | `(shared middleware)`, `modules/locations/locations.service.ts`, `modules/players/players.service.ts`, `modules/recruiters/recruiters.service.ts` |
 
 ## NOTIFICATION
 

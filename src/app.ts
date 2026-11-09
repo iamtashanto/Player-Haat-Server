@@ -58,6 +58,7 @@ export function createApp() {
 
   // Health is outside the rate limiter and outside /api/v1 so probes never get throttled or versioned.
   app.use("/health", healthRoutes);
+  app.use(`${API_PREFIX}/health`, healthRoutes); // same probes under the versioned prefix, still outside the rate limiter
 
   if (env.DOCS_ENABLED) {
     const doc = buildOpenApiDocument();

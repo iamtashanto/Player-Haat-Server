@@ -100,7 +100,7 @@ Audit date 2026-11-09, branch `feat/audit-media-location-notify`.
 | input validation | Zod on every route |
 | secrets in clients | none found; `MEDIA_API_KEY` is read only in `src/lib/storage/tashanto.ts` and `src/config/env.ts` |
 | error codes translated bn/en | works for the codes clients map; **partial**: not every one of the 149 codes was checked in both apps |
-| OpenAPI | **partial:** `/health` and `/health/ready` are documented under `/api/v1` but served at `/health` |
+| OpenAPI / health | works: `/health` (load balancers) and `/api/v1/health` are both served and documented (my earlier "mismatch" was the smoke script prepending `/api/v1`) |
 
 ## Fixed or built in this audit
 - **Media provider** (Phase 2, server part): `TashantoMediaStorage` behind the existing `StorageProvider` seam, default when `MEDIA_API_KEY` is set; Cloudinary stays as a fallback (`STORAGE_PROVIDER`). Key stays in `server/.env`. Verified live: avatar upload through `PUT /users/me/avatar`, served as WebP from `media.tashanto.com`, delete removes it from the service. 7 unit tests against a mock HTTP server (retry, timeout, error mapping, no key leakage).

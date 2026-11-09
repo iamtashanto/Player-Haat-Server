@@ -31,7 +31,7 @@ locationsRoutes.get("/unions", validate({ query: s.unionsQuery }), async (req, r
 
 locationsRoutes.get("/nearest", searchLimiter, validate({ query: s.nearestQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof s.nearestQuery>>(req);
-  ok(res, await svc.nearestDistricts(query.lat, query.lng, query.limit));
+  ok(res, await svc.containingArea(query.lat, query.lng));
 });
 
 locationsRoutes.get("/search", searchLimiter, validate({ query: s.searchQuery }), async (req, res) => {

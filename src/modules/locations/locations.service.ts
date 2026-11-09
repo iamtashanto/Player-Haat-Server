@@ -67,27 +67,26 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
     .slice(0, limit);
 }
 
-const rad = (d: number) => (d * Math.PI) / 180;
-/** Great-circle distance in km. */
-export const haversineKm = (aLat: number, aLng: number, bLat: number, bLng: number) => {
-  const dLat = rad(bLat - aLat);
-  const dLng = rad(bLng - aLng);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
-  return 12742 * Math.asin(Math.sqrt(h));
-};
+import { AppError } from "../../lib/errors.js";
+import { locate } from "./boundaries.js";
 
 /**
- * The districts nearest to a point, with their division. District centres only: the dataset has no coordinates for
- * upazilas or unions, so callers must let the user confirm (or refine) the finer levels. The point is used for this
- * lookup and is neither stored nor logged.
+ * The district and upazila that CONTAIN a point (polygons from OCHA/HDX COD-AB, in memory), with parents and ids.
+ * Upazila is null where the dataset has no polygon (city-corporation thanas, newer upazilas): the client then asks the
+ * user to pick it. Unions have no boundary data, so they stay a manual pick (the client pre-filters by upazila).
+ * The coordinate is used for this lookup only: never stored, never logged.
  */
-export async function nearestDistricts(lat: number, lng: number, limit: number) {
-  const rows = await prisma.district.findMany({
-    where: { lat: { not: null }, lng: { not: null } },
-    select: { id: true, nameBn: true, nameEn: true, lat: true, lng: true, division: { select: { id: true, nameBn: true, nameEn: true } } },
+export async function containingArea(lat: number, lng: number) {
+  const hit = locate(lat, lng);
+  if (!hit) throw AppError.notFound(undefined, "No Bangladesh area at this point");
+  const district = await prisma.district.findFirst({
+    where: { nameEn: hit.district },
+    select: { id: true, nameBn: true, nameEn: true, division: { select: { id: true, nameBn: true, nameEn: true } } },
   });
-  return rows
-    .map((d) => ({ level: "district" as const, id: d.id, nameBn: d.nameBn, nameEn: d.nameEn, division: d.division, distanceKm: Math.round(haversineKm(lat, lng, d.lat!, d.lng!) * 10) / 10 }))
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, limit);
+  if (!district) throw AppError.notFound(undefined, "No Bangladesh area at this point");
+  const upazila = hit.upazila
+    ? await prisma.upazila.findFirst({ where: { districtId: district.id, nameEn: hit.upazila }, select: { id: true, nameBn: true, nameEn: true } })
+    : null;
+  const { division, ...d } = district;
+  return { division, district: d, upazila, precision: upazila ? ("upazila" as const) : ("district" as const), nearBorder: hit.nearBorder };
 }

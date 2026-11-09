@@ -17,7 +17,6 @@ export const searchQuery = z.object({
 export const nearestQuery = z.object({
   lat: z.coerce.number().min(20.5).max(26.7).openapi({ example: 22.3569, description: "Inside Bangladesh." }),
   lng: z.coerce.number().min(88).max(92.8).openapi({ example: 91.7832 }),
-  limit: z.coerce.number().int().min(1).max(5).default(3),
 });
 
 const Name = { id: z.number().int(), nameBn: z.string(), nameEn: z.string(), slug: z.string() };
@@ -44,9 +43,16 @@ registerRoute({
   method: "get",
   path: "/locations/nearest",
   tag: T,
-  summary: "Nearest districts to a coordinate",
-  description: "District precision only (the dataset has no upazila/union coordinates): pre-fill the picker, then let the user confirm or change. The coordinate is not stored or logged.",
+  summary: "The area that contains a coordinate",
+  description:
+    "Point-in-polygon on our own boundary data (no third party). Returns the CONTAINING division › district › upazila; `upazila` is null where no polygon exists, and unions are always a manual pick. `nearBorder` = just outside every polygon but within 2 km (simplified edges, shorelines). 404 outside Bangladesh. The coordinate is not stored or logged.",
   query: nearestQuery,
-  response: z.array(z.object({ level: z.literal("district"), id: z.number(), nameBn: z.string(), nameEn: z.string(), division: Ref, distanceKm: z.number() })),
-  errors: [422],
+  response: z.object({
+    division: Ref,
+    district: Ref,
+    upazila: Ref.nullable(),
+    precision: z.enum(["upazila", "district"]),
+    nearBorder: z.boolean(),
+  }),
+  errors: [404, 422],
 });
