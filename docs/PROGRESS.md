@@ -29,5 +29,6 @@ Updated after the last commit below. Pick up from **Next**.
 
 ## Step 2 — casual play (in progress)
 - [x] Availability ("আজ খেলবি") server: `PlayerAvailability` (migration `20261109100000`), `GET/PUT/DELETE /players/me/availability`, expires at window end or midnight Asia/Dhaka (`src/lib/dhaka-time.ts`), swept every 30 min, `availableToday` search filter + card flag. Tests: `tests/availability.test.ts`.
-- [ ] Open-game join without approval, per-game chat, attendance, reliability score; then app/web/admin for all of it.
+- [x] Server: `joinMode` (APPROVAL | OPEN_JOIN) on matches, instant accept under the request row lock, leave = existing withdraw (re-opens a FILLED game). Per-game group chat `/games/:id/chat…` (organiser + accepted players, read-only 7 days after the game or on cancel), `/games/chats`. Attendance `PUT /games/:id/attendance` (organiser, after start, 14-day window). Reliability (`gamesPlayed`, `noShows`, `attendanceRate`, rating) on every player card/profile/applicant/shortlist item. Tests: `tests/games.test.ts`.
+- [ ] Clients: app + web + admin screens for availability, nearby-available filter, open-join toggle, game chat, attendance, reliability badge. (Game-chat unread counts and push for game messages belong to Step 4.)
 - Test DB note: Docker was down, so run tests with `TEST_DATABASE_URL=postgresql://<user>@localhost:5432/playerhaat_test?schema=public` (local Postgres, db name must end `_test`).

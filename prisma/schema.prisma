@@ -136,6 +136,16 @@ enum TeamMemberRole {
   PLAYER
 }
 
+enum JoinMode {
+  APPROVAL // players apply, the organiser accepts (default)
+  OPEN_JOIN // players join straight away until the game is full
+}
+
+enum Attendance {
+  ATTENDED
+  NO_SHOW
+}
+
 enum RequestStatus {
   OPEN
   FILLED
@@ -255,10 +265,10 @@ model User {
   recruiterProfile         RecruiterProfile?
   creditBalance            Int                   @default(0) // maintained with the ledger, never negative (CHECK in the migration)
   // Admin two-factor sign-in (TOTP). The secret is stored encrypted; backup codes only as hashes.
-  totpSecret       String?
-  totpEnabledAt    DateTime?
-  totpLastStep     Int? // the last 30-second step accepted, so one code can't be replayed
-  totpBackupHashes String[] @default([])
+  totpSecret               String?
+  totpEnabledAt            DateTime?
+  totpLastStep             Int? // the last 30-second step accepted, so one code can't be replayed
+  totpBackupHashes         String[]              @default([])
   creditTransactions       CreditTransaction[]
   payments                 Payment[]
   contactReveals           ContactReveal[]       @relation("ContactViewer")
@@ -269,6 +279,7 @@ model User {
   conversationsAsRecruiter Conversation[]        @relation("ConversationRecruiter")
   conversationsAsPlayer    Conversation[]        @relation("ConversationPlayer")
   messagesSent             Message[]
+  gameMessages             GameMessage[]         @relation("GameMessageSender")
   teamsCaptained           Team[]                @relation("TeamCaptain")
   teamMemberships          TeamMember[]
   requestsCreated          PlayerRequest[]
@@ -467,10 +478,10 @@ model PlayerProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  district       District         @relation(fields: [districtId], references: [id])
-  upazila        Upazila          @relation(fields: [upazilaId], references: [id])
-  union          Union?           @relation(fields: [unionId], references: [id])
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district       District             @relation(fields: [districtId], references: [id])
+  upazila        Upazila              @relation(fields: [upazilaId], references: [id])
+  union          Union?               @relation(fields: [unionId], references: [id])
   sports         PlayerSport[]
   media          PlayerMedia[]
   contactReveals ContactReveal[]
@@ -673,6 +684,7 @@ model PlayerRequest {
   isPaid          Boolean       @default(false)
   notes           String?
   kind            RequestKind   @default(MATCH)
+  joinMode        JoinMode      @default(APPROVAL)
   title           String? // events only: "Under-17 trial, Barishal"
   status          RequestStatus @default(OPEN)
   isHidden        Boolean       @default(false) // admin moderation
@@ -691,6 +703,7 @@ model PlayerRequest {
   applications Application[]
   ratings      Rating[]
   invites      Invite[]
+  chatMessages GameMessage[]
 
   @@index([status, matchAt])
   @@index([upazilaId, status, matchAt])
@@ -702,20 +715,24 @@ model PlayerRequest {
 }
 
 model Application {
-  id           String            @id @default(cuid())
-  requestId    String
-  playerId     String // User.id of the applicant
-  proposedRate Int?
-  message      String?
-  status       ApplicationStatus @default(PENDING)
-  respondedAt  DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id                 String            @id @default(cuid())
+  requestId          String
+  playerId           String // User.id of the applicant
+  proposedRate       Int?
+  message            String?
+  status             ApplicationStatus @default(PENDING)
+  respondedAt        DateTime?
+  // Marked by the organiser after the game; drives the player's reliability score.
+  attendance         Attendance?
+  attendanceMarkedAt DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   request PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   player  User          @relation(fields: [playerId], references: [id])
 
   @@unique([requestId, playerId])
+  @@index([playerId, attendance])
   @@index([playerId, status])
   @@index([requestId, status])
 }
@@ -723,6 +740,21 @@ model Application {
 // ─────────────────────────────────────────────────────────────────────────────
 // Ratings
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// One group chat per game. Membership is derived (organiser + ACCEPTED applicants), so there is no
+/// member table to drift; the chat turns read-only 7 days after the game.
+model GameMessage {
+  id        String   @id @default(cuid())
+  requestId String
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  request PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sender  User          @relation("GameMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt(sort: Desc)])
+}
 
 model Rating {
   id        String          @id @default(cuid())

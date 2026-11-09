@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { locationInclude } from "../locations/location.service.js";
+import { emptyReliability, noExtras, type CardExtras } from "./reliability.service.js";
 
 export const profileInclude = {
   user: { select: { name: true, avatarUrl: true } },
@@ -50,7 +51,7 @@ function sportEntry(s: FullProfile["sports"][number], detailed: boolean) {
  * The compact shape used in search results. Only public sport profiles are listed; those that matched
  * the search's sport-level filters come first, so a recruiter lands on the most relevant one.
  */
-export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], shortlisted = false, availableToday = false) {
+export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], shortlisted = false, extras: CardExtras = noExtras) {
   const matched = new Set(matchedSportIds);
   const sports = p.sports.filter(isPublicSport).sort((a, b) => Number(matched.has(b.sportId)) - Number(matched.has(a.sportId)));
   return {
@@ -66,14 +67,15 @@ export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], sho
     matchedSportIds: sports.filter((s) => matched.has(s.sportId)).map((s) => s.sportId),
     // Whether the viewing recruiter has saved this player (always false for everyone else).
     shortlisted,
-    availableToday,
+    availableToday: extras.available.has(p.id),
+    reliability: extras.reliability.get(p.userId) ?? emptyReliability(round2(p.avgRating), p.ratingCount),
   };
 }
 
 /** What other users see. Deliberately omits email, phone, birth year and the user id. */
-export function toPublicProfile(p: FullProfile, shortlisted = false) {
+export function toPublicProfile(p: FullProfile, shortlisted = false, extras: CardExtras = noExtras) {
   return {
-    ...toPlayerCard(p, [], shortlisted),
+    ...toPlayerCard(p, [], shortlisted, extras),
     sports: p.sports.filter(isPublicSport).map((s) => sportEntry(s, true)),
     bio: p.bio,
     media: p.media.map((m) => ({ id: m.id, type: m.type, url: m.url, order: m.order })),
@@ -82,9 +84,9 @@ export function toPublicProfile(p: FullProfile, shortlisted = false) {
 }
 
 /** The owner sees every sport profile, including ones they (or an admin) have hidden, and why. */
-export function toMyProfile(p: FullProfile) {
+export function toMyProfile(p: FullProfile, extras: CardExtras = noExtras) {
   return {
-    ...toPublicProfile(p),
+    ...toPublicProfile(p, false, extras),
     sports: p.sports.map((s) => ({ ...sportEntry(s, true), isVisible: s.isVisible, hiddenByAdmin: s.hiddenByAdminAt !== null })),
     isVisible: p.isVisible,
     hiddenByAdmin: p.hiddenByAdminAt !== null,

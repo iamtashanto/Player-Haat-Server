@@ -2,7 +2,8 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
-import { availableAmong, availableNowSql } from "./availability.service.js";
+import { availableNowSql } from "./availability.service.js";
+import { cardExtras } from "./reliability.service.js";
 import { shortlistedAmong } from "../shortlist/shortlist.service.js";
 import { profileInclude, toPlayerCard } from "./players.presenter.js";
 import type { searchQuery } from "./players.schema.js";
@@ -162,8 +163,8 @@ export async function searchPlayers(viewerId: string, q: Query) {
   });
   const byId = new Map(profiles.map((p) => [p.id, p]));
   const saved = await shortlistedAmong(viewerId, page.map((r) => r.id));
-  const free = await availableAmong(page.map((r) => r.id));
-  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!, r.matchedSportIds, saved.has(r.id), free.has(r.id))] : []));
+  const extras = await cardExtras(profiles);
+  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!, r.matchedSportIds, saved.has(r.id), extras)] : []));
 
   return { items, nextCursor: hasMore ? encode(rowCursor(q.sort, page[page.length - 1]!)) : null };
 }

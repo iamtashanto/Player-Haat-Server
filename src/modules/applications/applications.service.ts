@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
+import { cardExtras } from "../players/reliability.service.js";
 import { notify } from "../notifications/notifier.js";
 import { lockRequest } from "../requests/request-lock.js";
 import type { RequestRow } from "../requests/requests.presenter.js";
@@ -15,8 +16,11 @@ import type { applyBody } from "./applications.schema.js";
 
 const display = (r: RequestRow) => ({ sport: { bn: r.sport.nameBn, en: r.sport.nameEn }, venue: r.venueText, when: r.matchAt });
 
-const loadApplicant = (id: string) =>
-  prisma.application.findUniqueOrThrow({ where: { id }, include: applicantInclude }).then(toApplicant);
+const loadApplicant = async (id: string) => {
+  const row = await prisma.application.findUniqueOrThrow({ where: { id }, include: applicantInclude });
+  const profile = row.player.playerProfile;
+  return toApplicant(row, profile ? await cardExtras([profile]) : undefined);
+};
 
 /** Requests that must not accept (more) people. Order matters: the most specific reason wins. */
 function assertAcceptingPeople(r: RequestRow) {
@@ -31,7 +35,7 @@ export async function apply(userId: string, requestId: string, input: z.infer<ty
   const profile = await prisma.playerProfile.findUnique({ where: { userId }, select: { id: true, user: { select: { name: true } } } });
   if (!profile) throw AppError.conflict("PLAYER_PROFILE_REQUIRED", "Create your player profile before applying");
 
-  const { application, request } = await prisma.$transaction(async (tx) => {
+  const { application, request, instant } = await prisma.$transaction(async (tx) => {
     const request = await lockRequest(tx, requestId);
     const posterActive = (await tx.user.findUnique({ where: { id: request.createdById }, select: { status: true } }))?.status === "ACTIVE";
     if (request.isHidden || !posterActive) throw AppError.notFound("REQUEST_NOT_FOUND", "Request not found");
@@ -53,16 +57,27 @@ export async function apply(userId: string, requestId: string, input: z.infer<ty
       throw AppError.conflict("APPLICATION_EXISTS", `You already applied (${existing.status.toLowerCase()})`);
     }
     // Re-applying after a withdrawal revives the same row (unique per request + player).
+    // Open-join games skip the approval: the spot is taken here, under the same row lock accept() uses.
+    const instant = request.joinMode === "OPEN_JOIN" && request.kind === "MATCH";
+    const status = instant ? ("ACCEPTED" as const) : ("PENDING" as const);
+    const respondedAt = instant ? new Date() : null;
     const application = existing
-      ? await tx.application.update({ where: { id: existing.id }, data: { status: "PENDING", proposedRate, message, respondedAt: null } })
-      : await tx.application.create({ data: { requestId, playerId: userId, proposedRate, message } });
-    return { application, request };
+      ? await tx.application.update({ where: { id: existing.id }, data: { status, proposedRate, message, respondedAt, attendance: null, attendanceMarkedAt: null } })
+      : await tx.application.create({ data: { requestId, playerId: userId, proposedRate, message, status, respondedAt } });
+    if (instant) {
+      const accepted = request.playersAccepted + 1;
+      await tx.playerRequest.update({
+        where: { id: requestId },
+        data: { playersAccepted: accepted, ...(accepted >= request.playersNeeded && { status: "FILLED" }) },
+      });
+    }
+    return { application, request, instant };
   });
 
   notify({
     userIds: [request.createdById],
     type: "NEW_APPLICANT",
-    data: { requestId, applicationId: application.id },
+    data: { requestId, applicationId: application.id, ...(instant && { joined: "true" }) },
     params: { ...display(request), actor: profile.user.name },
   });
   return loadApplicant(application.id);
@@ -85,7 +100,8 @@ export async function listApplicants(userId: string, requestId: string, q: { cur
     ...cursorArgs(q.cursor, q.limit),
   });
   const { items, nextCursor } = toPage(rows, q.limit);
-  return { items: items.map(toApplicant), nextCursor };
+  const extras = await cardExtras(items.flatMap((a) => (a.player.playerProfile ? [a.player.playerProfile] : [])));
+  return { items: items.map((a) => toApplicant(a, extras)), nextCursor };
 }
 
 /** Shared by accept/reject: lock the request, verify the poster, re-read the application under the lock. */

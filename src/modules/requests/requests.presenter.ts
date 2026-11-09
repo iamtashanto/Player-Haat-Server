@@ -41,6 +41,7 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
     budgetMax: r.budgetMax,
     notes: r.notes,
     kind: r.kind,
+    joinMode: r.joinMode,
     title: r.title,
     boostedUntil: r.boostedUntil && r.boostedUntil.getTime() > Date.now() ? r.boostedUntil.toISOString() : null,
     interested: ctx.interest?.get(r.id) ?? { count: 0, preview: [] },

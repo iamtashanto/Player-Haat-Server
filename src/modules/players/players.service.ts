@@ -6,6 +6,7 @@ import { assertValidLocation } from "../locations/location.service.js";
 import { shortlistedAmong } from "../shortlist/shortlist.service.js";
 import { toMyProfile, toPublicProfile, profileInclude, type FullProfile } from "./players.presenter.js";
 import { MAX_ACHIEVEMENTS, type addAchievementBody, type addSportBody, type createProfileBody, type updateProfileBody, type updateSportBody } from "./players.schema.js";
+import { cardExtras } from "./reliability.service.js";
 import { parseStats } from "./sport-stats.js";
 
 const NOT_FOUND = "PLAYER_PROFILE_NOT_FOUND";
@@ -18,7 +19,8 @@ export async function loadMyProfile(userId: string): Promise<FullProfile> {
 }
 
 export async function getMyProfile(userId: string) {
-  return toMyProfile(await loadMyProfile(userId));
+  const profile = await loadMyProfile(userId);
+  return toMyProfile(profile, await cardExtras([profile]));
 }
 
 export async function createProfile(userId: string, input: z.infer<typeof createProfileBody>) {
@@ -68,7 +70,7 @@ export async function updateProfile(userId: string, patch: z.infer<typeof update
     },
     include: profileInclude,
   });
-  return toMyProfile(profile);
+  return toMyProfile(profile, await cardExtras([profile]));
 }
 
 /** Public view: only visible profiles of active users. Hidden ones are indistinguishable from missing. */
@@ -79,7 +81,7 @@ export async function getPublicProfile(profileId: string, viewerId?: string) {
   });
   if (!profile) throw AppError.notFound(NOT_FOUND, "Player not found");
   const saved = viewerId ? await shortlistedAmong(viewerId, [profile.id]) : new Set<string>();
-  return toPublicProfile(profile, saved.has(profile.id));
+  return toPublicProfile(profile, saved.has(profile.id), await cardExtras([profile]));
 }
 
 // ─────────────────────────── sports ───────────────────────────

@@ -194,6 +194,15 @@ const PlayerCard = z
     location: Location,
     sports: z.array(SportEntry),
     shortlisted: z.boolean().openapi({ description: "true when the signed-in recruiter has saved this player." }),
+    reliability: z
+      .object({
+        gamesPlayed: z.number().int(),
+        noShows: z.number().int(),
+        attendanceRate: z.number().min(0).max(1).nullable().openapi({ description: "Attended ÷ games the organiser marked; null until a game has been marked." }),
+        ratingAverage: z.number(),
+        ratingCount: z.number().int(),
+      })
+      .openapi({ description: "Shown the same everywhere a player appears: games played, attendance, no-shows and average rating." }),
     availableToday: z.boolean().openapi({ description: "true while the player's \"available today\" window is open." }),
     matchedSportIds: z.array(z.number().int()).openapi({ description: "Search only: the sport profiles that satisfied the sport-level filters (empty when none were used)." }),
   })

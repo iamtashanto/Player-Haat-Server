@@ -151,6 +151,7 @@ export async function createRequest(userId: string, input: z.infer<typeof create
       budgetMax,
       notes: input.notes ?? null,
       kind,
+      joinMode: kind === "MATCH" ? (input.joinMode ?? "APPROVAL") : "APPROVAL",
       title: kind === "EVENT" ? (input.title ?? null) : null,
     },
     include: requestInclude,

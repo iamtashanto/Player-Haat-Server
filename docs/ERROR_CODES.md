@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-151 codes. Messages are developer-facing English and may change; **codes are stable**.
+154 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -32,6 +32,12 @@ Every error response has this shape — the app should translate `error.code`, n
 | `APPLICATION_EXISTS` | 409 | You already applied (… | `modules/applications/applications.service.ts` |
 | `APPLICATION_NOT_FOUND` | 404 | Application not found | `modules/applications/applications.service.ts` |
 | `APPLICATION_NOT_PENDING` | 409 | Application is… | `modules/applications/applications.service.ts` |
+
+## ATTENDANCE
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `ATTENDANCE_WINDOW_CLOSED` | 409 | Attendance can be marked for… | `modules/games/games.service.ts` |
 
 ## AUTH
 
@@ -136,6 +142,13 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `EVENT_RECRUITERS_ONLY` | 403 | Only recruiters can launch events | `modules/requests/requests.service.ts` |
+
+## GAME
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `GAME_CHAT_ARCHIVED` | 409 | This chat is archived and read-only | `modules/games/games.service.ts` |
+| `GAME_CHAT_NOT_FOUND` | 404 | Game chat not found | `modules/games/games.service.ts` |
 
 ## INTERNAL
 
@@ -287,11 +300,11 @@ Every error response has this shape — the app should translate `error.code`, n
 | `REQUEST_LIMIT` | 409 | You can have at most… | `modules/requests/requests.service.ts` |
 | `REQUEST_NO_ACCEPTED_PLAYERS` | 409 | No players were accepted — cancel the request instead | `modules/requests/requests.service.ts` |
 | `REQUEST_NOT_COMPLETED` | 409 | You can rate once the poster marks the match completed | `modules/ratings/ratings.service.ts` |
-| `REQUEST_NOT_FOUND` | 404 | Request not found | `modules/admin/admin.service.ts`, `modules/applications/applications.service.ts`, `modules/public/public.routes.ts`, `modules/ratings/ratings.service.ts`, `modules/requests/request-lock.ts`, `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_FOUND` | 404 | Request not found | `modules/admin/admin.service.ts`, `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/public/public.routes.ts`, `modules/ratings/ratings.service.ts`, `modules/requests/request-lock.ts`, `modules/requests/requests.service.ts` |
 | `REQUEST_NOT_HIDDEN` | 409 | Not hidden | `modules/admin/admin.service.ts` |
-| `REQUEST_NOT_OPEN` | 409 | This request is… | `modules/applications/applications.service.ts`, `modules/requests/requests.service.ts` |
-| `REQUEST_NOT_OWNER` | 403 | Only the poster can see applicants | `modules/applications/applications.service.ts`, `modules/requests/requests.service.ts` |
-| `REQUEST_NOT_STARTED` | 409 | The match hasn't started yet | `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_OPEN` | 409 | This request is… | `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_OWNER` | 403 | Only the poster can see applicants | `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_STARTED` | 409 | The game hasn't started yet | `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
 | `REQUEST_OWN` | 403 | You can't apply to your own request | `modules/applications/applications.service.ts` |
 
 ## ROUTE
