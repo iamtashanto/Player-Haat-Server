@@ -280,7 +280,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `REQUEST_LIMIT` | 409 | You can have at most… | `modules/requests/requests.service.ts` |
 | `REQUEST_NO_ACCEPTED_PLAYERS` | 409 | No players were accepted — cancel the request instead | `modules/requests/requests.service.ts` |
 | `REQUEST_NOT_COMPLETED` | 409 | You can rate once the poster marks the match completed | `modules/ratings/ratings.service.ts` |
-| `REQUEST_NOT_FOUND` | 404 | Request not found | `modules/admin/admin.service.ts`, `modules/applications/applications.service.ts`, `modules/ratings/ratings.service.ts`, `modules/requests/request-lock.ts`, `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_FOUND` | 404 | Request not found | `modules/admin/admin.service.ts`, `modules/applications/applications.service.ts`, `modules/public/public.routes.ts`, `modules/ratings/ratings.service.ts`, `modules/requests/request-lock.ts`, `modules/requests/requests.service.ts` |
 | `REQUEST_NOT_HIDDEN` | 409 | Not hidden | `modules/admin/admin.service.ts` |
 | `REQUEST_NOT_OPEN` | 409 | This request is… | `modules/applications/applications.service.ts`, `modules/requests/requests.service.ts` |
 | `REQUEST_NOT_OWNER` | 403 | Only the poster can see applicants | `modules/applications/applications.service.ts`, `modules/requests/requests.service.ts` |
