@@ -320,6 +320,24 @@ describe("GET /requests (feed)", () => {
   });
   const venues = (res: { body: { data: Array<{ venueText: string }> } }) => res.body.data.map((r) => r.venueText);
 
+  it("near: same union, then same upazila, then same district, then the rest (soonest inside each band); paged", async () => {
+    await makeRequest(w, cap.user.id, { venueText: "far", matchAt: hoursFromNow(1), districtId: w.dhaka.id, upazilaId: w.savar.id });
+    await makeRequest(w, cap.user.id, { venueText: "district", matchAt: hoursFromNow(2), upazilaId: w.galachipa.id });
+    await makeRequest(w, cap.user.id, { venueText: "upazila late", matchAt: hoursFromNow(30), upazilaId: w.kalapara.id });
+    await makeRequest(w, cap.user.id, { venueText: "upazila soon", matchAt: hoursFromNow(5), upazilaId: w.kalapara.id });
+    await makeRequest(w, cap.user.id, { venueText: "union", matchAt: hoursFromNow(40), upazilaId: w.kalapara.id, unionId: w.latachapli.id });
+    const near = `sort=near&nearDistrictId=${w.patuakhali.id}&nearUpazilaId=${w.kalapara.id}&nearUnionId=${w.latachapli.id}`;
+    const order = ["union", "upazila soon", "upazila late", "district", "far"];
+    expect(venues(await get(viewer.auth, `/requests?${near}`))).toEqual(order);
+    const p1 = await get(viewer.auth, `/requests?${near}&limit=2`);
+    const p2 = await get(viewer.auth, `/requests?${near}&limit=2&cursor=${p1.body.meta.nextCursor}`);
+    const p3 = await get(viewer.auth, `/requests?${near}&limit=2&cursor=${p2.body.meta.nextCursor}`);
+    expect([...venues(p1), ...venues(p2), ...venues(p3)]).toEqual(order);
+    expect(p3.body.meta.nextCursor).toBeNull();
+    expect((await get(viewer.auth, "/requests?sort=near")).status).toBe(422);
+    expect((await get(viewer.auth, `/requests?${near}&cursor=garbage`)).status).toBe(422);
+  });
+
   it("lists only open, upcoming, visible requests from other people", async () => {
     await makeRequest(w, cap.user.id, { venueText: "ok" });
     await makeRequest(w, viewer.user.id, { venueText: "mine" });

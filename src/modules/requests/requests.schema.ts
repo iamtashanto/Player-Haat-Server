@@ -55,8 +55,13 @@ export const feedQuery = pageQuery
     unionId: qid.optional(),
     isPaid: z.stringbool().optional(),
     kind: z.enum(["MATCH", "EVENT"]).optional().openapi({ description: "Only matches, or only events (recruiters' trials and camps)." }),
+    sort: z.enum(["soonest", "near"]).default("soonest").openapi({ description: "`near`: same union, then same upazila, then same district, then the rest, soonest first within each; needs `nearDistrictId`. Area ids only, no coordinates." }),
+    nearDistrictId: qid.optional(),
+    nearUpazilaId: qid.optional(),
+    nearUnionId: qid.optional(),
   })
-  .refine((q) => !q.position || q.sportId !== undefined, { message: "position requires sportId", path: ["position"] });
+  .refine((q) => !q.position || q.sportId !== undefined, { message: "position requires sportId", path: ["position"] })
+  .refine((q) => q.sort !== "near" || q.nearDistrictId !== undefined, { message: "sort=near requires nearDistrictId", path: ["nearDistrictId"] });
 
 export const featuredQuery = z.object({
   kind: z.enum(["MATCH", "EVENT"]).optional(),

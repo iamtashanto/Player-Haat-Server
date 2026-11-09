@@ -143,11 +143,15 @@ export const searchQuery = z
     statsVerified: z.stringbool().optional().openapi({ description: "true = only sport profiles whose stats an admin has verified." }),
     q: z.string().trim().min(2).max(60).optional().openapi({ description: "Part of the player's name." }),
     availabilityDay: z.enum(WEEKDAYS).optional(),
-    sort: z.enum(["rating", "active"]).default("rating"),
+    sort: z.enum(["rating", "active", "near"]).default("rating").openapi({ description: "`near` ranks same union, then same upazila, then same district, then the rest (rating breaks ties); needs `nearDistrictId`. The client passes the area ids it detected: no coordinates are sent or stored." }),
+    nearDistrictId: id.optional(),
+    nearUpazilaId: id.optional(),
+    nearUnionId: id.optional(),
     cursor: z.string().max(300).optional(),
     limit: z.coerce.number().int().min(1).max(50).default(20),
   })
   .refine((q) => !q.position || q.sportId !== undefined, { message: "position requires sportId", path: ["position"] })
+  .refine((q) => q.sort !== "near" || q.nearDistrictId !== undefined, { message: "sort=near requires nearDistrictId", path: ["nearDistrictId"] })
   .refine((q) => q.rateMin === undefined || q.rateMax === undefined || q.rateMin <= q.rateMax, {
     message: "rateMin must be ≤ rateMax",
     path: ["rateMin"],
