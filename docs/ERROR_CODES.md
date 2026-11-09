@@ -331,8 +331,8 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
-| `STORAGE_NOT_CONFIGURED` | 503 | Image storage is not configured | `lib/storage/cloudinary.ts` |
-| `STORAGE_UPLOAD_FAILED` | 502 | Image upload failed | `lib/storage/cloudinary.ts` |
+| `STORAGE_NOT_CONFIGURED` | 503 | Image storage is not configured | `lib/storage/cloudinary.ts`, `lib/storage/tashanto.ts` |
+| `STORAGE_UPLOAD_FAILED` | 502 | Image upload failed | `lib/storage/cloudinary.ts`, `lib/storage/tashanto.ts` |
 
 ## TEAM
 

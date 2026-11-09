@@ -47,6 +47,11 @@ const schema = z
 
     // Third-party integrations — optional until the phase that uses them; each service
     // checks for its own config and throws a clear error when used while unconfigured.
+    /** Our own media service. The key is a secret: server only, never sent to a client. */
+    MEDIA_BASE_URL: optionalString,
+    MEDIA_API_KEY: optionalString,
+    /** Picks the image store; defaults to our media service when its key is set, else Cloudinary. */
+    STORAGE_PROVIDER: z.enum(["tashanto", "cloudinary"]).optional(),
     CLOUDINARY_CLOUD_NAME: optionalString,
     CLOUDINARY_API_KEY: optionalString,
     CLOUDINARY_API_SECRET: optionalString,
