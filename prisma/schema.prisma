@@ -193,6 +193,19 @@ enum NotificationType {
   VERIFICATION_RESULT
   TEAM_JOINED
   SYSTEM
+  NEARBY_AVAILABLE // someone near you is free to play today
+  GAME_REMINDER // 2 hours before, and the morning of
+  REQUEST_FILLED // the game you applied to is now full
+  GAME_MESSAGE // a message in a game's group chat
+  ANNOUNCEMENT // from the admin dashboard
+}
+
+enum PushStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
 }
 
 enum ReportTargetType {
@@ -269,33 +282,35 @@ model User {
   verificationCodes        VerificationCode[]
   playerProfile            PlayerProfile?
   recruiterProfile         RecruiterProfile?
-  creditBalance            Int                   @default(0) // maintained with the ledger, never negative (CHECK in the migration)
+  creditBalance            Int                     @default(0) // maintained with the ledger, never negative (CHECK in the migration)
   // Admin two-factor sign-in (TOTP). The secret is stored encrypted; backup codes only as hashes.
   totpSecret               String?
   totpEnabledAt            DateTime?
   totpLastStep             Int? // the last 30-second step accepted, so one code can't be replayed
-  totpBackupHashes         String[]              @default([])
+  totpBackupHashes         String[]                @default([])
   creditTransactions       CreditTransaction[]
   payments                 Payment[]
-  contactReveals           ContactReveal[]       @relation("ContactViewer")
-  invitesSent              Invite[]              @relation("InviteRecruiter")
+  contactReveals           ContactReveal[]         @relation("ContactViewer")
+  invitesSent              Invite[]                @relation("InviteRecruiter")
   shortlist                ShortlistEntry[]
-  verificationRequests     VerificationRequest[] @relation("VerificationSubmitter")
-  verificationsReviewed    VerificationRequest[] @relation("VerificationReviewer")
-  conversationsAsRecruiter Conversation[]        @relation("ConversationRecruiter")
-  conversationsAsPlayer    Conversation[]        @relation("ConversationPlayer")
+  verificationRequests     VerificationRequest[]   @relation("VerificationSubmitter")
+  verificationsReviewed    VerificationRequest[]   @relation("VerificationReviewer")
+  conversationsAsRecruiter Conversation[]          @relation("ConversationRecruiter")
+  conversationsAsPlayer    Conversation[]          @relation("ConversationPlayer")
   messagesSent             Message[]
-  gameMessages             GameMessage[]         @relation("GameMessageSender")
-  teamsCaptained           Team[]                @relation("TeamCaptain")
+  gameMessages             GameMessage[]           @relation("GameMessageSender")
+  notificationPreference   NotificationPreference?
+  pushJobs                 PushJob[]
+  teamsCaptained           Team[]                  @relation("TeamCaptain")
   teamMemberships          TeamMember[]
   requestsCreated          PlayerRequest[]
   applications             Application[]
-  ratingsGiven             Rating[]              @relation("RatingRater")
-  ratingsReceived          Rating[]              @relation("RatingRatee")
+  ratingsGiven             Rating[]                @relation("RatingRater")
+  ratingsReceived          Rating[]                @relation("RatingRatee")
   deviceTokens             DeviceToken[]
   notifications            Notification[]
-  reportsFiled             Report[]              @relation("ReportReporter")
-  reportsResolved          Report[]              @relation("ReportResolver")
+  reportsFiled             Report[]                @relation("ReportReporter")
+  reportsResolved          Report[]                @relation("ReportResolver")
   adminActions             AdminAction[]
 
   @@index([status])
@@ -823,6 +838,64 @@ model Notification {
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, readAt])
   @@index([createdAt]) // retention purge
+}
+
+/// What the user wants to hear about. No row = the defaults below.
+model NotificationPreference {
+  userId            String   @id
+  games             Boolean  @default(true) // matches near me, applications, reminders, filled/cancelled, rating reminders
+  messages          Boolean  @default(true) // chats and game chats
+  recruitment       Boolean  @default(true) // invites, number viewed
+  system            Boolean  @default(true) // payments, verification, announcements
+  nearbyAvailable   Boolean  @default(true) // "someone near you is free today"
+  quietHoursEnabled Boolean  @default(true)
+  quietStart        String   @default("23:00") // Asia/Dhaka, HH:MM
+  quietEnd          String   @default("07:00")
+  chatInQuietHours  Boolean  @default(false) // let chat messages through during quiet hours
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// The push queue AND the send log: a row per (notification × user). Request handlers only enqueue; a worker
+/// sends, retries with backoff, and the dashboard reads this table to show what happened.
+model PushJob {
+  id             String           @id @default(cuid())
+  userId         String
+  type           NotificationType
+  payload        Json // strings only: deep-link ids + display params (what the inbox row holds too)
+  status         PushStatus       @default(PENDING)
+  attempts       Int              @default(0)
+  nextAttemptAt  DateTime         @default(now())
+  expiresAt      DateTime? // a game reminder that would arrive after the game is dropped
+  collapseKey    String? // a still-pending job with the same key absorbs newer ones (chat bursts)
+  announcementId String?
+  deviceCount    Int              @default(0)
+  deliveredCount Int              @default(0)
+  skipReason     String?
+  lastError      String?
+  createdAt      DateTime         @default(now())
+  sentAt         DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([announcementId, status])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([createdAt])
+}
+
+/// A message from the dashboard to a slice of users, kept so delivery can be reviewed afterwards.
+model Announcement {
+  id          String   @id @default(cuid())
+  createdById String
+  title       String
+  body        String
+  audience    Json // { role, sportId, divisionId, districtId }
+  recipients  Int
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

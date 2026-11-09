@@ -289,6 +289,17 @@ adminRoutes.get("/notifications/preview", validate({ query: s.notificationFilter
   ok(res, await svc.previewNotificationCount(query));
 });
 
+adminRoutes.get("/announcements", validate({ query: s.announcementsQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, B<typeof s.announcementsQuery>>(req);
+  const { items, nextCursor } = await svc.listAnnouncements(query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
+adminRoutes.get("/push-log", validate({ query: s.pushLogQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, B<typeof s.pushLogQuery>>(req);
+  const { items, nextCursor } = await svc.listPushLog(query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
+adminRoutes.get("/push-stats", async (_req, res) => ok(res, await svc.pushStats()));
 adminRoutes.post("/notifications/broadcast", validate({ body: s.broadcastNotificationBody }), async (req, res) => {
   const { body } = valid<B<typeof s.broadcastNotificationBody>>(req);
   ok(res, await svc.broadcastNotification(adminId(req), body));

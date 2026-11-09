@@ -4,7 +4,8 @@ import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertValidLocation } from "../locations/location.service.js";
-import { notify } from "../notifications/notifier.js";
+import { notify, runInBackground } from "../notifications/notifier.js";
+import { notifyFilled } from "../notifications/triggers.js";
 import { getPricing, getPublicConfig } from "../app-config/app-config.service.js";
 import { spendCredits } from "../billing/credits.service.js";
 import { announceNewRequest } from "./matching.service.js";
@@ -318,13 +319,15 @@ export async function cancelRequest(userId: string, id: string) {
 }
 
 export async function fillRequest(userId: string, id: string) {
-  return prisma.$transaction(async (tx) => {
+  const filled = await prisma.$transaction(async (tx) => {
     const r = await lockRequest(tx, id);
     assertOwner(r, userId);
     if (r.status !== "OPEN") throw AppError.conflict("REQUEST_NOT_OPEN", `This request is ${r.status.toLowerCase()}`);
     const updated = await tx.playerRequest.update({ where: { id }, data: { status: "FILLED" }, include: requestInclude });
     return toRequest(updated, { viewerId: userId, pendingCounts: new Map() });
   });
+  runInBackground("filled", () => notifyFilled(id));
+  return filled;
 }
 
 export async function completeRequest(userId: string, id: string) {

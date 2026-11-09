@@ -29,7 +29,9 @@ export class FirebasePush implements PushProvider {
         tokens: batch,
         notification: { title: message.title, body: message.body },
         data: message.data,
-        android: { priority: "high", notification: { channelId: "playerhaat_default" } },
+        android: { priority: "high", notification: { channelId: message.channel ? `playerhaat_${message.channel}` : "playerhaat_default" } },
+        // Web (FCM web push): a click opens the screen; the service worker handles the rest.
+        ...(message.webLink && { webpush: { fcmOptions: { link: message.webLink } } }),
         apns: { payload: { aps: { sound: "default" } } },
       });
       res.responses.forEach((r, idx) => {

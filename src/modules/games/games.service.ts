@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { notify } from "../notifications/notifier.js";
 import { lockRequest } from "../requests/request-lock.js";
 import { ATTENDANCE_WINDOW_DAYS, CHAT_ARCHIVE_DAYS, type attendanceBody, type messagesQuery } from "./games.schema.js";
 
@@ -121,6 +122,16 @@ export async function send(userId: string, id: string, text: string) {
   const g = await loadForMember(userId, id);
   if (isArchived(g)) throw AppError.conflict("GAME_CHAT_ARCHIVED", "This chat is archived and read-only");
   const m = await prisma.gameMessage.create({ data: { requestId: id, senderId: userId, body: text }, include: messageInclude });
+  // Push only (no inbox row per message). A burst folds into one "N new messages" push per person.
+  const others = [g.createdById, ...g.applications.map((a) => a.playerId)].filter((u) => u !== userId);
+  notify({
+    userIds: others,
+    type: "GAME_MESSAGE",
+    data: { gameId: id },
+    params: { sport: { bn: g.sport.nameBn, en: g.sport.nameEn }, venue: g.venueText, actor: m.sender.name, text: text.slice(0, 120) },
+    collapseKey: `game:${id}`,
+    inbox: false,
+  });
   return toMessage(m, userId, g.createdById);
 }
 

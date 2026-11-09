@@ -11,6 +11,17 @@ process.env.APPLE_CLIENT_IDS = "com.playerhaat.test";
 process.env.SMTP_HOST = "";
 process.env.PAYMENT_BKASH_NUMBER = "01700000000"; // so the manual mobile-banking flow can be exercised
 
+// Pin the notification clock to noon in Dhaka, so quiet hours never depend on when the suite runs.
+{
+  const { clock } = await import("../src/lib/clock.js");
+  const dhakaNoon = () => {
+    const d = new Date();
+    const local = new Date(d.getTime() + 6 * 3_600_000);
+    return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 12, 0) - 6 * 3_600_000);
+  };
+  clock.now = dhakaNoon;
+}
+
 vi.mock("../src/lib/mailer.js", async () => {
   const { mailbox } = await import("./mailbox.js");
   return {

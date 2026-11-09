@@ -3,7 +3,8 @@ import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
 import { cardExtras } from "../players/reliability.service.js";
-import { notify } from "../notifications/notifier.js";
+import { notify, runInBackground } from "../notifications/notifier.js";
+import { notifyFilled } from "../notifications/triggers.js";
 import { lockRequest } from "../requests/request-lock.js";
 import type { RequestRow } from "../requests/requests.presenter.js";
 import {
@@ -74,6 +75,7 @@ export async function apply(userId: string, requestId: string, input: z.infer<ty
     return { application, request, instant };
   });
 
+  if (instant && request.playersAccepted + 1 >= request.playersNeeded) runInBackground("filled", () => notifyFilled(request.id));
   notify({
     userIds: [request.createdById],
     type: "NEW_APPLICANT",
@@ -135,6 +137,7 @@ export async function accept(userId: string, applicationId: string) {
     return { request, app, changed: true };
   });
 
+  if (out.changed && out.request.playersAccepted + 1 >= out.request.playersNeeded) runInBackground("filled", () => notifyFilled(out.request.id));
   if (out.changed) {
     notify({
       userIds: [out.app.playerId],

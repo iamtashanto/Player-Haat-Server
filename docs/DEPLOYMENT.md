@@ -69,7 +69,8 @@ npm run db:seed              # locations (full national dataset), sports, defaul
 | `MEDIA_BASE_URL`, `MEDIA_API_KEY` | image storage on our media service (`mk_xxxx`; secret, server only, never in a client, log or git) |
 | `STORAGE_PROVIDER` | optional: `tashanto` (default when the key is set) or `cloudinary` |
 | `CLOUDINARY_*` | fallback image store only |
-| `FIREBASE_SERVICE_ACCOUNT` | path to the service-account JSON (chmod 600), for push |
+| `FIREBASE_SERVICE_ACCOUNT` | path to the service-account JSON (chmod 600), for push (app **and** web: web push uses the same FCM project) |
+| `WEB_APP_URL` | origin of the website, e.g. `https://playerhaat.com`; web-push clicks open pages under it |
 | `PUBLIC_API_URL` | `https://playerhaat-api.tashanto.com` |
 
 Create the first admin (there's no API for it, on purpose), after that person has registered in the app:

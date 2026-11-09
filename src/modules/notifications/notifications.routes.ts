@@ -28,6 +28,14 @@ notificationsRoutes.get("/", validate({ query: s.listQuery }), async (req, res) 
   const { items, nextCursor, unreadCount } = await svc.listNotifications(me(req), query);
   ok(res, items, { nextCursor, limit: query.limit, unreadCount });
 });
+notificationsRoutes.get("/preferences", async (req, res) => ok(res, await svc.myPreferences(me(req))));
+notificationsRoutes.put("/preferences", validate({ body: s.prefsBody }), async (req, res) => {
+  ok(res, await svc.savePreferences(me(req), valid<B<typeof s.prefsBody>>(req).body));
+});
+notificationsRoutes.delete("/", async (req, res) => ok(res, await svc.deleteAllNotifications(me(req))));
+notificationsRoutes.delete("/:id", validate({ params: s.idParams }), async (req, res) => {
+  ok(res, await svc.deleteNotification(me(req), valid<unknown, B<typeof s.idParams>>(req).params.id));
+});
 notificationsRoutes.get("/unread-count", async (req, res) => ok(res, { count: await svc.unreadCountOf(me(req)) }));
 notificationsRoutes.post("/read-all", async (req, res) => ok(res, await svc.markAllRead(me(req))));
 notificationsRoutes.post("/:id/read", validate({ params: s.idParams }), async (req, res) => {

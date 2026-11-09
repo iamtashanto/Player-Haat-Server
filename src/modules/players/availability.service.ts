@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "../../lib/errors.js";
 import { dhakaTimeToday, endOfDhakaDay } from "../../lib/dhaka-time.js";
 import { prisma } from "../../lib/prisma.js";
+import { runInBackground } from "../notifications/notifier.js";
+import { notifyNearbyAvailable } from "../notifications/triggers.js";
 
 export interface AvailabilityInput {
   sportIds: number[];
@@ -42,10 +44,13 @@ export async function setMyAvailability(userId: string, input: AvailabilityInput
   const startsAt = from < now ? now : from;
   if (until <= now || until <= startsAt) throw AppError.badRequest("AVAILABILITY_WINDOW_INVALID", "The window must end in the future, after it starts");
 
+  const wasFree = (await prisma.playerAvailability.count({ where: { profileId, endsAt: { gt: now } } })) > 0;
   await prisma.$transaction([
     prisma.playerAvailability.deleteMany({ where: { profileId } }),
     prisma.playerAvailability.createMany({ data: sportIds.map((sportId) => ({ profileId, sportId, startsAt, endsAt: until })) }),
   ]);
+  // Only the moment someone goes from "not free" to "free" is news to their neighbours.
+  if (!wasFree) runInBackground("nearby-available", () => notifyNearbyAvailable(profileId, sportIds));
   return getMyAvailability(userId, now);
 }
 

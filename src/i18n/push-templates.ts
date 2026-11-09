@@ -12,6 +12,12 @@ export interface PushParams {
   actor?: string;
   /** A short piece of user text, e.g. the start of a chat message. */
   text?: string;
+  /** A custom heading (admin announcements). */
+  heading?: string;
+  /** "2h" before the game or "morning" of the day (GAME_REMINDER). */
+  when2?: "2h" | "morning";
+  /** How many messages a collapsed chat push stands for. */
+  count?: number;
   /** Which outcome a SYSTEM notification reports; the copy lives here so it can be localized. */
   code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED";
 }
@@ -93,6 +99,26 @@ const templates: Record<NotificationType, Template> = {
     title: l === "bn" ? "দলে নতুন সদস্য" : "New team member",
     body: p.actor ?? "",
   }),
+  NEARBY_AVAILABLE: (p, l) => ({
+    title: l === "bn" ? "আপনার কাছে কেউ আজ খেলতে পারবে" : "Someone near you is free to play today",
+    body: [p.sport?.[l], p.venue].filter(Boolean).join(" · "),
+  }),
+  GAME_REMINDER: (p, l) => ({
+    title:
+      p.when2 === "morning"
+        ? l === "bn" ? "আজ আপনার ম্যাচ আছে" : "You have a match today"
+        : l === "bn" ? "ম্যাচ শুরু হবে ২ ঘণ্টা পরে" : "Match starts in 2 hours",
+    body: line(p, l),
+  }),
+  REQUEST_FILLED: (p, l) => ({
+    title: l === "bn" ? "ম্যাচে আর জায়গা নেই" : "The match is full",
+    body: line(p, l),
+  }),
+  GAME_MESSAGE: (p, l) => ({
+    title: p.venue ? `${p.sport?.[l] ?? ""} · ${p.venue}`.trim().replace(/^·\s*/, "") : l === "bn" ? "গেম চ্যাট" : "Game chat",
+    body: (p.count ?? 1) > 1 ? (l === "bn" ? `${p.count}টি নতুন বার্তা` : `${p.count} new messages`) : `${p.actor ?? ""}: ${p.text ?? ""}`.replace(/^: /, ""),
+  }),
+  ANNOUNCEMENT: (p) => ({ title: p.heading ?? "PlayerHaat", body: p.text ?? "" }),
   SYSTEM: (p, l) => ({
     title: "PlayerHaat",
     body:
@@ -115,6 +141,9 @@ export function paramsToData(p: PushParams): Record<string, string> {
     ...(p.when && { matchAt: p.when.toISOString() }),
     ...(p.actor && { actor: p.actor }),
     ...(p.text && { text: p.text }),
+    ...(p.heading && { heading: p.heading }),
+    ...(p.when2 && { when2: p.when2 }),
+    ...(p.count !== undefined && { count: String(p.count) }),
     ...(p.code && { code: p.code }),
   };
 }
@@ -127,6 +156,9 @@ export function paramsFromData(d: Record<string, unknown>): PushParams {
     when: str("matchAt") ? new Date(str("matchAt")!) : undefined,
     actor: str("actor"),
     text: str("text"),
+    heading: str("heading"),
+    when2: str("when2") as PushParams["when2"],
+    count: str("count") ? Number(str("count")) : undefined,
     code: str("code") as PushParams["code"],
   };
 }

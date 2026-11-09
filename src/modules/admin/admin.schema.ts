@@ -250,6 +250,15 @@ registerRoute({ method: "get", path: "/admin/locations/unions", ...A, summary: "
 registerRoute({ method: "put", path: "/admin/locations/unions/{id}", ...A, summary: "Update union name", params: intIdParams, body: updateLocationBody, response: Obj, errors: [403, 404, 422] });
 
 // Push Announcements
+export const announcementsQuery = pageQuery;
+export const pushLogQuery = pageQuery.extend({
+  status: z.enum(["PENDING", "SENDING", "SENT", "FAILED", "SKIPPED"]).optional(),
+  type: z.string().max(40).optional(),
+  userId: id.optional(),
+});
+registerRoute({ method: "get", path: "/admin/announcements", ...A, summary: "Past announcements with delivery numbers", description: "Per announcement: recipients, queued, sent, devices reached, failed, skipped by reason (`NO_DEVICE`, `CATEGORY_OFF`, …) and how many opened it.", query: announcementsQuery, response: z.array(Obj), errors: [403] });
+registerRoute({ method: "get", path: "/admin/push-log", ...A, summary: "Push send log", description: "Every queued, sent, failed and skipped push, newest first. Filter by status, type or user.", query: pushLogQuery, response: z.array(Obj), errors: [403, 422] });
+registerRoute({ method: "get", path: "/admin/push-stats", ...A, summary: "Push queue health", description: "Counts by status over the last 24 hours and the current backlog.", response: Obj, errors: [403] });
 registerRoute({ method: "get", path: "/admin/notifications/preview", ...A, summary: "Preview recipient count for broadcast", query: notificationFilterQuery, response: z.object({ targetCount: z.number().int() }), errors: [403] });
 registerRoute({ method: "post", path: "/admin/notifications/broadcast", ...A, summary: "Broadcast announcement notification", body: broadcastNotificationBody, response: z.object({ sentCount: z.number().int() }), errors: [403, 422] });
 
