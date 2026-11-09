@@ -10,14 +10,14 @@ const NOT_FOUND = () => AppError.notFound("GAME_CHAT_NOT_FOUND", "Game chat not 
 
 type Game = Prisma.PlayerRequestGetPayload<{
   include: {
-    sport: { select: { id: true; nameBn: true; nameEn: true } };
+    sport: { select: { id: true; code: true; nameBn: true; nameEn: true } };
     createdBy: { select: { id: true; name: true; avatarUrl: true; status: true } };
     applications: { where: { status: "ACCEPTED" }; select: { playerId: true; player: { select: { name: true; avatarUrl: true } } } };
   };
 }>;
 
 const gameInclude = {
-  sport: { select: { id: true, nameBn: true, nameEn: true } },
+  sport: { select: { id: true, code: true, nameBn: true, nameEn: true } },
   createdBy: { select: { id: true, name: true, avatarUrl: true, status: true } },
   applications: { where: { status: "ACCEPTED" as const }, select: { playerId: true, player: { select: { name: true, avatarUrl: true } } } },
 } satisfies Prisma.PlayerRequestInclude;

@@ -1359,8 +1359,25 @@ export async function stats() {
     prisma.payment.count({ where: { status: "SUBMITTED" } }),
   ]);
 
+  // Casual play: who says they're free today, open-join games waiting for players, how attendance is being marked.
+  const nowDate = new Date();
+  const [freeToday, openJoinOpen, attended30, noShow30, gameChats] = await Promise.all([
+    prisma.playerAvailability.groupBy({ by: ["profileId"], where: { startsAt: { lte: nowDate }, endsAt: { gt: nowDate } } }).then((r) => r.length),
+    prisma.playerRequest.count({ where: { kind: "MATCH", joinMode: "OPEN_JOIN", status: "OPEN", isHidden: false, matchAt: { gt: nowDate } } }),
+    prisma.application.count({ where: { attendance: "ATTENDED", attendanceMarkedAt: { gte: thirtyDaysAgo } } }),
+    prisma.application.count({ where: { attendance: "NO_SHOW", attendanceMarkedAt: { gte: thirtyDaysAgo } } }),
+    prisma.gameMessage.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+  ]);
+
   return {
     summary: {
+      play: {
+        freeToday,
+        openJoinGamesOpen: openJoinOpen,
+        attendedLast30Days: attended30,
+        noShowsLast30Days: noShow30,
+        gameChatMessagesLast7Days: gameChats,
+      },
       users: {
         total: byRole.reduce((acc, r) => acc + r._count._all, 0),
         byRole: count(byRole, "role"),

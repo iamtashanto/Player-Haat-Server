@@ -24,7 +24,7 @@ const Message = z.object({ id: z.string(), mine: z.boolean(), body: z.string(), 
 const Chat = z
   .object({
     gameId: z.string(),
-    sport: z.object({ id: z.number().int(), nameBn: z.string(), nameEn: z.string() }),
+    sport: z.object({ id: z.number().int(), code: z.string(), nameBn: z.string(), nameEn: z.string() }),
     matchAt: z.string().datetime(),
     venueText: z.string(),
     status: z.enum(["OPEN", "FILLED", "CANCELLED", "COMPLETED"]),
