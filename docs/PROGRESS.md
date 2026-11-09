@@ -55,3 +55,8 @@ Updated after the last commit below. Pick up from **Next**.
 - Web: preferences card in Settings, delete/clear alerts, deep links from the server, web push over **FCM** (one sender, one token table; VAPID would add a second pipeline) with `/firebase-messaging-sw.js` generated from env and an opt-in sheet shown only after an apply / post / message, snoozed 14 days. `e2e/notifications.spec.ts` (desktop + mobile) passes. App: preferences screen + quiet-hours pickers, four Android channels, swipe-to-delete, clear all.
 - Not tracked: profile views (only contact reveals are recorded), so "profile viewed" has no source; CONTACT_VIEWED covers the recruiter feature.
 - Production: set `WEB_APP_URL`, `FIREBASE_SERVICE_ACCOUNT` (server) and `NEXT_PUBLIC_FIREBASE_*` + `NEXT_PUBLIC_FIREBASE_VAPID_KEY` (web). Without them push stays off and the inbox works.
+
+## Step 5 — re-audit (DONE)
+- `docs/SYSTEM_AUDIT.md` rewritten with evidence, the defects found and fixed, per-area status, and the plans that still need a decision.
+- Real Playwright pass at 411×914 and 1440×900 (`web/e2e/audit-pass.spec.ts`), admin UI opened at both sizes, live smoke incl. 25 admin routes. Final counts: server 763 tests, web 27 unit + all e2e green on desktop and mobile, app 104 tests, admin 7 tests and build.
+- Left on purpose: cost split, team vs team, tournaments, turf; private verification documents; recruiter logo; coarse-location storage; HEIC metadata stripping.

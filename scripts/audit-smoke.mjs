@@ -19,7 +19,16 @@ for (const [path, ms] of Object.entries(spec.paths)) {
   const hit = async (tok) => (await fetch(api + path, { headers: tok ? { authorization: `Bearer ${tok}` } : {} })).status;
   rows.push({ path, anon: await hit(null), player: await hit(player), rec: await hit(rec), auth: ms.get.security?.length ? 'auth' : 'public' });
 }
+// Dashboard routes must refuse app tokens (player and recruiter) and anonymous callers.
+const adminRows = [];
+for (const [path, ms] of Object.entries(spec.paths)) {
+  if (!ms.get || path.includes('{') || !path.startsWith('/admin')) continue;
+  const hit = async (tok) => (await fetch(api + path.replace(/^\/admin/, '/admin'), { headers: tok ? { authorization: `Bearer ${tok}` } : {} })).status;
+  adminRows.push({ path, anon: await hit(null), player: await hit(player), rec: await hit(rec) });
+}
 console.table(rows);
+const adminOpen = adminRows.filter((r) => [r.anon, r.player, r.rec].some((s) => s !== 401 && s !== 403));
+console.log(`admin GET routes probed: ${adminRows.length}; answering a non-admin caller:`, adminOpen);
 const bad = rows.filter((r) => [r.anon, r.player, r.rec].some((s) => s >= 500));
 const open = rows.filter((r) => r.auth === 'auth' && r.anon === 200);
 console.log('5xx:', bad.map((r) => r.path), '\nauth routes answering anonymous callers:', open.map((r) => r.path));
