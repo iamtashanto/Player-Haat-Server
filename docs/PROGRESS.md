@@ -30,5 +30,12 @@ Updated after the last commit below. Pick up from **Next**.
 ## Step 2 — casual play (in progress)
 - [x] Availability ("আজ খেলবি") server: `PlayerAvailability` (migration `20261109100000`), `GET/PUT/DELETE /players/me/availability`, expires at window end or midnight Asia/Dhaka (`src/lib/dhaka-time.ts`), swept every 30 min, `availableToday` search filter + card flag. Tests: `tests/availability.test.ts`.
 - [x] Server: `joinMode` (APPROVAL | OPEN_JOIN) on matches, instant accept under the request row lock, leave = existing withdraw (re-opens a FILLED game). Per-game group chat `/games/:id/chat…` (organiser + accepted players, read-only 7 days after the game or on cancel), `/games/chats`. Attendance `PUT /games/:id/attendance` (organiser, after start, 14-day window). Reliability (`gamesPlayed`, `noShows`, `attendanceRate`, rating) on every player card/profile/applicant/shortlist item. Tests: `tests/games.test.ts`.
-- [ ] Clients: app + web + admin screens for availability, nearby-available filter, open-join toggle, game chat, attendance, reliability badge. (Game-chat unread counts and push for game messages belong to Step 4.)
+- [x] Clients: web (`src/lib/api/play.ts`, `components/app/play.tsx`, `reliability.tsx`, `views/game-chat.tsx`, e2e `e2e/play.spec.ts` desktop+mobile pass), app (`lib/features/play/*`, `test/features/play_flows_test.dart`), admin dashboard tiles (`summary.play`). Game-chat unread counts and push for game messages belong to Step 4.
+- Step 2 DONE. Next: Step 3 media completion.
 - Test DB note: Docker was down, so run tests with `TEST_DATABASE_URL=postgresql://<user>@localhost:5432/playerhaat_test?schema=public` (local Postgres, db name must end `_test`).
+
+## Commands cheat-sheet (this machine)
+- API for e2e: `cd server && RATE_LIMIT_ENABLED=false npx tsx src/server.ts` (dev DB `playerhaat`); web: `pnpm build && pnpm exec next start -p 3000`; e2e needs `E2E_DATABASE_URL=postgresql://<user>@localhost:5432/playerhaat`.
+- Server tests: `TEST_DATABASE_URL=postgresql://<user>@localhost:5432/playerhaat_test?schema=public npx vitest run` (Docker was down).
+- Regenerate web API types: build the OpenAPI doc with `buildOpenApiDocument()` (after importing `createApp`), write to `web/src/lib/api/openapi.json`, then `pnpm exec openapi-typescript src/lib/api/openapi.json -o src/lib/api/schema.d.ts`.
+- SQL in e2e that sets a timestamp must use `now() at time zone 'utc'` (columns are zone-less UTC).
