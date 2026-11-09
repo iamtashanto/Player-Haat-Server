@@ -14,14 +14,14 @@ Updated after the last commit below. Pick up from **Next**.
   - `/api/v1/health` served too.
 - Dev DB `playerhaat` re-seeded (610 upazilas, 4,537 unions, district lat/lng).
 
+- **Step 1 clients done:** web (`useDetectArea`, "Use my location" in the shared picker → profile setup / create request / edit profile; "Near me" chip in player search; About-page attribution; `e2e/location.spec.ts` with mocked geolocation, granted + denied) and app (`geolocator`, `lib/shared/place_picker/detect_area.dart`, button in the place picker, "Near me" chip in search, bn/en strings, coarse-location Android permission, iOS usage string). web + app branches: `feat/audit-media-location-notify`.
+- **Not done in step 1:** opt-in storage of a coarse (~1 km) coordinate on the profile (needs a column + migration + a consent toggle); a "Near me" control for the open-games feed in the clients (server `sort=near` for `/requests` exists).
+
 ## Next (in order)
-1. **Step 1, clients:** web (Geolocation API → `/locations/nearest` → pre-fill the picker's division/district/upazila, user confirms union) in profile setup, create request, players search ("Near me" chip → `sort=near`); app (`geolocator`, bn/en permission strings, same flow). Store area ids; store a `roundCoarse` coordinate only after an explicit "near me" opt-in (a column on `PlayerProfile` is still to be added, with a migration). Add the CC BY-IGO attribution to the web About page. e2e with mocked geolocation (Playwright `context.setGeolocation` + `permissions`).
-2. **Step 2, casual play:** see the plan in `SYSTEM_AUDIT.md` (availability status per sport with window + expiry job, nearby-available query, open games join-without-approval flag, per-game group chat archived +7 days, attendance, reliability score), server → app → web → admin, a test per rule.
-3. **Step 3, media completion** (cover, 12-photo gallery with caption/order, YouTube-id videos with `source` enum, Cloudinary → media-service migration script, EXIF strip, upload rate limit, delete on account deletion, app/web/admin UI, OG images).
-4. **Step 4, notifications** (preferences + quiet hours, FCM app + web, service worker, DB-backed job queue with retry + send log, all triggers, targeted admin announcements + stats).
-5. **Step 5, re-audit** (update `SYSTEM_AUDIT.md`, real Playwright pass mobile + desktop, open the admin UI, the e2e list in the brief).
+1. **Step 2, casual play** (in progress: check the git log for what landed): availability status + nearby-available, open-game join rules, per-game chat, attendance, reliability score, then app/web/admin and tests.
+2. **Step 3, media completion**, 3. **Step 4, notifications**, 4. **Step 5, re-audit** (details in the brief and `SYSTEM_AUDIT.md`).
 
 ## Commands
-- Server checks: `cd server && pnpm exec tsc --noEmit && TEST_DATABASE_URL=postgresql://ta-shanto@localhost:5432/playerhaat_test?schema=public pnpm exec vitest run` (do not run two vitest processes at once: they share the test DB).
-- Run the API for clients: `RATE_LIMIT_ENABLED=false DATABASE_URL=postgresql://ta-shanto@localhost:5432/playerhaat?schema=public npx tsx src/server.ts`.
-- Web: branch `feat/web-parity-followups` has the parity work; do new web work on `feat/audit-media-location-notify` created from it. e2e: `E2E_DATABASE_URL=postgresql://ta-shanto@localhost/playerhaat pnpm test:e2e` (production build + `next start -p 3000`).
+- Server checks: `cd server && pnpm exec tsc --noEmit && TEST_DATABASE_URL=postgresql://ta-shanto@localhost:5432/playerhaat_test?schema=public pnpm exec vitest run` (never run two vitest processes at once: they share the test DB).
+- API for clients: `RATE_LIMIT_ENABLED=false DATABASE_URL=postgresql://ta-shanto@localhost:5432/playerhaat?schema=public npx tsx src/server.ts`.
+- web e2e: `E2E_DATABASE_URL=postgresql://ta-shanto@localhost/playerhaat pnpm test:e2e` (production build + `next start -p 3000`). app: `flutter analyze && flutter test`.
