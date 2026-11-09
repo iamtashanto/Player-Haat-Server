@@ -159,6 +159,18 @@ adminRoutes.delete("/sport-profiles/:id/media/:mediaId", validate({ params: s.me
   ok(res, await svc.deleteSportMedia(adminId(req), params.id, params.mediaId));
 });
 
+adminRoutes.delete("/users/:id/media/:mediaId", validate({ params: s.mediaParams, body: s.reasonBody }), async (req, res) => {
+  const { params, body } = valid<B<typeof s.reasonBody>, B<typeof s.mediaParams>>(req);
+  ok(res, await svc.removeUserMedia(adminId(req), params.id, params.mediaId, body.reason));
+});
+adminRoutes.delete("/users/:id/avatar", validate({ params: s.userParams, body: s.reasonBody }), async (req, res) => {
+  ok(res, await svc.removeUserImage(adminId(req), idOf(req), "avatar", valid<B<typeof s.reasonBody>>(req).body.reason));
+});
+adminRoutes.delete("/users/:id/cover", validate({ params: s.userParams, body: s.reasonBody }), async (req, res) => {
+  ok(res, await svc.removeUserImage(adminId(req), idOf(req), "cover", valid<B<typeof s.reasonBody>>(req).body.reason));
+});
+adminRoutes.get("/media/usage", async (_req, res) => ok(res, await svc.mediaUsage()));
+
 adminRoutes.post("/sport-profiles/:id/hide", validate({ params: s.sportProfileParams, body: s.reasonBody }), async (req, res) => {
   ok(res, await svc.setSportProfileHidden(adminId(req), idOf(req), true, valid<B<typeof s.reasonBody>>(req).body.reason));
 });

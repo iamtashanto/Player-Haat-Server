@@ -3,19 +3,9 @@ import { z } from "../../lib/zod.js";
 
 export const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 export const SLOTS = ["morning", "afternoon", "evening", "night"] as const;
-export const VIDEO_HOSTS = [
-  "youtube.com",
-  "www.youtube.com",
-  "m.youtube.com",
-  "youtu.be",
-  "facebook.com",
-  "www.facebook.com",
-  "m.facebook.com",
-  "fb.watch",
-  "vimeo.com",
-] as const;
-export const MAX_PHOTOS = 6;
-export const MAX_VIDEOS = 3;
+/** Gallery photos per player; videos per sports profile. */
+export const MAX_PHOTOS = 12;
+export const MAX_VIDEOS = 6;
 
 const id = z.coerce.number().int().positive();
 const intId = z.number().int().positive();
@@ -108,22 +98,14 @@ export const achievementParams = z.object({ sportId: id, achievementId: z.string
 
 // ───────── media ─────────
 export const addVideoBody = z.strictObject({
-  url: z
-    .string()
-    .trim()
-    .max(500)
-    .url()
-    .refine((u) => {
-      try {
-        const x = new URL(u);
-        return x.protocol === "https:" && (VIDEO_HOSTS as readonly string[]).includes(x.hostname);
-      } catch {
-        return false;
-      }
-    }, `Must be an https link on: ${VIDEO_HOSTS.join(", ")}`),
+  sportId: z.number().int().positive().openapi({ description: "The sports profile this video belongs to." }),
+  source: z.enum(["YOUTUBE", "UPLOAD"]).default("YOUTUBE").openapi({ description: "`UPLOAD` (our own hosting) is not available yet: it answers 400 `UPLOAD_NOT_AVAILABLE`." }),
+  url: z.string().trim().min(1).max(500).openapi({ description: "Any YouTube link (watch, youtu.be, shorts, embed) or the bare 11-character video id." }),
+  caption: z.string().trim().max(120).nullable().optional(),
 });
+export const updateMediaBody = z.strictObject({ caption: z.string().trim().max(120).nullable() });
 export const mediaParams = z.object({ mediaId: z.string().min(1).max(40) });
-export const reorderBody = z.strictObject({ ids: z.array(z.string().min(1).max(40)).min(1).max(MAX_PHOTOS + MAX_VIDEOS) });
+export const reorderBody = z.strictObject({ ids: z.array(z.string().min(1).max(40)).min(1).max(MAX_PHOTOS).openapi({ description: "Every gallery photo id exactly once, in the new order." }) });
 export const profileParams = z.object({ id: z.string().min(1).max(40) });
 
 // ───────── search ─────────
@@ -207,9 +189,20 @@ const PlayerCard = z
     matchedSportIds: z.array(z.number().int()).openapi({ description: "Search only: the sport profiles that satisfied the sport-level filters (empty when none were used)." }),
   })
   .openapi("PlayerCard");
-const MediaItem = z.object({ id: z.string(), type: z.enum(["PHOTO", "VIDEO_LINK"]), url: z.string(), order: z.number().int() });
+const MediaItem = z.object({
+  id: z.string(),
+  type: z.enum(["PHOTO", "VIDEO_LINK"]),
+  url: z.string().openapi({ description: "Photos: delivery URL of the original. Videos: the watch link." }),
+  thumbnailUrl: z.string().nullable().openapi({ description: "Photos: a 400px-wide rendition. Videos: the YouTube thumbnail." }),
+  order: z.number().int(),
+  caption: z.string().nullable(),
+  source: z.enum(["YOUTUBE", "UPLOAD"]).nullable(),
+  videoId: z.string().nullable(),
+  sportId: z.number().int().nullable().openapi({ description: "Videos: the sports profile they belong to." }),
+});
 const PlayerProfile = PlayerCard.extend({
   bio: z.string().nullable(),
+  coverUrl: z.string().nullable().openapi({ description: "Wide banner behind the avatar (about 3:1)." }),
   media: z.array(MediaItem),
   memberSince: z.string().datetime(),
 }).openapi("PlayerProfile");
@@ -226,8 +219,11 @@ registerRoute({ method: "delete", path: "/players/me/sports/{sportId}", tag: T, 
 registerRoute({ method: "post", path: "/players/me/sports/{sportId}/achievements", tag: T, summary: "Add an achievement to a sport profile", description: `Up to ${MAX_ACHIEVEMENTS} per sport profile.`, auth: true, params: sportParams, body: addAchievementBody, response: MyProfile, status: 201, errors: [404, 409, 422] });
 registerRoute({ method: "delete", path: "/players/me/sports/{sportId}/achievements/{achievementId}", tag: T, summary: "Remove an achievement", auth: true, params: achievementParams, response: MyProfile, errors: [404] });
 registerRoute({ method: "post", path: "/players/me/media/photos", tag: T, summary: "Add a photo", description: `multipart/form-data, field \`file\`. Up to ${MAX_PHOTOS} photos.`, auth: true, multipart: z.object({ file: binary }), response: MyProfile, status: 201, errors: [404, 409, 413, 415, 422, 502, 503] });
-registerRoute({ method: "post", path: "/players/me/media/videos", tag: T, summary: "Add a video link", description: `Up to ${MAX_VIDEOS}. https links on YouTube, Facebook or Vimeo only.`, auth: true, body: addVideoBody, response: MyProfile, status: 201, errors: [404, 409, 422] });
-registerRoute({ method: "put", path: "/players/me/media/order", tag: T, summary: "Reorder my media", description: "`ids` must list every media item exactly once.", auth: true, body: reorderBody, response: MyProfile, errors: [404, 422] });
+registerRoute({ method: "post", path: "/players/me/media/videos", tag: T, summary: "Add a YouTube video to a sports profile", description: `Up to ${MAX_VIDEOS} per sports profile. YouTube links only; the id is stored and thumbnails are built from it.`, auth: true, body: addVideoBody, response: MyProfile, status: 201, errors: [400, 404, 409, 422] });
+registerRoute({ method: "patch", path: "/players/me/media/{mediaId}", tag: T, summary: "Set or clear a caption", auth: true, params: mediaParams, body: updateMediaBody, response: MyProfile, errors: [404, 422] });
+registerRoute({ method: "put", path: "/players/me/media/cover", tag: T, summary: "Set my cover photo", description: "multipart/form-data, field `file`. Crop to about 3:1 before upload. The previous cover is deleted.", auth: true, multipart: z.object({ file: binary }), response: MyProfile, errors: [404, 413, 415, 422, 502, 503] });
+registerRoute({ method: "delete", path: "/players/me/media/cover", tag: T, summary: "Remove my cover photo", auth: true, response: MyProfile, errors: [404] });
+registerRoute({ method: "put", path: "/players/me/media/order", tag: T, summary: "Reorder my gallery photos", description: "`ids` must list every gallery photo exactly once. Videos are ordered by when they were added.", auth: true, body: reorderBody, response: MyProfile, errors: [404, 422] });
 registerRoute({ method: "delete", path: "/players/me/media/{mediaId}", tag: T, summary: "Remove a photo or video link", auth: true, params: mediaParams, response: MyProfile, errors: [404] });
 registerRoute({
   method: "get",

@@ -108,6 +108,11 @@ enum VerificationType {
   PHONE_OTP
 }
 
+enum VideoSource {
+  YOUTUBE
+  UPLOAD // reserved for our own hosting (a paid feature later); the API answers UPLOAD_NOT_AVAILABLE for now
+}
+
 enum MediaType {
   PHOTO
   VIDEO_LINK
@@ -223,6 +228,7 @@ enum AdminActionType {
   REPORT_RESOLVE
   REPORT_DISMISS
   CONFIG_SET
+  MEDIA_REMOVE
 }
 
 enum ReportStatus {
@@ -469,6 +475,9 @@ model PlayerProfile {
   // Set by an admin; unlike isVisible (the player's own switch) the player cannot clear it.
   hiddenByAdminAt   DateTime?
   contactVisibility ContactVisibility @default(ON_TAP)
+  // Wide banner behind the avatar (about 3:1). The URL is derived from the stored path at read time.
+  coverUrl          String?
+  coverPublicId     String?
 
   avgRating    Float    @default(0)
   ratingCount  Int      @default(0)
@@ -578,17 +587,23 @@ model PlayerAchievement {
 }
 
 model PlayerMedia {
-  id        String    @id @default(cuid())
+  id        String       @id @default(cuid())
   profileId String
   type      MediaType
   url       String
-  publicId  String? // Cloudinary public id (PHOTO only)
-  order     Int       @default(0)
-  createdAt DateTime  @default(now())
+  publicId  String? // storage path / provider id (PHOTO only)
+  order     Int          @default(0)
+  caption   String?
+  // Videos: where it is hosted, the id there, and which sports profile it belongs to (max 6 each).
+  source    VideoSource?
+  videoId   String?
+  sportId   Int?
+  createdAt DateTime     @default(now())
 
   profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId, order])
+  @@index([profileId, type, sportId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

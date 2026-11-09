@@ -82,7 +82,15 @@ playersRoutes.post("/me/media/photos", uploadLimiter, imageUpload("file"), async
   created(res, await media.addPhoto(me(req), req.image!.buffer));
 });
 playersRoutes.post("/me/media/videos", validate({ body: s.addVideoBody }), async (req, res) => {
-  created(res, await media.addVideo(me(req), valid<B<typeof s.addVideoBody>>(req).body.url));
+  created(res, await media.addVideo(me(req), valid<B<typeof s.addVideoBody>>(req).body));
+});
+playersRoutes.put("/me/media/cover", uploadLimiter, imageUpload("file"), async (req, res) => {
+  ok(res, await media.setCover(me(req), req.image!.buffer));
+});
+playersRoutes.delete("/me/media/cover", async (req, res) => ok(res, await media.removeCover(me(req))));
+playersRoutes.patch("/me/media/:mediaId", validate({ params: s.mediaParams, body: s.updateMediaBody }), async (req, res) => {
+  const { params, body } = valid<B<typeof s.updateMediaBody>, B<typeof s.mediaParams>>(req);
+  ok(res, await media.setCaption(me(req), params.mediaId, body.caption));
 });
 playersRoutes.put("/me/media/order", validate({ body: s.reorderBody }), async (req, res) => {
   ok(res, await media.reorderMedia(me(req), valid<B<typeof s.reorderBody>>(req).body.ids));

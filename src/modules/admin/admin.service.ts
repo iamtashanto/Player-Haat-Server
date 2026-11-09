@@ -3,6 +3,9 @@ import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
+import { deleteImagesQuietly } from "../../lib/storage/safe-delete.js";
+import { storage } from "../../lib/storage/index.js";
+import { imageUrl, toMediaItem } from "../players/players.presenter.js";
 import { hashPassword, verifyPassword } from "../../lib/password.js";
 import { CONFIG_SCHEMAS, clearConfigCache, readAll, type ConfigKey } from "../app-config/app-config.service.js";
 import { retireParticipation } from "../moderation/participation.js";
@@ -235,7 +238,8 @@ export async function getUser(id: string) {
             hiddenByAdmin: sp.hiddenByAdminAt !== null,
             achievements: sp.achievements,
           })),
-          media: u.playerProfile.media,
+          coverUrl: imageUrl(u.playerProfile.coverPublicId, u.playerProfile.coverUrl),
+          media: u.playerProfile.media.map(toMediaItem),
         }
       : null,
     recentRequests: u.requestsCreated.map((r) => ({
@@ -675,11 +679,45 @@ export async function deleteSportMedia(adminId: string, sportProfileId: string, 
   const media = await prisma.playerMedia.findFirst({ where: { id: mediaId, profileId: sp.profileId } });
   if (!media) throw AppError.notFound("MEDIA_NOT_FOUND", "Media not found");
 
-  return prisma.$transaction(async (tx) => {
-    await tx.playerMedia.delete({ where: { id: mediaId } });
-    await audit(tx, adminId, "SPORT_PROFILE_HIDE", "PLAYER_MEDIA", mediaId, "Inappropriate media removed by admin");
+  return removeMediaAsAdmin(adminId, media, "Inappropriate media removed by admin");
+}
+
+async function removeMediaAsAdmin(adminId: string, media: { id: string; publicId: string | null; type: string }, reason: string) {
+  const out = await prisma.$transaction(async (tx) => {
+    await tx.playerMedia.delete({ where: { id: media.id } });
+    await audit(tx, adminId, "MEDIA_REMOVE", "PLAYER_MEDIA", media.id, reason, { type: media.type });
     return { success: true };
   });
+  await deleteImagesQuietly([media.publicId]); // the DB row is gone: take the file down too
+  return out;
+}
+
+/** Moderation by user: a photo or video from their gallery. Written to the audit log with the admin's reason. */
+export async function removeUserMedia(adminId: string, userId: string, mediaId: string, reason: string) {
+  const media = await prisma.playerMedia.findFirst({ where: { id: mediaId, profile: { userId } } });
+  if (!media) throw AppError.notFound("MEDIA_NOT_FOUND", "Media not found");
+  return removeMediaAsAdmin(adminId, media, reason);
+}
+
+/** Removes a user's avatar or cover (offensive picture) and the stored file. */
+export async function removeUserImage(adminId: string, userId: string, which: "avatar" | "cover", reason: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarPublicId: true, playerProfile: { select: { id: true, coverPublicId: true } } } });
+  if (!user) throw AppError.notFound("USER_NOT_FOUND", "User not found");
+  const publicId = which === "avatar" ? user.avatarPublicId : (user.playerProfile?.coverPublicId ?? null);
+  const has = which === "avatar" ? user.avatarPublicId !== null : user.playerProfile?.coverPublicId != null;
+  if (!has) throw AppError.notFound("MEDIA_NOT_FOUND", `No ${which} to remove`);
+  await prisma.$transaction(async (tx) => {
+    if (which === "avatar") await tx.user.update({ where: { id: userId }, data: { avatarUrl: null, avatarPublicId: null } });
+    else await tx.playerProfile.update({ where: { id: user.playerProfile!.id }, data: { coverUrl: null, coverPublicId: null } });
+    await audit(tx, adminId, "MEDIA_REMOVE", "USER", userId, reason, { which });
+  });
+  await deleteImagesQuietly([publicId]);
+  return { success: true };
+}
+
+/** Storage used vs quota, read through our server so the media key never reaches the dashboard. */
+export async function mediaUsage() {
+  return (await storage.usage?.()) ?? { provider: "none" as const };
 }
 
 export async function setSportProfileHidden(adminId: string, id: string, hidden: boolean, reason?: string) {

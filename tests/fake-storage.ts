@@ -5,6 +5,8 @@ import type { ImageKind, StorageProvider, StoredImage } from "../src/lib/storage
 class FakeStorage implements StorageProvider {
   /** publicId → bytes currently "stored". */
   files = new Map<string, { kind: ImageKind; size: number; createdAt: Date }>();
+  /** publicId → the exact bytes that were uploaded (after metadata stripping). */
+  bytes = new Map<string, Buffer>();
   deleted: string[] = [];
   failUploads = false;
   failDeletes = false;
@@ -15,6 +17,7 @@ class FakeStorage implements StorageProvider {
 
   reset() {
     this.files.clear();
+    this.bytes.clear();
     this.deleted = [];
     this.failUploads = false;
     this.failDeletes = false;
@@ -28,14 +31,19 @@ class FakeStorage implements StorageProvider {
     this.files.set(publicId, { kind, size: 1, createdAt: new Date(Date.now() - hoursAgo * 3_600_000) });
   }
 
-  urlFor(publicId: string) {
-    return `https://fake.cdn/${publicId}`;
+  urlFor(publicId: string, transform?: string) {
+    return `https://fake.cdn/${transform ? `${transform}/` : ""}${publicId}`;
   }
 
   async uploadImage(buffer: Buffer, opts: { kind: ImageKind; publicId: string }): Promise<StoredImage> {
     if (this.failUploads) throw new AppError("STORAGE_UPLOAD_FAILED", 502, "Image upload failed");
     this.files.set(opts.publicId, { kind: opts.kind, size: buffer.length, createdAt: new Date() });
+    this.bytes.set(opts.publicId, buffer);
     return { url: this.urlFor(opts.publicId), publicId: opts.publicId, width: 100, height: 100, bytes: buffer.length };
+  }
+
+  async usage() {
+    return { provider: "fake", usedBytes: [...this.files.values()].reduce((n, f) => n + f.size, 0), quotaBytes: 1_000_000, files: this.files.size };
   }
 
   async deleteImage(publicId: string) {

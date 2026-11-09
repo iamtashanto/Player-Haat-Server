@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-154 codes. Messages are developer-facing English and may change; **codes are stable**.
+156 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -231,6 +231,7 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `PLAYER_ACHIEVEMENT_LIMIT` | 409 | You can list up to… | `modules/players/players.service.ts` |
 | `PLAYER_ACHIEVEMENT_NOT_FOUND` | 404 | Achievement not found | `modules/players/players.service.ts` |
+| `PLAYER_MEDIA_DUPLICATE` | 409 | That video is already on this sports profile | `modules/players/player-media.service.ts` |
 | `PLAYER_MEDIA_LIMIT` | 409 | You can have at most… | `modules/players/player-media.service.ts` |
 | `PLAYER_MEDIA_NOT_FOUND` | 404 | Media not found | `modules/players/player-media.service.ts` |
 | `PLAYER_NO_PHONE` | 409 | This player hasn't added a phone number | `modules/contact/contact.service.ts` |
@@ -238,7 +239,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `PLAYER_PROFILE_NOT_FOUND` | 404 | Player profile not found | `modules/admin/admin.service.ts`, `modules/chat/chat.service.ts`, `modules/contact/contact.service.ts`, `modules/invites/invites.service.ts`, `modules/players/availability.service.ts`, `modules/players/player-media.service.ts`, `modules/ratings/ratings.service.ts`, `modules/shortlist/shortlist.service.ts` |
 | `PLAYER_PROFILE_REQUIRED` | 409 | Create your player profile before applying | `modules/applications/applications.service.ts` |
 | `PLAYER_SPORT_EXISTS` | 409 | You already added that sport; update it instead | `modules/players/players.service.ts` |
-| `PLAYER_SPORT_NOT_FOUND` | 404 | Sport profile not found | `modules/admin/admin.service.ts`, `modules/players/players.service.ts`, `modules/verification/verification.service.ts` |
+| `PLAYER_SPORT_NOT_FOUND` | 404 | Sport profile not found | `modules/admin/admin.service.ts`, `modules/players/player-media.service.ts`, `modules/players/players.service.ts`, `modules/verification/verification.service.ts` |
 | `PLAYER_SPORT_REQUIRED` | 409 | Add… | `modules/applications/applications.service.ts` |
 
 ## POSITION
@@ -378,6 +379,12 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `UPAZILA_NOT_FOUND` | 404 | Upazila not found | `modules/admin/admin.service.ts` |
+
+## UPLOAD
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `UPLOAD_NOT_AVAILABLE` | 400 | Uploading videos isn't available yet. Add a YouTube link instead. | `modules/players/player-media.service.ts` |
 
 ## USER
 

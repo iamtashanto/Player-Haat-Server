@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { locationInclude } from "../locations/location.service.js";
+import { storage } from "../../lib/storage/index.js";
+import { youtubeThumbnail, youtubeWatchUrl } from "../../lib/youtube.js";
 import { emptyReliability, noExtras, type CardExtras } from "./reliability.service.js";
 
 export const profileInclude = {
@@ -16,6 +18,34 @@ export const profileInclude = {
 } satisfies Prisma.PlayerProfileInclude;
 
 export type FullProfile = Prisma.PlayerProfileGetPayload<{ include: typeof profileInclude }>;
+
+/** URLs are built from the stored path, so changing the media domain never needs a data migration. */
+export function imageUrl(publicId: string | null | undefined, stored: string | null | undefined, transform?: string): string | null {
+  if (!publicId) return stored ?? null;
+  try {
+    return storage.urlFor(publicId, transform);
+  } catch {
+    return stored ?? null; // provider not configured (tests, local): fall back to what was stored
+  }
+}
+
+const coverUrl = (p: { coverPublicId: string | null; coverUrl: string | null }) => imageUrl(p.coverPublicId, p.coverUrl);
+
+type MediaRow = FullProfile["media"][number];
+export function toMediaItem(m: MediaRow) {
+  const video = m.type === "VIDEO_LINK";
+  return {
+    id: m.id,
+    type: m.type,
+    url: video && m.videoId ? youtubeWatchUrl(m.videoId) : (imageUrl(m.publicId, m.url) ?? m.url),
+    thumbnailUrl: video ? (m.videoId ? youtubeThumbnail(m.videoId) : null) : imageUrl(m.publicId, m.url, "w_400"),
+    order: m.order,
+    caption: m.caption,
+    source: m.source,
+    videoId: m.videoId,
+    sportId: m.sportId,
+  };
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -78,7 +108,8 @@ export function toPublicProfile(p: FullProfile, shortlisted = false, extras: Car
     ...toPlayerCard(p, [], shortlisted, extras),
     sports: p.sports.filter(isPublicSport).map((s) => sportEntry(s, true)),
     bio: p.bio,
-    media: p.media.map((m) => ({ id: m.id, type: m.type, url: m.url, order: m.order })),
+    coverUrl: coverUrl(p),
+    media: p.media.map(toMediaItem),
     memberSince: p.createdAt.toISOString(),
   };
 }

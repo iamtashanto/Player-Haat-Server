@@ -53,8 +53,8 @@ export class TashantoMediaStorage implements StorageProvider {
     return last!;
   }
 
-  urlFor(publicId: string): string {
-    return `${this.cfg().base}/img/-/${publicId}`;
+  urlFor(publicId: string, transform = "-"): string {
+    return `${this.cfg().base}/img/${transform}/${publicId}`;
   }
 
   async uploadImage(buffer: Buffer, opts: { kind: ImageKind; publicId: string }): Promise<StoredImage> {
@@ -100,6 +100,13 @@ export class TashantoMediaStorage implements StorageProvider {
     if (res.status !== 200) return null;
     const body = (await res.json()) as { files?: MediaFile[] };
     return body.files?.find((f) => f.path === path) ?? null;
+  }
+
+  async usage() {
+    const res = await this.call("/usage", { method: "GET" });
+    if (res.status !== 200) throw new AppError("STORAGE_UPLOAD_FAILED", 502, "Couldn't read storage usage");
+    const u = (await res.json()) as { used_bytes?: number; quota_bytes?: number; files?: number };
+    return { provider: "tashanto", usedBytes: u.used_bytes ?? 0, quotaBytes: u.quota_bytes ?? 0, files: u.files ?? 0 };
   }
 
   async listImages(opts: { prefix: string; olderThan: Date; limit: number }) {

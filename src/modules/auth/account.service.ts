@@ -52,12 +52,12 @@ export async function deleteAccount(userId: string, input: { password?: string }
     effects = await retireParticipation(tx, userId);
 
     const avatar = user.avatarPublicId ? [user.avatarPublicId] : [];
-    const profile = await tx.playerProfile.findUnique({ where: { userId }, select: { id: true } });
+    const profile = await tx.playerProfile.findUnique({ where: { userId }, select: { id: true, coverPublicId: true } });
     if (!profile) return avatar;
-    await tx.playerProfile.update({ where: { id: profile.id }, data: { isVisible: false, bio: null } });
+    await tx.playerProfile.update({ where: { id: profile.id }, data: { isVisible: false, bio: null, coverUrl: null, coverPublicId: null } });
     const media = await tx.playerMedia.findMany({ where: { profileId: profile.id, publicId: { not: null } } });
     await tx.playerMedia.deleteMany({ where: { profileId: profile.id } });
-    return [...avatar, ...media.map((m) => m.publicId!)];
+    return [...avatar, ...(profile.coverPublicId ? [profile.coverPublicId] : []), ...media.map((m) => m.publicId!)];
   });
 
   // The DB is already anonymized; purge the stored images (best-effort, failures are logged).
