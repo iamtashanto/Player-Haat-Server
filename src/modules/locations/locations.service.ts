@@ -66,3 +66,28 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
     .sort((a, b) => rank(a) - rank(b))
     .slice(0, limit);
 }
+
+const rad = (d: number) => (d * Math.PI) / 180;
+/** Great-circle distance in km. */
+export const haversineKm = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+  const dLat = rad(bLat - aLat);
+  const dLng = rad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+};
+
+/**
+ * The districts nearest to a point, with their division. District centres only: the dataset has no coordinates for
+ * upazilas or unions, so callers must let the user confirm (or refine) the finer levels. The point is used for this
+ * lookup and is neither stored nor logged.
+ */
+export async function nearestDistricts(lat: number, lng: number, limit: number) {
+  const rows = await prisma.district.findMany({
+    where: { lat: { not: null }, lng: { not: null } },
+    select: { id: true, nameBn: true, nameEn: true, lat: true, lng: true, division: { select: { id: true, nameBn: true, nameEn: true } } },
+  });
+  return rows
+    .map((d) => ({ level: "district" as const, id: d.id, nameBn: d.nameBn, nameEn: d.nameEn, division: d.division, distanceKm: Math.round(haversineKm(lat, lng, d.lat!, d.lng!) * 10) / 10 }))
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, limit);
+}

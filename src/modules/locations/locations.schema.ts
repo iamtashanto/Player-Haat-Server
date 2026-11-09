@@ -14,6 +14,12 @@ export const searchQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
+export const nearestQuery = z.object({
+  lat: z.coerce.number().min(20.5).max(26.7).openapi({ example: 22.3569, description: "Inside Bangladesh." }),
+  lng: z.coerce.number().min(88).max(92.8).openapi({ example: 91.7832 }),
+  limit: z.coerce.number().int().min(1).max(5).default(3),
+});
+
 const Name = { id: z.number().int(), nameBn: z.string(), nameEn: z.string(), slug: z.string() };
 const Ref = z.object({ id: z.number().int(), nameBn: z.string(), nameEn: z.string() });
 const T = "Reference";
@@ -32,5 +38,15 @@ registerRoute({
   response: z.array(
     z.object({ level: z.enum(["district", "upazila", "union"]), id: z.number(), nameBn: z.string(), nameEn: z.string(), district: Ref.nullable(), upazila: Ref.nullable() }),
   ),
+  errors: [422],
+});
+registerRoute({
+  method: "get",
+  path: "/locations/nearest",
+  tag: T,
+  summary: "Nearest districts to a coordinate",
+  description: "District precision only (the dataset has no upazila/union coordinates): pre-fill the picker, then let the user confirm or change. The coordinate is not stored or logged.",
+  query: nearestQuery,
+  response: z.array(z.object({ level: z.literal("district"), id: z.number(), nameBn: z.string(), nameEn: z.string(), division: Ref, distanceKm: z.number() })),
   errors: [422],
 });

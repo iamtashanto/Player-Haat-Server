@@ -74,7 +74,8 @@ Audit date 2026-11-09, branch `feat/audit-media-location-notify`.
 |---|---|---|---|---|---|---|
 | division → district → upazila → union, bn + en | 610 upazilas, 4,540 unions from `bd-geo-info` | n/v | picker with union step (e2e) | locations page | works | `District` and `Upazila` have `lat`/`lng`; **`Union` has none** |
 | union selectable in the app picker | n/a | n/v | n/a | n/a | not verified | |
-| nearest-area lookup | none | none | none | none | **missing** | Phase 3 |
+| nearest-area lookup | `GET /locations/nearest` (district centres) | none | none | none | partial | district precision only: nearest *centre*, not containment (a Kalapara point answers Barguna first); the dataset has **no upazila/union coordinates** — see decision 8 |
+| dev database seeded with the full dataset | | | | | fixed | the `playerhaat` dev DB had 494 upazilas; re-seeded to 610 upazilas / 4,537 unions, 64/64 districts now have lat/lng |
 
 ## Platform
 | feature | server | app | web | admin | status | notes |
@@ -104,11 +105,13 @@ Audit date 2026-11-09, branch `feat/audit-media-location-notify`.
 ## Fixed or built in this audit
 - **Media provider** (Phase 2, server part): `TashantoMediaStorage` behind the existing `StorageProvider` seam, default when `MEDIA_API_KEY` is set; Cloudinary stays as a fallback (`STORAGE_PROVIDER`). Key stays in `server/.env`. Verified live: avatar upload through `PUT /users/me/avatar`, served as WebP from `media.tashanto.com`, delete removes it from the service. 7 unit tests against a mock HTTP server (retry, timeout, error mapping, no key leakage).
 - `scripts/audit-smoke.mjs`: the repeatable live audit.
+- **Phase 3, server part:** district coordinates (64/64, from `bd-geo-info`) in the seed (`scripts/build-district-coords.ts`), and `GET /locations/nearest?lat&lng&limit` (haversine, Bangladesh bounds, public, rate-limited, coordinate neither stored nor logged). 4 tests. Typecheck clean, 655/655 server tests pass.
 
 ## Not built yet
 Everything marked **missing** or **partial** above except the media provider. Phase 2 DB changes (media id columns, cover photo, 12-photo gallery with reorder/caption, YouTube video model with a `source` enum), the Cloudinary migration script, EXIF stripping, per-user upload rate limit, app/web/admin media UI, Phase 3 (location), and Phase 4 (notifications) were not started.
 
 ## Plans that need your decision (not started)
+8. **Finer auto-location.** `bd-geo-info` has coordinates for divisions and districts only. To pre-fill upazila and union I need a source with their coordinates or boundaries. Options: (a) an open dataset with upazila/union centroids or polygons (GADM / OSM-derived, shipped in the repo, no user data leaves the server); (b) a reverse-geocoding API (sends the user's coordinate to a third party: needs your OK, and is rate-limited); (c) keep district auto-detect and make the user pick upazila/union. I recommend (a) with point-in-polygon on the server. Until then clients should use `nearest` only to pre-select the district.
 1. **Casual play** (core product, I would build it next): `PlayerProfile.availableUntil` (+ `availableSports`), set by a one-tap "আজ খেলবি" that expires at 23:59 Asia/Dhaka or after N hours; `GET /players/available-nearby`; a nightly/hourly job clears expired rows; push to nearby matching players (debounced, capped per day). Needs coordinates, so Phase 3 first.
 2. **Reliability:** attendance confirmation by both sides after a game, a reliability score derived from attended / no-show / late-cancel counts, shown on cards.
 3. **Per-game chat:** a conversation row keyed by `requestId`, members = owner + accepted players.

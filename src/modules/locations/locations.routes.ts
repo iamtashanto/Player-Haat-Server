@@ -29,6 +29,11 @@ locationsRoutes.get("/unions", validate({ query: s.unionsQuery }), async (req, r
   ok(res, await svc.listUnions(query.upazilaId));
 });
 
+locationsRoutes.get("/nearest", searchLimiter, validate({ query: s.nearestQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, z.infer<typeof s.nearestQuery>>(req);
+  ok(res, await svc.nearestDistricts(query.lat, query.lng, query.limit));
+});
+
 locationsRoutes.get("/search", searchLimiter, validate({ query: s.searchQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof s.searchQuery>>(req);
   ok(res, await svc.searchLocations(query.q, query.level ? [query.level] : ["district", "upazila", "union"], query.limit));

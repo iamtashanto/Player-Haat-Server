@@ -3,8 +3,15 @@ import { fileURLToPath } from "node:url";
 import type { PrismaClient } from "@prisma/client";
 import { demoUpazilas } from "./data/locations-demo.js";
 import { districtsByDivision } from "./data/districts.js";
+import districtCoords from "./data/district-coords.json" with { type: "json" };
 import { divisions } from "./data/divisions.js";
 import { slugify } from "./slug.js";
+
+/** District centre from bd-geo-info (the package has no upazila/union coordinates). */
+const coords = (name: string) => {
+  const c = (districtCoords as Record<string, number[]>)[name];
+  return c ? { lat: c[0], lng: c[1] } : {};
+};
 
 export interface UnionSeed {
   nameEn: string;
@@ -46,8 +53,8 @@ export async function seedLocations(prisma: PrismaClient) {
       const slug = slugify(d.nameEn);
       const row = await prisma.district.upsert({
         where: { divisionId_slug: { divisionId, slug } },
-        update: { nameEn: d.nameEn, nameBn: d.nameBn },
-        create: { divisionId, slug, nameEn: d.nameEn, nameBn: d.nameBn },
+        update: { nameEn: d.nameEn, nameBn: d.nameBn, ...coords(d.nameEn) },
+        create: { divisionId, slug, nameEn: d.nameEn, nameBn: d.nameBn, ...coords(d.nameEn) },
       });
       districtIds.set(d.nameEn, row.id);
     }
