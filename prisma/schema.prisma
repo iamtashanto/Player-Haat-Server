@@ -423,6 +423,7 @@ model Sport {
 
   positions    Position[]
   playerSports PlayerSport[]
+  availability PlayerAvailability[]
   teams        Team[]
   requests     PlayerRequest[]
 }
@@ -475,6 +476,7 @@ model PlayerProfile {
   contactReveals ContactReveal[]
   invites        Invite[]
   shortlisted    ShortlistEntry[]
+  availability   PlayerAvailability[]
 
   // Player search: filter by place, then walk the sort order — each index ends in `id`, the unique
   // tie-breaker the keyset cursor uses, so Postgres never has to sort. (Without the location-first
@@ -486,6 +488,24 @@ model PlayerProfile {
   @@index([avgRating(sort: Desc), ratingCount(sort: Desc), id])
   @@index([lastActiveAt(sort: Desc), id])
   @@index([unionId])
+}
+
+/// "Available to play today" per sport. Rows expire by time (endsAt) and are swept by a job; readers
+/// always filter on endsAt, so a late sweep never shows a stale player.
+model PlayerAvailability {
+  id        String   @id @default(cuid())
+  profileId String
+  sportId   Int
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+
+  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  sport   Sport         @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, sportId])
+  @@index([sportId, endsAt])
+  @@index([endsAt])
 }
 
 model PlayerSport {

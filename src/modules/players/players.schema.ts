@@ -144,6 +144,7 @@ export const searchQuery = z
     q: z.string().trim().min(2).max(60).optional().openapi({ description: "Part of the player's name." }),
     availabilityDay: z.enum(WEEKDAYS).optional(),
     sort: z.enum(["rating", "active", "near"]).default("rating").openapi({ description: "`near` ranks same union, then same upazila, then same district, then the rest (rating breaks ties); needs `nearDistrictId`. The client passes the area ids it detected: no coordinates are sent or stored." }),
+    availableToday: z.stringbool().optional().openapi({ description: "true = only players who marked themselves available right now (with `sportId`, for that sport)." }),
     nearDistrictId: id.optional(),
     nearUpazilaId: id.optional(),
     nearUnionId: id.optional(),
@@ -193,6 +194,7 @@ const PlayerCard = z
     location: Location,
     sports: z.array(SportEntry),
     shortlisted: z.boolean().openapi({ description: "true when the signed-in recruiter has saved this player." }),
+    availableToday: z.boolean().openapi({ description: "true while the player's \"available today\" window is open." }),
     matchedSportIds: z.array(z.number().int()).openapi({ description: "Search only: the sport profiles that satisfied the sport-level filters (empty when none were used)." }),
   })
   .openapi("PlayerCard");
@@ -232,3 +234,14 @@ registerRoute({
   errors: [422],
 });
 registerRoute({ method: "get", path: "/players/{id}", tag: T, summary: "A player's public profile", auth: true, params: profileParams, response: PlayerProfile, errors: [404] });
+
+// ───────── availability ("আজ খেলবি") ─────────
+export const availabilityBody = z.object({
+  sportIds: z.array(z.number().int().positive()).min(1).max(10),
+  from: z.string().regex(/^\d{2}:\d{2}$/).optional().openapi({ description: "Today's start, Dhaka time HH:MM. Defaults to now." }),
+  until: z.string().regex(/^\d{2}:\d{2}$/).optional().openapi({ description: "Today's end, Dhaka time HH:MM. Defaults to midnight." }),
+});
+const AvailabilityList = z.object({ items: z.array(z.object({ sportId: z.number().int(), startsAt: z.string().datetime(), endsAt: z.string().datetime() })) }).openapi("MyAvailability");
+registerRoute({ method: "get", path: "/players/me/availability", tag: T, summary: "Am I available to play today?", auth: true, response: AvailabilityList, errors: [404] });
+registerRoute({ method: "put", path: "/players/me/availability", tag: T, summary: "Mark myself available today (per sport, optional window)", description: "Replaces the previous set. Expires at the window end, or midnight Asia/Dhaka.", auth: true, body: availabilityBody, response: AvailabilityList, errors: [400, 404, 422] });
+registerRoute({ method: "delete", path: "/players/me/availability", tag: T, summary: "I'm not available any more", auth: true, response: AvailabilityList, errors: [404] });

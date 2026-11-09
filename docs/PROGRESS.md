@@ -25,3 +25,9 @@ Updated after the last commit below. Pick up from **Next**.
 - Server checks: `cd server && pnpm exec tsc --noEmit && TEST_DATABASE_URL=postgresql://ta-shanto@localhost:5432/playerhaat_test?schema=public pnpm exec vitest run` (never run two vitest processes at once: they share the test DB).
 - API for clients: `RATE_LIMIT_ENABLED=false DATABASE_URL=postgresql://ta-shanto@localhost:5432/playerhaat?schema=public npx tsx src/server.ts`.
 - web e2e: `E2E_DATABASE_URL=postgresql://ta-shanto@localhost/playerhaat pnpm test:e2e` (production build + `next start -p 3000`). app: `flutter analyze && flutter test`.
+
+
+## Step 2 — casual play (in progress)
+- [x] Availability ("আজ খেলবি") server: `PlayerAvailability` (migration `20261109100000`), `GET/PUT/DELETE /players/me/availability`, expires at window end or midnight Asia/Dhaka (`src/lib/dhaka-time.ts`), swept every 30 min, `availableToday` search filter + card flag. Tests: `tests/availability.test.ts`.
+- [ ] Open-game join without approval, per-game chat, attendance, reliability score; then app/web/admin for all of it.
+- Test DB note: Docker was down, so run tests with `TEST_DATABASE_URL=postgresql://<user>@localhost:5432/playerhaat_test?schema=public` (local Postgres, db name must end `_test`).

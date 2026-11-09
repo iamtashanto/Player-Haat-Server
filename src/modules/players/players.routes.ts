@@ -14,6 +14,7 @@ import * as media from "./player-media.service.js";
 import * as svc from "./players.service.js";
 import * as s from "./players.schema.js";
 import { requireOnboardedRecruiter } from "../recruiters/recruiters.service.js";
+import * as avail from "./availability.service.js";
 import { searchPlayers } from "./search.service.js";
 
 type B<T extends z.ZodType> = z.infer<T>;
@@ -36,6 +37,12 @@ playersRoutes.post("/me", validate({ body: s.createProfileBody }), async (req, r
 playersRoutes.patch("/me", validate({ body: s.updateProfileBody }), async (req, res) => {
   ok(res, await svc.updateProfile(me(req), valid<B<typeof s.updateProfileBody>>(req).body));
 });
+
+playersRoutes.get("/me/availability", async (req, res) => ok(res, await avail.getMyAvailability(me(req))));
+playersRoutes.put("/me/availability", validate({ body: s.availabilityBody }), async (req, res) => {
+  ok(res, await avail.setMyAvailability(me(req), valid<B<typeof s.availabilityBody>>(req).body));
+});
+playersRoutes.delete("/me/availability", async (req, res) => ok(res, await avail.clearMyAvailability(me(req))));
 
 playersRoutes.post("/me/sports", validate({ body: s.addSportBody }), async (req, res) => {
   created(res, await svc.addSport(me(req), valid<B<typeof s.addSportBody>>(req).body));

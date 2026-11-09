@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { availableAmong, availableNowSql } from "./availability.service.js";
 import { shortlistedAmong } from "../shortlist/shortlist.service.js";
 import { profileInclude, toPlayerCard } from "./players.presenter.js";
 import type { searchQuery } from "./players.schema.js";
@@ -66,6 +67,7 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
 
   if (q.districtId !== undefined) where.push(Prisma.sql`p."districtId" = ${q.districtId}`);
   if (q.upazilaId !== undefined) where.push(Prisma.sql`p."upazilaId" = ${q.upazilaId}`);
+  if (q.availableToday) where.push(availableNowSql(q.sportId, new Date()));
   if (q.unionId !== undefined) where.push(Prisma.sql`p."unionId" = ${q.unionId}`);
   if (q.q) where.push(Prisma.sql`u.name ILIKE ${`%${q.q.replace(/[\\%_]/g, "\\$&")}%`}`);
   // With a sport chosen, "rated 4+" means rated 4+ *in that sport*; otherwise the overall rating decides.
@@ -160,7 +162,8 @@ export async function searchPlayers(viewerId: string, q: Query) {
   });
   const byId = new Map(profiles.map((p) => [p.id, p]));
   const saved = await shortlistedAmong(viewerId, page.map((r) => r.id));
-  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!, r.matchedSportIds, saved.has(r.id))] : []));
+  const free = await availableAmong(page.map((r) => r.id));
+  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!, r.matchedSportIds, saved.has(r.id), free.has(r.id))] : []));
 
   return { items, nextCursor: hasMore ? encode(rowCursor(q.sort, page[page.length - 1]!)) : null };
 }

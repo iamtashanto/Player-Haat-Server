@@ -50,7 +50,7 @@ function sportEntry(s: FullProfile["sports"][number], detailed: boolean) {
  * The compact shape used in search results. Only public sport profiles are listed; those that matched
  * the search's sport-level filters come first, so a recruiter lands on the most relevant one.
  */
-export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], shortlisted = false) {
+export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], shortlisted = false, availableToday = false) {
   const matched = new Set(matchedSportIds);
   const sports = p.sports.filter(isPublicSport).sort((a, b) => Number(matched.has(b.sportId)) - Number(matched.has(a.sportId)));
   return {
@@ -66,6 +66,7 @@ export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], sho
     matchedSportIds: sports.filter((s) => matched.has(s.sportId)).map((s) => s.sportId),
     // Whether the viewing recruiter has saved this player (always false for everyone else).
     shortlisted,
+    availableToday,
   };
 }
 

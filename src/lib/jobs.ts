@@ -1,3 +1,4 @@
+import { sweepExpiredAvailability } from "../modules/players/availability.service.js";
 import { expireStaleRequests } from "../modules/maintenance/expire-stale-requests.js";
 import { purgeExpiredData } from "../modules/maintenance/purge-expired-data.js";
 import { sweepOrphanUploads } from "../modules/maintenance/sweep-orphan-uploads.js";
@@ -17,6 +18,7 @@ const HOUR = 60 * MINUTE;
 const jobs: Job[] = [
   { name: "rating-reminders", everyMs: 15 * MINUTE, firstRunMs: MINUTE, run: () => sendFollowupRatingReminders() },
   { name: "expire-stale-requests", everyMs: HOUR, firstRunMs: 5 * MINUTE, run: () => expireStaleRequests() },
+  { name: "sweep-availability", everyMs: 30 * MINUTE, firstRunMs: 2 * MINUTE, run: () => sweepExpiredAvailability() },
   { name: "purge-expired-data", everyMs: 24 * HOUR, firstRunMs: 10 * MINUTE, run: () => purgeExpiredData() },
   { name: "sweep-orphan-uploads", everyMs: 24 * HOUR, firstRunMs: 30 * MINUTE, run: () => sweepOrphanUploads() },
 ];
