@@ -55,23 +55,6 @@ async function collect(): Promise<{ jobs: Job[]; already: number }> {
   for (const t of await prisma.team.findMany({ where: { logoPublicId: { not: null } }, select: { id: true, captainId: true, logoUrl: true, logoPublicId: true } })) {
     take(t.logoPublicId, t.logoUrl, { kind: "team-logo", ownerId: t.captainId, apply: (n) => prisma.team.update({ where: { id: t.id }, data: { logoUrl: n.url, logoPublicId: n.publicId } }).then(() => undefined) });
   }
-  for (const v of await prisma.verificationRequest.findMany({ where: { evidenceImages: { not: null as never } }, select: { id: true, submitterId: true, evidenceImages: true } })) {
-    const imgs = Array.isArray(v.evidenceImages) ? (v.evidenceImages as { url: string; publicId: string }[]) : [];
-    imgs.forEach((img, i) =>
-      take(img.publicId, img.url, {
-        kind: "verification-doc",
-        ownerId: v.submitterId,
-        apply: async (n) => {
-          // Re-read so two images of one request don't overwrite each other's update.
-          const cur = await prisma.verificationRequest.findUniqueOrThrow({ where: { id: v.id }, select: { evidenceImages: true } });
-          const list = [...((cur.evidenceImages as { url: string; publicId: string }[] | null) ?? imgs)];
-          const at = list.findIndex((x) => x.publicId === img.publicId);
-          list[at < 0 ? i : at] = { url: n.url, publicId: n.publicId };
-          await prisma.verificationRequest.update({ where: { id: v.id }, data: { evidenceImages: list } });
-        },
-      }),
-    );
-  }
   return { jobs, already };
 }
 

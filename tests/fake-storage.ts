@@ -7,6 +7,8 @@ class FakeStorage implements StorageProvider {
   files = new Map<string, { kind: ImageKind; size: number; createdAt: Date }>();
   /** publicId → the exact bytes that were uploaded (after metadata stripping). */
   bytes = new Map<string, Buffer>();
+  /** path → text stored with putText (encrypted documents). */
+  texts = new Map<string, string>();
   deleted: string[] = [];
   failUploads = false;
   failDeletes = false;
@@ -18,6 +20,7 @@ class FakeStorage implements StorageProvider {
   reset() {
     this.files.clear();
     this.bytes.clear();
+    this.texts.clear();
     this.deleted = [];
     this.failUploads = false;
     this.failDeletes = false;
@@ -39,7 +42,21 @@ class FakeStorage implements StorageProvider {
     if (this.failUploads) throw new AppError("STORAGE_UPLOAD_FAILED", 502, "Image upload failed");
     this.files.set(opts.publicId, { kind: opts.kind, size: buffer.length, createdAt: new Date() });
     this.bytes.set(opts.publicId, buffer);
-    return { url: this.urlFor(opts.publicId), publicId: opts.publicId, width: 100, height: 100, bytes: buffer.length };
+    return { url: this.urlFor(opts.publicId), publicId: opts.publicId, mediaId: `m-${opts.publicId.slice(-6)}`, mime: "image/jpeg", width: 100, height: 100, bytes: buffer.length };
+  }
+
+  async putText(text: string, opts: { folder: string; name: string }) {
+    if (this.failUploads) throw new AppError("STORAGE_UPLOAD_FAILED", 502, "Upload failed");
+    const path = `playerhaat/${opts.folder}/${opts.name}-${this.texts.size + 1}.txt`;
+    this.texts.set(path, text);
+    this.files.set(path, { kind: "verification-doc", size: text.length, createdAt: new Date() });
+    return { path, mediaId: `m${this.texts.size}` };
+  }
+
+  async getText(path: string) {
+    const t = this.texts.get(path);
+    if (t === undefined) throw new AppError("STORAGE_UPLOAD_FAILED", 502, "Couldn't read the document");
+    return t;
   }
 
   async usage() {
@@ -49,6 +66,7 @@ class FakeStorage implements StorageProvider {
   async deleteImage(publicId: string) {
     if (this.failDeletes || this.failDeleteIds.has(publicId)) throw new Error("cloudinary down");
     this.files.delete(publicId);
+    this.texts.delete(publicId);
     this.deleted.push(publicId);
   }
 

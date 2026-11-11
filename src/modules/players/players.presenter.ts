@@ -32,7 +32,8 @@ export function imageUrl(publicId: string | null | undefined, stored: string | n
 const coverUrl = (p: { coverPublicId: string | null; coverUrl: string | null }) => imageUrl(p.coverPublicId, p.coverUrl);
 
 type MediaRow = FullProfile["media"][number];
-export function toMediaItem(m: MediaRow) {
+export function toMediaItem(m: MediaRow, assets?: Map<string, { width: number | null; height: number | null }>) {
+  const dims = (!assets || m.type === "VIDEO_LINK" || !m.publicId ? undefined : assets.get(m.publicId)) ?? undefined;
   const video = m.type === "VIDEO_LINK";
   return {
     id: m.id,
@@ -44,6 +45,8 @@ export function toMediaItem(m: MediaRow) {
     source: m.source,
     videoId: m.videoId,
     sportId: m.sportId,
+    width: dims?.width ?? null,
+    height: dims?.height ?? null,
   };
 }
 
@@ -109,7 +112,9 @@ export function toPublicProfile(p: FullProfile, shortlisted = false, extras: Car
     sports: p.sports.filter(isPublicSport).map((s) => sportEntry(s, true)),
     bio: p.bio,
     coverUrl: coverUrl(p),
-    media: p.media.map(toMediaItem),
+    coverWidth: (p.coverPublicId && extras.assets.get(p.coverPublicId)?.width) || null,
+    coverHeight: (p.coverPublicId && extras.assets.get(p.coverPublicId)?.height) || null,
+    media: p.media.map((m) => toMediaItem(m, extras.assets)),
     memberSince: p.createdAt.toISOString(),
   };
 }

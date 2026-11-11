@@ -9,6 +9,7 @@ import * as adminAuth from "./admin-auth.service.js";
 import * as chat from "../chat/chat.service.js";
 import * as verification from "../verification/verification.service.js";
 import * as vs from "../verification/verification.schema.js";
+import { sendDocument } from "../verification/verification.routes.js";
 import { registerRoute } from "../../lib/openapi.js";
 import { z as zod } from "../../lib/zod.js";
 
@@ -29,6 +30,10 @@ adminExtraRoutes.get("/verifications", validate({ query: vs.adminQuery }), async
   const { query } = valid<unknown, unknown, B<typeof vs.adminQuery>>(req);
   const { items, nextCursor } = await verification.adminList(query);
   ok(res, items, { nextCursor, limit: query.limit });
+});
+adminExtraRoutes.get("/verification/:id/files/:fileId", validate({ params: vs.adminFileParams }), async (req, res) => {
+  const { params } = valid<unknown, B<typeof vs.adminFileParams>>(req);
+  sendDocument(res, await verification.adminFile(adminId(req), params.id, params.fileId));
 });
 adminExtraRoutes.post("/verifications/:id/review", validate({ params: vs.verificationParams, body: vs.reviewBody }), async (req, res) => {
   ok(res, await verification.adminReview(adminId(req), idOf(req), valid<B<typeof vs.reviewBody>>(req).body));

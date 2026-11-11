@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { prisma } from "../prisma.js";
 import { storage } from "./index.js";
 
 /**
@@ -8,6 +9,7 @@ import { storage } from "./index.js";
 export async function deleteImagesQuietly(publicIds: Array<string | null | undefined>): Promise<void> {
   const ids = publicIds.filter((id): id is string => !!id);
   const results = await Promise.allSettled(ids.map((id) => storage.deleteImage(id)));
+  await prisma.mediaAsset.deleteMany({ where: { path: { in: ids } } }).catch(() => undefined);
   results.forEach((r, i) => {
     if (r.status === "rejected") logger.warn({ publicId: ids[i], err: r.reason }, "failed to delete stored image");
   });

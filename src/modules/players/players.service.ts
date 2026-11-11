@@ -20,7 +20,7 @@ export async function loadMyProfile(userId: string): Promise<FullProfile> {
 
 export async function getMyProfile(userId: string) {
   const profile = await loadMyProfile(userId);
-  return toMyProfile(profile, await cardExtras([profile]));
+  return toMyProfile(profile, await cardExtras([profile], { assets: true }));
 }
 
 export async function createProfile(userId: string, input: z.infer<typeof createProfileBody>) {
@@ -70,7 +70,7 @@ export async function updateProfile(userId: string, patch: z.infer<typeof update
     },
     include: profileInclude,
   });
-  return toMyProfile(profile, await cardExtras([profile]));
+  return toMyProfile(profile, await cardExtras([profile], { assets: true }));
 }
 
 /** Public view: only visible profiles of active users. Hidden ones are indistinguishable from missing. */
@@ -81,7 +81,7 @@ export async function getPublicProfile(profileId: string, viewerId?: string) {
   });
   if (!profile) throw AppError.notFound(NOT_FOUND, "Player not found");
   const saved = viewerId ? await shortlistedAmong(viewerId, [profile.id]) : new Set<string>();
-  return toPublicProfile(profile, saved.has(profile.id), await cardExtras([profile]));
+  return toPublicProfile(profile, saved.has(profile.id), await cardExtras([profile], { assets: true }));
 }
 
 // ─────────────────────────── sports ───────────────────────────

@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-157 codes. Messages are developer-facing English and may change; **codes are stable**.
+160 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -143,6 +143,13 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `EVENT_RECRUITERS_ONLY` | 403 | Only recruiters can launch events | `modules/requests/requests.service.ts` |
 
+## EVIDENCE
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `EVIDENCE_CORRUPT` | 500 | Document can't be read | `lib/evidence-crypto.ts` |
+| `EVIDENCE_NOT_CONFIGURED` | 503 | Document uploads aren't set up on this server | `lib/evidence-crypto.ts` |
+
 ## GAME
 
 | Code | HTTP | Developer message | Raised in |
@@ -194,7 +201,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `MEDIA_NOT_FOUND` | 404 | Media not found | `modules/admin/admin.service.ts` |
 | `MEDIA_NOT_OWNED` | 403 | That image is not yours | `modules/media/media.service.ts` |
 | `MEDIA_TOO_LARGE` | 413 | Image must be at most… | `middlewares/upload.ts` |
-| `MEDIA_UNSUPPORTED_TYPE` | 415 | Only jpeg, png, webp and heic images are allowed | `middlewares/upload.ts` |
+| `MEDIA_UNSUPPORTED_TYPE` | 415 | Only jpeg, png, webp and heic images are allowed | `middlewares/upload.ts`, `modules/verification/verification.service.ts` |
 
 ## NOT
 
@@ -352,7 +359,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
-| `STORAGE_NOT_CONFIGURED` | 503 | Image storage is not configured | `lib/storage/cloudinary.ts`, `lib/storage/tashanto.ts` |
+| `STORAGE_NOT_CONFIGURED` | 503 | Image storage is not configured | `lib/storage/cloudinary.ts`, `lib/storage/tashanto.ts`, `modules/verification/verification.service.ts` |
 | `STORAGE_UPLOAD_FAILED` | 502 | Image upload failed | `lib/storage/cloudinary.ts`, `lib/storage/tashanto.ts` |
 
 ## TEAM
@@ -410,6 +417,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `VERIFICATION_ALREADY_REVIEWED` | 409 | Already… | `modules/verification/verification.service.ts` |
+| `VERIFICATION_FILE_NOT_FOUND` | 404 | Document not found | `modules/verification/verification.service.ts` |
 | `VERIFICATION_NOT_FOUND` | 404 | Verification request not found | `modules/verification/verification.service.ts` |
 | `VERIFICATION_PENDING` | 409 | You already have a request waiting for review | `modules/verification/verification.service.ts` |
 

@@ -199,10 +199,14 @@ const MediaItem = z.object({
   source: z.enum(["YOUTUBE", "UPLOAD"]).nullable(),
   videoId: z.string().nullable(),
   sportId: z.number().int().nullable().openapi({ description: "Videos: the sports profile they belong to." }),
+  width: z.number().int().nullable().openapi({ description: "Photos: pixel size of the original, to reserve the space before it loads." }),
+  height: z.number().int().nullable(),
 });
 const PlayerProfile = PlayerCard.extend({
   bio: z.string().nullable(),
   coverUrl: z.string().nullable().openapi({ description: "Wide banner behind the avatar (about 3:1)." }),
+  coverWidth: z.number().int().nullable(),
+  coverHeight: z.number().int().nullable(),
   media: z.array(MediaItem),
   memberSince: z.string().datetime(),
 }).openapi("PlayerProfile");

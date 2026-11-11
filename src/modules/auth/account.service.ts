@@ -62,5 +62,8 @@ export async function deleteAccount(userId: string, input: { password?: string }
 
   // The DB is already anonymized; purge the stored images (best-effort, failures are logged).
   await deleteImagesQuietly(orphanedMedia);
+  const docs = await prisma.verificationFile.findMany({ where: { userId }, select: { path: true } });
+  await deleteImagesQuietly(docs.map((d) => d.path));
+  await prisma.verificationFile.deleteMany({ where: { userId } });
   for (const e of effects) notify(e);
 }

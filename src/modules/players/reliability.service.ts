@@ -13,13 +13,17 @@ export interface Reliability {
   ratingCount: number;
 }
 
+export type AssetDims = { width: number | null; height: number | null };
+
 export interface CardExtras {
+  /** media path → pixel size, so a screen can reserve the space before the image loads (profile views only). */
+  assets: Map<string, AssetDims>;
   available: Set<string>;
   /** by User.id */
   reliability: Map<string, Reliability>;
 }
 
-export const noExtras: CardExtras = { available: new Set(), reliability: new Map() };
+export const noExtras: CardExtras = { available: new Set(), reliability: new Map(), assets: new Map() };
 
 export const emptyReliability = (ratingAverage = 0, ratingCount = 0): Reliability => ({ gamesPlayed: 0, noShows: 0, attendanceRate: null, ratingAverage, ratingCount });
 
@@ -55,8 +59,22 @@ export async function reliabilityAmong(profiles: { userId: string; avgRating: nu
   return out;
 }
 
-/** Everything a player card needs beyond the profile row, fetched for a page at once. */
-export async function cardExtras(profiles: { id: string; userId: string; avgRating: number; ratingCount: number }[]): Promise<CardExtras> {
-  const [available, reliability] = await Promise.all([availableAmong(profiles.map((p) => p.id)), reliabilityAmong(profiles)]);
-  return { available, reliability };
+export async function assetDims(paths: Array<string | null | undefined>): Promise<Map<string, AssetDims>> {
+  const ids = [...new Set(paths.filter((p): p is string => !!p))];
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.mediaAsset.findMany({ where: { path: { in: ids } }, select: { path: true, width: true, height: true } });
+  return new Map(rows.map((r) => [r.path, { width: r.width, height: r.height }]));
+}
+
+/** Everything a player card needs beyond the profile row, fetched for a page at once. `assets: true` adds image sizes (profile screens). */
+export async function cardExtras(
+  profiles: { id: string; userId: string; avgRating: number; ratingCount: number; coverPublicId?: string | null; media?: { publicId: string | null }[] }[],
+  opts: { assets?: boolean } = {},
+): Promise<CardExtras> {
+  const [available, reliability, assets] = await Promise.all([
+    availableAmong(profiles.map((p) => p.id)),
+    reliabilityAmong(profiles),
+    opts.assets ? assetDims(profiles.flatMap((p) => [p.coverPublicId, ...(p.media ?? []).map((m) => m.publicId)])) : Promise.resolve(new Map<string, AssetDims>()),
+  ]);
+  return { available, reliability, assets };
 }

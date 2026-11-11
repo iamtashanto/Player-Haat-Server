@@ -13,12 +13,20 @@ export interface UploadedImage {
   bytes?: number;
 }
 
+/** Remembers the facts about an upload (media id, mime, size, pixels) so screens can reserve its space. */
+export async function recordAsset(image: { publicId: string; mediaId?: string; mime?: string; width?: number; height?: number; bytes?: number }, mime: string) {
+  const data = { mediaId: image.mediaId ?? null, mime: image.mime ?? mime, width: image.width ?? null, height: image.height ?? null, size: image.bytes ?? null };
+  await prisma.mediaAsset.upsert({ where: { path: image.publicId }, create: { path: image.publicId, ...data }, update: data });
+}
+
 /** Uploads into the caller's own namespace; the id is generated here, never chosen by the client. */
-export function uploadOwnedImage(userId: string, kind: ImageKind, buffer: Buffer): Promise<UploadedImage> {
+export async function uploadOwnedImage(userId: string, kind: ImageKind, buffer: Buffer): Promise<UploadedImage> {
   // Location (EXIF GPS) and other embedded metadata never reach storage.
   const mime = sniffImageType(buffer);
   const clean = mime ? stripImageMetadata(buffer, mime) : buffer;
-  return storage.uploadImage(clean, { kind, publicId: newPublicId(kind, userId) });
+  const image = await storage.uploadImage(clean, { kind, publicId: newPublicId(kind, userId) });
+  await recordAsset(image, mime ?? "image/jpeg");
+  return image;
 }
 
 /** Deletes an upload that isn't attached to anything. Refuses other users' images and live ones. */

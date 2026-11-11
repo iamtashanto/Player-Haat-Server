@@ -31,6 +31,8 @@ const schema = z
     CORS_ORIGINS: csv,
     TRUST_PROXY: bool.default(false),
     /** Web Push (VAPID): `npm run vapid:generate`. Unset = web push off. */
+    /** 32 bytes, base64 or hex. Encrypts verification documents before they reach the media service. */
+    EVIDENCE_ENCRYPTION_KEY: optionalString,
     VAPID_PUBLIC_KEY: optionalString,
     VAPID_PRIVATE_KEY: optionalString,
     VAPID_SUBJECT: optionalString,

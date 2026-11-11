@@ -2,6 +2,9 @@
 export type ImageKind = "avatar" | "player-photo" | "player-cover" | "team-logo" | "verification-doc";
 
 export interface StoredImage {
+  /** The provider's own id for the file (media service), when it has one. */
+  mediaId?: string;
+  mime?: string;
   /** Delivery URL (https, auto format/quality). Always derived server-side, never taken from a client. */
   url: string;
   /** Provider id; needed to delete the asset later. */
@@ -21,6 +24,9 @@ export interface StorageProvider {
   deleteImage(publicId: string): Promise<void>;
   /** `transform` is a media-service transform such as `w_400` or `w_1200,h_630,c_fill`; omitted = the original size. */
   urlFor(publicId: string, transform?: string): string;
+  /** Stores opaque text (an encrypted document) in `folder` and returns where. Never produces a public URL for callers. */
+  putText?(text: string, opts: { folder: string; name: string }): Promise<{ path: string; mediaId?: string }>;
+  getText?(path: string): Promise<string>;
   /** Storage used and quota, when the provider can tell. */
   usage?(): Promise<{ provider: string; usedBytes: number; quotaBytes: number; files: number }>;
   /** Assets under `prefix` created before `olderThan` (at most `limit`) — for the orphan sweeper. */

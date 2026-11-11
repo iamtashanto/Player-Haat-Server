@@ -36,12 +36,12 @@ export class TashantoMediaStorage implements StorageProvider {
   }
 
   /** One request with a timeout and a single retry on 429/5xx. Never logs the key or the file body. */
-  private async call(path: string, init: RequestInit): Promise<Response> {
+  private async call(path: string, init: RequestInit, absolute = false): Promise<Response> {
     const { base, key } = this.cfg();
     let last: Response | undefined;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = await fetch(`${base}/api/v1${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+        const res = await fetch(absolute ? `${base}${path}` : `${base}/api/v1${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(TIMEOUT_MS) });
         if (!RETRY_STATUSES.has(res.status) || attempt === 1) return res;
         last = res;
         const wait = Math.min(Number(res.headers.get("retry-after")) * 1000 || 400, 2000);
@@ -78,7 +78,7 @@ export class TashantoMediaStorage implements StorageProvider {
       throw new AppError("STORAGE_UPLOAD_FAILED", 502, "Image upload failed");
     }
     const f = (await res.json()) as MediaFile;
-    return { url: this.urlFor(f.path), publicId: f.path, width: f.width, height: f.height, bytes: f.size };
+    return { url: this.urlFor(f.path), publicId: f.path, mediaId: f.id, mime: f.mime, width: f.width, height: f.height, bytes: f.size };
   }
 
   /** The service deletes by its own id, so look the file up by folder first. A missing file is not an error. */
@@ -92,6 +92,12 @@ export class TashantoMediaStorage implements StorageProvider {
     }
   }
 
+  /** The service's facts about a file, found by its path (we keep paths, not the service's ids). null if it is gone. */
+  async stat(path: string) {
+    const f = await this.find(path);
+    return f ? { mediaId: f.id, mime: f.mime ?? "application/octet-stream", width: f.width ?? null, height: f.height ?? null, size: f.size ?? null } : null;
+  }
+
   private async find(path: string): Promise<MediaFile | null> {
     const idx = path.lastIndexOf("/");
     const dir = path.slice(0, idx);
@@ -100,6 +106,31 @@ export class TashantoMediaStorage implements StorageProvider {
     if (res.status !== 200) return null;
     const body = (await res.json()) as { files?: MediaFile[] };
     return body.files?.find((f) => f.path === path) ?? null;
+  }
+
+  async putText(text: string, opts: { folder: string; name: string }) {
+    const form = new FormData();
+    form.set("file", new Blob([text], { type: "text/plain" }), `${opts.name}.txt`);
+    form.set("folder", opts.folder);
+    let res: Response;
+    try {
+      res = await this.call("/upload", { method: "POST", body: form });
+    } catch (err) {
+      logger.error({ err: String(err) }, "private upload failed (network)");
+      throw new AppError("STORAGE_UPLOAD_FAILED", 502, "Upload failed");
+    }
+    if (res.status !== 201) {
+      logger.error({ status: res.status }, "private upload rejected");
+      throw new AppError("STORAGE_UPLOAD_FAILED", 502, "Upload failed");
+    }
+    const f = (await res.json()) as MediaFile;
+    return { path: f.path, mediaId: f.id };
+  }
+
+  async getText(path: string) {
+    const res = await this.call(`/f/${path}`, { method: "GET" }, true).catch(() => null);
+    if (!res || res.status !== 200) throw new AppError("STORAGE_UPLOAD_FAILED", 502, "Couldn't read the document");
+    return res.text();
   }
 
   async usage() {

@@ -242,6 +242,7 @@ enum AdminActionType {
   REPORT_DISMISS
   CONFIG_SET
   MEDIA_REMOVE
+  VERIFICATION_FILE_VIEW
 }
 
 enum ReportStatus {
@@ -302,6 +303,7 @@ model User {
   notificationPreference   NotificationPreference?
   pushJobs                 PushJob[]
   webPushSubscriptions     WebPushSubscription[]
+  verificationFiles        VerificationFile[]      @relation("VerificationFileOwner")
   teamsCaptained           Team[]                  @relation("TeamCaptain")
   teamMemberships          TeamMember[]
   requestsCreated          PlayerRequest[]
@@ -841,6 +843,41 @@ model Notification {
   @@index([createdAt]) // retention purge
 }
 
+/// Facts about every uploaded image, keyed by its storage path: so layouts can reserve the space before it loads.
+model MediaAsset {
+  path      String   @id // the media service path (= publicId everywhere else)
+  mediaId   String? // the media service's own id
+  mime      String
+  width     Int?
+  height    Int?
+  size      Int?
+  createdAt DateTime @default(now())
+
+  @@index([mediaId])
+}
+
+/// A verification document. Stored AES-256-GCM encrypted (as base64 text, the only shape the media service accepts
+/// besides images) in `verification/<userId>/`: the service has no private mode, so what sits at its public URL is
+/// unreadable. Only our API, with the key, can turn it back into the picture. No public URL is ever built for it.
+model VerificationFile {
+  id        String   @id @default(cuid())
+  userId    String
+  requestId String? // null until it is attached to a submitted request
+  path      String   @unique // media service path of the encrypted blob
+  mediaId   String?
+  mime      String // of the original image
+  width     Int?
+  height    Int?
+  size      Int // of the original image, bytes
+  createdAt DateTime @default(now())
+
+  user    User                 @relation("VerificationFileOwner", fields: [userId], references: [id], onDelete: Cascade)
+  request VerificationRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([userId, createdAt])
+}
+
 /// What the user wants to hear about. No row = the defaults below.
 model NotificationPreference {
   userId            String   @id
@@ -1032,7 +1069,8 @@ model VerificationRequest {
   playerSportId      String?
   note               String?
   evidenceLinks      String[] // https links: a page, a federation record, a match report
-  evidenceImages     Json? // [{ url, publicId }] — uploaded through /media/images
+  evidenceImages     Json? // LEGACY public images; `scripts/migrate-evidence-private.ts` moves them into `files` and clears this
+  files              VerificationFile[]
   status             VerificationStatus @default(PENDING)
   reviewedById       String?
   reviewedAt         DateTime?

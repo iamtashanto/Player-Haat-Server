@@ -1,6 +1,7 @@
 import { AppError } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
+import { deleteImagesQuietly } from "../../lib/storage/safe-delete.js";
 import { storage } from "../../lib/storage/index.js";
 import { STORAGE_PREFIX } from "../../lib/storage/paths.js";
 
@@ -35,7 +36,7 @@ export async function sweepOrphanUploads(now = new Date(), opts: { minAgeHours?:
   const ids = candidates.map((c) => c.publicId).filter((id) => id.startsWith(STORAGE_PREFIX)); // belt and braces
   if (ids.length === 0) return { scanned: 0, deleted: 0 };
 
-  const [avatars, photos, logos, evidence] = await Promise.all([
+  const [avatars, photos, logos, evidence, covers] = await Promise.all([
     prisma.user.findMany({ where: { avatarPublicId: { in: ids } }, select: { avatarPublicId: true } }),
     prisma.playerMedia.findMany({ where: { publicId: { in: ids } }, select: { publicId: true } }),
     prisma.team.findMany({ where: { logoPublicId: { in: ids } }, select: { logoPublicId: true } }),
@@ -43,8 +44,9 @@ export async function sweepOrphanUploads(now = new Date(), opts: { minAgeHours?:
     prisma.$queryRaw<{ publicId: string }[]>`
       SELECT elem->>'publicId' AS "publicId" FROM "VerificationRequest", jsonb_array_elements(COALESCE("evidenceImages", '[]'::jsonb)) elem
       WHERE elem->>'publicId' = ANY(${ids})`,
+    prisma.playerProfile.findMany({ where: { coverPublicId: { in: ids } }, select: { coverPublicId: true } }),
   ]);
-  const referenced = new Set<string>([...avatars.map((a) => a.avatarPublicId!), ...photos.map((p) => p.publicId!), ...logos.map((l) => l.logoPublicId!), ...evidence.map((e) => e.publicId)]);
+  const referenced = new Set<string>([...avatars.map((a) => a.avatarPublicId!), ...photos.map((p) => p.publicId!), ...logos.map((l) => l.logoPublicId!), ...evidence.map((e) => e.publicId), ...covers.map((c) => c.coverPublicId!)]);
   const orphans = ids.filter((id) => !referenced.has(id));
 
   let deleted = 0;
@@ -57,4 +59,13 @@ export async function sweepOrphanUploads(now = new Date(), opts: { minAgeHours?:
     }
   }
   return { scanned: ids.length, deleted };
+}
+
+/** Documents uploaded but never attached to a request (the user walked away): remove the blob and the row after a day. */
+export async function sweepUnattachedEvidence(now = new Date(), olderThanHours = 24) {
+  const stale = await prisma.verificationFile.findMany({ where: { requestId: null, createdAt: { lt: new Date(now.getTime() - olderThanHours * HOUR) } }, select: { id: true, path: true }, take: 500 });
+  if (stale.length === 0) return null;
+  await deleteImagesQuietly(stale.map((f) => f.path));
+  await prisma.verificationFile.deleteMany({ where: { id: { in: stale.map((f) => f.id) } } });
+  return { deleted: stale.length };
 }

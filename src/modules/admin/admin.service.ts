@@ -239,7 +239,7 @@ export async function getUser(id: string) {
             achievements: sp.achievements,
           })),
           coverUrl: imageUrl(u.playerProfile.coverPublicId, u.playerProfile.coverUrl),
-          media: u.playerProfile.media.map(toMediaItem),
+          media: u.playerProfile.media.map((m) => toMediaItem(m)),
         }
       : null,
     recentRequests: u.requestsCreated.map((r) => ({
