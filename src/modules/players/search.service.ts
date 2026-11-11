@@ -12,7 +12,7 @@ type Query = z.infer<typeof searchQuery>;
 
 interface Row {
   id: string;
-  avgRating: number;
+  bayesRating: number;
   ratingCount: number;
   lastActiveAt: Date;
   matchedSportIds: number[];
@@ -42,9 +42,9 @@ function decode(raw: string, sort: Query["sort"]): Cursor {
 
 const rowCursor = (sort: Query["sort"], r: Row): Cursor =>
   sort === "rating"
-    ? { s: "rating", v: [r.avgRating, r.ratingCount, r.id] }
+    ? { s: "rating", v: [r.bayesRating, r.ratingCount, r.id] }
     : sort === "near"
-      ? { s: "near", v: [Number(r.prox), r.avgRating, r.ratingCount, r.id] }
+      ? { s: "near", v: [Number(r.prox), r.bayesRating, r.ratingCount, r.id] }
       : { s: "active", v: [r.lastActiveAt.toISOString(), r.id] };
 
 /**
@@ -53,7 +53,7 @@ const rowCursor = (sort: Query["sort"], r: Row): Cursor =>
  * pagination over mixed-direction sort keys. Every value is a bound parameter.
  *
  * Sort orders (all end in `id ASC` as a unique tie-breaker so pages never overlap or skip):
- *   rating: avgRating DESC, ratingCount DESC, id      — uses PlayerProfile_avgRating_ratingCount_idx
+ *   rating: bayesRating DESC, ratingCount DESC, id      — uses PlayerProfile_bayesRating_ratingCount_idx
  *   active: lastActiveAt DESC, id                     — uses PlayerProfile_lastActiveAt_idx
  */
 /** Builds the (parameterised) id-selection query. Exported so scripts can EXPLAIN exactly what runs. */
@@ -117,12 +117,12 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
     if (c.s === "near") {
       const [rank, avg, cnt, id] = c.v;
       where.push(
-        Prisma.sql`(${prox} > ${rank} OR (${prox} = ${rank} AND (p."avgRating" < ${avg} OR (p."avgRating" = ${avg} AND (p."ratingCount" < ${cnt} OR (p."ratingCount" = ${cnt} AND p.id > ${id}))))))`,
+        Prisma.sql`(${prox} > ${rank} OR (${prox} = ${rank} AND (p."bayesRating" < ${avg} OR (p."bayesRating" = ${avg} AND (p."ratingCount" < ${cnt} OR (p."ratingCount" = ${cnt} AND p.id > ${id}))))))`,
       );
     } else if (c.s === "rating") {
       const [avg, cnt, id] = c.v;
       where.push(
-        Prisma.sql`(p."avgRating" < ${avg} OR (p."avgRating" = ${avg} AND (p."ratingCount" < ${cnt} OR (p."ratingCount" = ${cnt} AND p.id > ${id}))))`,
+        Prisma.sql`(p."bayesRating" < ${avg} OR (p."bayesRating" = ${avg} AND (p."ratingCount" < ${cnt} OR (p."ratingCount" = ${cnt} AND p.id > ${id}))))`,
       );
     } else {
       const [at, id] = c.v;
@@ -136,13 +136,13 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
 
   const orderBy =
     q.sort === "rating"
-      ? Prisma.sql`p."avgRating" DESC, p."ratingCount" DESC, p.id ASC`
+      ? Prisma.sql`p."bayesRating" DESC, p."ratingCount" DESC, p.id ASC`
       : q.sort === "near"
-        ? Prisma.sql`${prox} ASC, p."avgRating" DESC, p."ratingCount" DESC, p.id ASC`
+        ? Prisma.sql`${prox} ASC, p."bayesRating" DESC, p."ratingCount" DESC, p.id ASC`
         : Prisma.sql`p."lastActiveAt" DESC, p.id ASC`;
 
   return Prisma.sql`
-    SELECT p.id, p."avgRating", p."ratingCount", p."lastActiveAt", ${matched} AS "matchedSportIds", ${prox} AS prox
+    SELECT p.id, p."bayesRating", p."ratingCount", p."lastActiveAt", ${matched} AS "matchedSportIds", ${prox} AS prox
     FROM "PlayerProfile" p
     JOIN "User" u ON u.id = p."userId"
     WHERE ${Prisma.join(where, " AND ")}

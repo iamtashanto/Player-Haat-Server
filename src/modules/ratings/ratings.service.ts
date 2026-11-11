@@ -6,6 +6,8 @@ import { prisma } from "../../lib/prisma.js";
 import { requestInclude, toRequest } from "../requests/requests.presenter.js";
 import type { createRatingBody } from "./ratings.schema.js";
 import { RATING_WINDOW_DAYS } from "./ratings.schema.js";
+import { RATING_RULES, bayesAverage } from "./ratings.config.js";
+import { notify } from "../notifications/notifier.js";
 
 const WINDOW_MS = RATING_WINDOW_DAYS * 86_400_000;
 type Scores = Record<string, number>;
@@ -22,6 +24,7 @@ export function toRating(r: Rating) {
     comment: r.comment,
     noShow: r.noShow,
     createdAt: r.createdAt.toISOString(),
+    revealed: r.revealedAt !== null,
   };
 }
 
@@ -89,15 +92,23 @@ export async function createRating(userId: string, requestId: string, body: Body
     if (struck) throw AppError.conflict("RATING_NOT_ELIGIBLE", "You were marked as a no-show for this match");
   }
 
+  const revealedNotice: string[] = [];
   return prisma.$transaction(async (tx) => {
     // Serialize everything that changes this person's aggregates. Without the lock, two ratings landing
     // together would each recompute without seeing the other and the stored average would be wrong.
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${rateeId} FOR UPDATE`;
 
+    if (noShow) {
+      // A no-show is a fact about attendance: the Application is the single source, the Rating row mirrors it.
+      const att = await tx.application.findFirst({ where: { requestId, playerId: rateeId, status: "ACCEPTED" }, select: { id: true, attendance: true } });
+      if (att?.attendance === "ATTENDED") throw AppError.conflict("ATTENDANCE_CONFLICT", "This player was marked as having attended");
+      if (att && att.attendance !== "NO_SHOW") await tx.application.update({ where: { id: att.id }, data: { attendance: "NO_SHOW", attendanceMarkedAt: new Date() } });
+    }
+
     let rating: Rating;
     try {
       rating = await tx.rating.create({
-        data: { requestId, raterId: userId, rateeId, direction, scores, overall, noShow, comment: body.comment ?? null },
+        data: { requestId, raterId: userId, rateeId, direction, scores, overall, noShow, comment: body.comment ?? null, revealedAt: noShow ? new Date() : null },
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
@@ -105,36 +116,104 @@ export async function createRating(userId: string, requestId: string, body: Body
       }
       throw err;
     }
+
+    let revealed = noShow;
+    if (!noShow) {
+      // Double-blind: both sides' reviews become visible together, once the second one arrives.
+      const other = await tx.rating.findFirst({ where: { requestId, raterId: rateeId, rateeId: userId, noShow: false, revealedAt: null }, select: { id: true } });
+      if (other) {
+        const now = new Date();
+        await tx.rating.updateMany({ where: { id: { in: [other.id, rating.id] } }, data: { revealedAt: now } });
+        rating = { ...rating, revealedAt: now };
+        revealed = true;
+        await recomputeAggregates(tx, userId, direction === "CAPTAIN_TO_PLAYER" ? "PLAYER_TO_CAPTAIN" : "CAPTAIN_TO_PLAYER", request.sportId);
+        revealedNotice.push(userId);
+      }
+    }
     await recomputeAggregates(tx, rateeId, direction, request.sportId);
-    return toRating(rating);
+    if (revealed && !noShow) revealedNotice.push(rateeId);
+    return { ...toRating(rating), revealsAt: revealed ? null : windowEnd(request.completedAt!).toISOString() };
+  }).then((r) => {
+    if (revealedNotice.length) notify({ userIds: revealedNotice, type: "SYSTEM", data: { code: "REVIEW_REVEALED", requestId }, params: { code: "REVIEW_REVEALED" } });
+    return r;
   });
 }
 
+/** What counts as a review: revealed, not hidden by an admin, not a no-show strike. */
+const countable = { noShow: false, revealedAt: { not: null }, hiddenByAdminAt: null } as const;
+
+async function platformMean(tx: Prisma.TransactionClient): Promise<number> {
+  const r = await tx.rating.aggregate({ where: { ...countable, direction: "CAPTAIN_TO_PLAYER" }, _avg: { overall: true }, _count: { _all: true } });
+  return r._count._all > 0 && r._avg.overall ? r._avg.overall : RATING_RULES.fallbackPrior;
+}
+
 /**
- * Recomputes from the rating rows (not incrementally), so it can never drift.
- * No-shows are strikes, not reviews: they raise noShowCount and are excluded from the average and its count.
+ * Strikes counted against a player: Application.attendance = NO_SHOW is the single source. A strike whose mirror
+ * row is under an open dispute, or was removed by an admin, does not count.
  */
-async function recomputeAggregates(tx: Prisma.TransactionClient, rateeId: string, direction: Rating["direction"], sportId: number) {
-  const reviews = await tx.rating.aggregate({ where: { rateeId, direction, noShow: false }, _avg: { overall: true }, _count: { _all: true } });
+export async function countedNoShows(tx: Prisma.TransactionClient, playerId: string): Promise<number> {
+  const [row] = await tx.$queryRaw<{ n: number }[]>`
+    SELECT COUNT(*)::int AS n FROM "Application" a
+    WHERE a."playerId" = ${playerId} AND a.attendance = 'NO_SHOW'
+      AND NOT EXISTS (
+        SELECT 1 FROM "Rating" r LEFT JOIN "RatingDispute" d ON d."ratingId" = r.id AND d.status = 'OPEN'
+        WHERE r."requestId" = a."requestId" AND r."rateeId" = a."playerId" AND r."noShow" AND (r."hiddenByAdminAt" IS NOT NULL OR d.id IS NOT NULL))`;
+  return row?.n ?? 0;
+}
+
+/**
+ * Recomputes from the rating rows (not incrementally), so it can never drift. Only revealed, visible reviews count;
+ * no-shows are strikes, not reviews. Also stores the damped average used for ordering.
+ */
+export async function recomputeAggregates(tx: Prisma.TransactionClient, rateeId: string, direction: Rating["direction"], sportId: number | null) {
+  const reviews = await tx.rating.aggregate({ where: { rateeId, direction, ...countable }, _avg: { overall: true }, _count: { _all: true } });
   const avg = reviews._avg.overall ?? 0;
   const count = reviews._count._all;
 
   if (direction === "CAPTAIN_TO_PLAYER") {
-    const noShowCount = await tx.rating.count({ where: { rateeId, direction, noShow: true } });
-    await tx.playerProfile.updateMany({ where: { userId: rateeId }, data: { avgRating: avg, ratingCount: count, noShowCount } });
+    const prior = await platformMean(tx);
+    const noShowCount = await countedNoShows(tx, rateeId);
+    await tx.playerProfile.updateMany({ where: { userId: rateeId }, data: { avgRating: avg, ratingCount: count, noShowCount, bayesRating: bayesAverage(avg, count, prior) } });
 
-    // The same reviews, narrowed to this match's sport, feed that sport profile's own rating.
-    const [perSport] = await tx.$queryRaw<{ avg: number | null; cnt: number }[]>`
-      SELECT AVG(r.overall)::float AS avg, COUNT(*)::int AS cnt
-      FROM "Rating" r JOIN "PlayerRequest" q ON q.id = r."requestId"
-      WHERE r."rateeId" = ${rateeId} AND r.direction = 'CAPTAIN_TO_PLAYER' AND r."noShow" = false AND q."sportId" = ${sportId}`;
-    await tx.playerSport.updateMany({
-      where: { sportId, profile: { userId: rateeId } },
-      data: { avgRating: perSport?.avg ?? 0, ratingCount: perSport?.cnt ?? 0 },
-    });
+    const sports = sportId === null ? (await tx.playerSport.findMany({ where: { profile: { userId: rateeId } }, select: { sportId: true } })).map((x) => x.sportId) : [sportId];
+    for (const sid of sports) {
+      // The same reviews, narrowed to one sport, feed that sport profile's own rating.
+      const [perSport] = await tx.$queryRaw<{ avg: number | null; cnt: number }[]>`
+        SELECT AVG(r.overall)::float AS avg, COUNT(*)::int AS cnt
+        FROM "Rating" r JOIN "PlayerRequest" q ON q.id = r."requestId"
+        WHERE r."rateeId" = ${rateeId} AND r.direction = 'CAPTAIN_TO_PLAYER' AND r."noShow" = false
+          AND r."revealedAt" IS NOT NULL AND r."hiddenByAdminAt" IS NULL AND q."sportId" = ${sid}`;
+      await tx.playerSport.updateMany({ where: { sportId: sid, profile: { userId: rateeId } }, data: { avgRating: perSport?.avg ?? 0, ratingCount: perSport?.cnt ?? 0 } });
+    }
   } else {
     await tx.user.update({ where: { id: rateeId }, data: { captainAvgRating: avg, captainRatingCount: count } });
   }
+}
+
+/** Recomputes every aggregate for one person (admin moderation, reconcile script). */
+export async function recomputeEverything(tx: Prisma.TransactionClient, userId: string) {
+  await recomputeAggregates(tx, userId, "CAPTAIN_TO_PLAYER", null);
+  await recomputeAggregates(tx, userId, "PLAYER_TO_CAPTAIN", null);
+}
+
+/**
+ * Job: reviews whose window closed without the other side rating become visible (so silence can't hide a review
+ * forever). Returns how many were revealed.
+ */
+export async function revealExpired(now = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - WINDOW_MS);
+  const due = await prisma.rating.findMany({
+    where: { revealedAt: null, noShow: false, request: { completedAt: { lte: cutoff } } },
+    select: { id: true, rateeId: true },
+  });
+  if (due.length === 0) return 0;
+  const ratees = [...new Set(due.map((d) => d.rateeId))];
+  await prisma.$transaction(async (tx) => {
+    await tx.rating.updateMany({ where: { id: { in: due.map((d) => d.id) } }, data: { revealedAt: now } });
+    for (const id of ratees) await recomputeEverything(tx, id);
+  });
+  notify({ userIds: ratees, type: "SYSTEM", data: { code: "REVIEW_REVEALED" }, params: { code: "REVIEW_REVEALED" } });
+  return due.length;
 }
 
 // ───────────────────────── pending ─────────────────────────
@@ -204,7 +283,7 @@ export async function playerReviews(profileId: string, q: { cursor?: string; lim
   if (!profile) throw AppError.notFound("PLAYER_PROFILE_NOT_FOUND", "Player not found");
 
   const rows = await prisma.rating.findMany({
-    where: { rateeId: profile.userId, direction: "CAPTAIN_TO_PLAYER", noShow: false },
+    where: { rateeId: profile.userId, direction: "CAPTAIN_TO_PLAYER", ...countable },
     include: {
       rater: { select: { name: true, avatarUrl: true } },
       request: { select: { matchAt: true, sport: { select: { id: true, code: true, nameBn: true, nameEn: true } } } },
@@ -219,10 +298,50 @@ export async function playerReviews(profileId: string, q: { cursor?: string; lim
       overall: Math.round(r.overall * 100) / 100,
       scores: r.scores as Scores,
       comment: r.comment,
+      reply: r.replyText ? { text: r.replyText, at: r.repliedAt?.toISOString() ?? null } : null,
       createdAt: r.createdAt.toISOString(),
       rater: r.rater,
       request: { sport: r.request.sport, matchAt: r.request.matchAt.toISOString() },
     })),
+    nextCursor,
+  };
+}
+
+/** Everything I've received: reviews (revealed) and no-show strikes, with reply/dispute state, so I can respond. */
+export async function receivedRatings(userId: string, q: { cursor?: string; limit: number }) {
+  const rows = await prisma.rating.findMany({
+    where: { rateeId: userId, revealedAt: { not: null } },
+    include: {
+      rater: { select: { name: true, avatarUrl: true } },
+      disputes: { select: { status: true, createdAt: true } },
+      request: { select: { matchAt: true, sport: { select: { id: true, code: true, nameBn: true, nameEn: true } } } },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    ...cursorArgs(q.cursor, q.limit),
+  });
+  const { items, nextCursor } = toPage(rows, q.limit);
+  const now = Date.now();
+  return {
+    items: items.map((r) => {
+      const d = r.disputes[0] ?? null;
+      const open = r.revealedAt ? now <= r.revealedAt.getTime() + RATING_RULES.disputeWindowDays * 86_400_000 : false;
+      return {
+        id: r.id,
+        direction: r.direction,
+        noShow: r.noShow,
+        overall: r.noShow ? null : Math.round(r.overall * 100) / 100,
+        scores: r.scores as Scores,
+        comment: r.comment,
+        reply: r.replyText ? { text: r.replyText, at: r.repliedAt?.toISOString() ?? null } : null,
+        hidden: r.hiddenByAdminAt !== null,
+        dispute: d ? { status: d.status } : null,
+        canDispute: !d && open && r.hiddenByAdminAt === null,
+        canReply: !r.noShow && r.hiddenByAdminAt === null && (!r.replyText || (r.repliedAt ? now <= r.repliedAt.getTime() + RATING_RULES.replyEditHours * 3_600_000 : true)),
+        createdAt: r.createdAt.toISOString(),
+        rater: r.rater,
+        request: { sport: r.request.sport, matchAt: r.request.matchAt.toISOString() },
+      };
+    }),
     nextCursor,
   };
 }

@@ -155,7 +155,7 @@ const SportEntry = z.object({
   experienceYears: z.number().int().nullable(),
   currentTeam: z.string().nullable(),
   stats: z.record(z.string(), z.number()).nullable(),
-  rating: z.object({ average: z.number(), count: z.number().int() }),
+  rating: z.object({ average: z.number(), count: z.number().int(), isNew: z.boolean() }),
   statsVerified: z.boolean().openapi({ description: "An admin checked these stats against the player's evidence." }),
   achievements: z.array(z.object({ id: z.string(), title: z.string(), year: z.number().int().nullable(), description: z.string().nullable() })).optional(),
   preferredFoot: z.string().nullable().optional(),
@@ -163,7 +163,7 @@ const SportEntry = z.object({
   availability: z.record(z.string(), z.array(z.string())).nullable().optional(),
 });
 const Location = z.object({ district: Ref, upazila: Ref, union: Ref.nullable() });
-const Rating = z.object({ average: z.number(), count: z.number().int() });
+const Rating = z.object({ average: z.number(), count: z.number().int(), isNew: z.boolean() });
 const PlayerCard = z
   .object({
     id: z.string(),

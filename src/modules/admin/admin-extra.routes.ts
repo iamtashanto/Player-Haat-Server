@@ -7,6 +7,8 @@ import { validate } from "../../middlewares/validate.js";
 import * as billing from "../billing/billing.admin.js";
 import * as adminAuth from "./admin-auth.service.js";
 import * as chat from "../chat/chat.service.js";
+import * as ratingMod from "../ratings/ratings.moderation.js";
+import * as rs from "../ratings/ratings.schema.js";
 import * as verification from "../verification/verification.service.js";
 import * as vs from "../verification/verification.schema.js";
 import { sendDocument } from "../verification/verification.routes.js";
@@ -38,6 +40,25 @@ adminExtraRoutes.get("/verification/:id/files/:fileId", validate({ params: vs.ad
 adminExtraRoutes.post("/verifications/:id/review", validate({ params: vs.verificationParams, body: vs.reviewBody }), async (req, res) => {
   ok(res, await verification.adminReview(adminId(req), idOf(req), valid<B<typeof vs.reviewBody>>(req).body));
 });
+
+// ratings: disputes, hiding, replies, history, organiser flags
+adminExtraRoutes.get("/ratings/disputes", validate({ query: rs.disputesQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, B<typeof rs.disputesQuery>>(req);
+  const { items, nextCursor } = await ratingMod.adminListDisputes(query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
+adminExtraRoutes.post("/ratings/disputes/:id/resolve", validate({ params: rs.ratingParams, body: rs.resolveBody }), async (req, res) => {
+  ok(res, await ratingMod.adminResolveDispute(adminId(req), idOf(req), valid<B<typeof rs.resolveBody>>(req).body));
+});
+adminExtraRoutes.post("/ratings/:id/hide", validate({ params: rs.ratingParams, body: rs.hideBody }), async (req, res) => {
+  const { hidden, reason } = valid<B<typeof rs.hideBody>>(req).body;
+  ok(res, await ratingMod.adminSetHidden(adminId(req), idOf(req), hidden, reason));
+});
+adminExtraRoutes.delete("/ratings/:id/reply", validate({ params: rs.ratingParams, body: rs.reasonBody }), async (req, res) => {
+  ok(res, await ratingMod.adminRemoveReply(adminId(req), idOf(req), valid<B<typeof rs.reasonBody>>(req).body.reason));
+});
+adminExtraRoutes.get("/ratings/flagged-organisers", async (_req, res) => ok(res, await ratingMod.flaggedOrganisers()));
+adminExtraRoutes.get("/users/:id/ratings", validate({ params: rs.ratingParams }), async (req, res) => ok(res, await ratingMod.adminUserRatings(idOf(req))));
 
 // payments
 adminExtraRoutes.get("/payments", validate({ query: billing.paymentsQuery }), async (req, res) => {
@@ -82,3 +103,10 @@ registerRoute({ method: "get", path: "/admin/me/sessions", ...A, summary: "My si
 registerRoute({ method: "delete", path: "/admin/me/sessions/{id}", ...A, summary: "Sign one of my sessions out", params: idParams, response: Obj, errors: [403, 404] });
 registerRoute({ method: "post", path: "/admin/me/2fa/backup-codes", ...A, summary: "Replace my backup codes", description: "Needs a current authenticator code. The old codes stop working; the new ones are shown once.", body: backupBody, response: Obj, errors: [401, 403, 409, 422] });
 registerRoute({ method: "get", path: "/admin/conversations/{id}/transcript", ...A, summary: "Read a reported conversation", description: "For moderation only. Every read is written to the audit log.", params: idParams, response: Obj, errors: [403, 404] });
+
+registerRoute({ method: "get", path: "/admin/ratings/disputes", ...A, summary: "Rating disputes", description: "Oldest first. Filter by status.", query: rs.disputesQuery, response: zod.array(Obj), errors: [403] });
+registerRoute({ method: "post", path: "/admin/ratings/disputes/{id}/resolve", ...A, summary: "Resolve a rating dispute", description: "UPHOLD keeps the review/strike; REMOVE hides it. Audit-logged; both people are notified.", params: idParams, body: rs.resolveBody, response: Obj, errors: [403, 404, 409, 422] });
+registerRoute({ method: "post", path: "/admin/ratings/{id}/hide", ...A, summary: "Hide or restore a rating", description: "Recomputes every aggregate of both people.", params: idParams, body: rs.hideBody, response: Obj, errors: [403, 404, 422] });
+registerRoute({ method: "delete", path: "/admin/ratings/{id}/reply", ...A, summary: "Remove a reply", params: idParams, body: rs.reasonBody, response: Obj, errors: [403, 404, 422] });
+registerRoute({ method: "get", path: "/admin/ratings/flagged-organisers", ...A, summary: "Organisers marking most players as no-shows", description: "More than half no-shows across at least three games.", response: zod.array(Obj), errors: [403] });
+registerRoute({ method: "get", path: "/admin/users/{id}/ratings", ...A, summary: "A person's full rating history", description: "Given and received, including hidden and not-yet-revealed.", params: idParams, response: zod.array(Obj), errors: [403, 404] });

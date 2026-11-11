@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { revealExpired } from "../src/modules/ratings/ratings.service.js";
 import { fakePush } from "./fake-push.js";
 import { V1, api, completedMatch, hoursFromNow, makeApplication, makeRequest, playerUser, prisma, resetDb, seedWorld, settle, signedIn, type World } from "./helpers.js";
 
@@ -11,7 +12,16 @@ beforeEach(async () => {
 
 const post = (a: Auth, path: string, body?: object) => api().post(`${V1}${path}`).set(a).send(body);
 const get = (a: Auth, path: string, query: Record<string, string | number> = {}) => api().get(`${V1}${path}`).set(a).query(query);
-const rate = (a: Auth, requestId: string, body: object) => post(a, `/requests/${requestId}/ratings`, body);
+/** Posts a rating without revealing it (double-blind). */
+const rateBlind = (a: Auth, requestId: string, body: object) => post(a, `/requests/${requestId}/ratings`, body);
+/** Lets the 7-day window pass so every pending rating becomes visible. */
+const reveal = () => revealExpired(new Date(Date.now() + 8 * 86_400_000));
+/** Posts a rating and reveals it, for tests that are about scores and aggregates rather than the blind rule. */
+const rate = async (a: Auth, requestId: string, body: object) => {
+  const res = await rateBlind(a, requestId, body);
+  await reveal();
+  return res;
+};
 const CAP_SCORES = { skill: 5, punctuality: 4, behavior: 3 };
 const profileOf = (userId: string) => prisma.playerProfile.findUniqueOrThrow({ where: { userId } });
 
@@ -240,9 +250,10 @@ describe("aggregates stay exact", () => {
     await prisma.playerRequest.update({ where: { id: r2.id }, data: { completedAt: hoursFromNow(-5), playersAccepted: 1 } });
     const app2 = await makeApplication(r2.id, player.user.id, "ACCEPTED");
     await Promise.all([
-      rate(a.cap.auth, a.request.id, { applicationId: player.app.id, scores: { skill: 5, punctuality: 5, behavior: 5 } }),
-      rate(cap2.auth, r2.id, { applicationId: app2.id, scores: { skill: 1, punctuality: 1, behavior: 1 } }),
+      rateBlind(a.cap.auth, a.request.id, { applicationId: player.app.id, scores: { skill: 5, punctuality: 5, behavior: 5 } }),
+      rateBlind(cap2.auth, r2.id, { applicationId: app2.id, scores: { skill: 1, punctuality: 1, behavior: 1 } }),
     ]);
+    await reveal();
     expect(await profileOf(player.user.id)).toMatchObject({ avgRating: 3, ratingCount: 2 });
   });
 });

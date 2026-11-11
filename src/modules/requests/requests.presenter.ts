@@ -1,3 +1,4 @@
+import { publicRating } from "../ratings/ratings.config.js";
 import { imageUrl } from "../players/players.presenter.js";
 import type { Prisma } from "@prisma/client";
 import { locationInclude } from "../locations/location.service.js";
@@ -50,7 +51,7 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
     captain: {
       name: r.createdBy.name,
       avatarUrl: r.createdBy.avatarUrl,
-      rating: { average: round2(r.createdBy.captainAvgRating), count: r.createdBy.captainRatingCount },
+      rating: publicRating(r.createdBy.captainAvgRating, r.createdBy.captainRatingCount),
       // Set when the poster is a recruiter with a profile: the app links to their public card.
       recruiterId: r.createdBy.recruiterProfile?.id ?? null,
       recruiterVerified: r.createdBy.recruiterProfile?.verifiedBadge ?? false,

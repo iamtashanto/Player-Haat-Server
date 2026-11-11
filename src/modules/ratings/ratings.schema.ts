@@ -41,6 +41,8 @@ const RatingItem = z
     comment: z.string().nullable(),
     noShow: z.boolean(),
     createdAt: z.string().datetime(),
+    revealed: z.boolean().openapi({ description: "False until both sides have rated or the 7-day window closed (double-blind)." }),
+    revealsAt: z.string().datetime().nullable().optional(),
   })
   .openapi("Rating");
 const PublicReview = z
@@ -49,6 +51,7 @@ const PublicReview = z
     overall: z.number(),
     scores: Scores,
     comment: z.string().nullable(),
+    reply: z.object({ text: z.string(), at: z.string().datetime().nullable() }).nullable(),
     createdAt: z.string().datetime(),
     rater: z.object({ name: z.string(), avatarUrl: z.string().nullable() }),
     request: z.object({ sport: z.object({ id: z.number(), code: z.string(), nameBn: z.string(), nameEn: z.string() }), matchAt: z.string().datetime() }),
@@ -81,3 +84,19 @@ registerRoute({
 });
 registerRoute({ method: "get", path: "/ratings/pending", tag: T, summary: "Matches I can still rate", description: "Completed matches inside the rating window with someone left to rate.", auth: true, response: z.array(Pending) });
 registerRoute({ method: "get", path: "/players/{id}/ratings", tag: T, summary: "Reviews a player has received", description: "Excludes no-show strikes. Newest first.", auth: true, params: profileParams, query: playerRatingsQuery, response: z.array(PublicReview), errors: [404, 422] });
+
+export const ratingParams = z.object({ id: z.string().min(1).max(40) });
+export const replyBody = z.strictObject({ text: z.string().trim().min(1).max(300) });
+export const disputeBody = z.strictObject({
+  reason: z.string().trim().min(10).max(1000),
+  photoPublicId: z.string().min(1).max(200).nullable().optional().openapi({ description: "An image you uploaded (kind: dispute evidence)." }),
+});
+export const resolveBody = z.strictObject({ decision: z.enum(["UPHOLD", "REMOVE"]), note: z.string().trim().min(3).max(1000) });
+export const hideBody = z.strictObject({ hidden: z.boolean(), reason: z.string().trim().min(3).max(1000) });
+export const reasonBody = z.strictObject({ reason: z.string().trim().min(3).max(1000) });
+export const disputesQuery = pageQuery.extend({ status: z.enum(["OPEN", "UPHELD", "REMOVED"]).optional() });
+
+const Any = z.record(z.string(), z.unknown());
+registerRoute({ method: "get", path: "/ratings/received", tag: T, summary: "Reviews and no-show strikes I received", description: "Revealed ones only, with reply/dispute state and whether I can still reply or dispute.", auth: true, query: playerRatingsQuery, response: z.array(Any) });
+registerRoute({ method: "post", path: "/ratings/{id}/reply", tag: T, summary: "Answer a review in public", description: "One reply of at most 300 characters, editable for 24 hours after it is first posted.", auth: true, params: ratingParams, body: replyBody, response: Any, errors: [404, 409, 422] });
+registerRoute({ method: "post", path: "/ratings/{id}/dispute", tag: T, summary: "Dispute a review or a no-show", description: "Within 7 days of it being revealed; a reason (10+ characters) and an optional photo. While open, a no-show strike is not counted.", auth: true, params: ratingParams, body: disputeBody, response: Any, status: 201, errors: [403, 404, 409, 422] });

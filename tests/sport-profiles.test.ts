@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { revealExpired } from "../src/modules/ratings/ratings.service.js";
 import { V1, adminUser, api, completedMatch, playerUser, prisma, recruiterUser, resetDb, seedWorld, type World } from "./helpers.js";
 
 let w: World;
@@ -212,6 +213,7 @@ describe("per-sport ratings", () => {
     await prisma.playerSport.create({ data: { profileId: players[0]!.profileId, sportId: w.cricket.id, skillLevel: 3 } });
     const res = await call("post", `/requests/${request.id}/ratings`, cap.auth, { applicationId: players[0]!.app.id, scores: { skill: 5, punctuality: 4, behavior: 3 } });
     expect(res.status).toBe(201);
+    await revealExpired(new Date(Date.now() + 8 * 86_400_000));
     const sports = await prisma.playerSport.findMany({ where: { profileId: players[0]!.profileId } });
     expect(sports.find((s) => s.sportId === w.football.id)).toMatchObject({ avgRating: 4, ratingCount: 1 });
     expect(sports.find((s) => s.sportId === w.cricket.id)).toMatchObject({ avgRating: 0, ratingCount: 0 });

@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-161 codes. Messages are developer-facing English and may change; **codes are stable**.
+171 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -37,6 +37,8 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
+| `ATTENDANCE_ALREADY_RATED` | 409 | You already reviewed this player; a no-show can't be added | `modules/games/games.service.ts` |
+| `ATTENDANCE_CONFLICT` | 409 | This player was marked as having attended | `modules/ratings/ratings.service.ts` |
 | `ATTENDANCE_WINDOW_CLOSED` | 409 | Attendance can be marked for… | `modules/games/games.service.ts` |
 
 ## AUTH
@@ -126,6 +128,15 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `CREDITS_REQUIRED` | 402 | Not enough credits | `modules/billing/credits.service.ts` |
 
+## DISPUTE
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `DISPUTE_EXISTS` | 409 | You already disputed this | `modules/ratings/ratings.moderation.ts` |
+| `DISPUTE_NOT_FOUND` | 404 | Dispute not found | `modules/ratings/ratings.moderation.ts` |
+| `DISPUTE_RESOLVED` | 409 | Already resolved | `modules/ratings/ratings.moderation.ts` |
+| `DISPUTE_WINDOW_CLOSED` | 409 | Disputes are open for… | `modules/ratings/ratings.moderation.ts` |
+
 ## DISTRICT
 
 | Code | HTTP | Developer message | Raised in |
@@ -200,7 +211,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `MEDIA_IN_USE` | 409 | Remove the image from your profile first | `modules/media/media.service.ts` |
 | `MEDIA_INVALID_UPLOAD` | 422 | Malformed multipart upload (details in the message) | `middlewares/upload.ts` |
 | `MEDIA_NOT_FOUND` | 404 | Media not found | `modules/admin/admin.service.ts` |
-| `MEDIA_NOT_OWNED` | 403 | That image is not yours | `modules/media/media.service.ts` |
+| `MEDIA_NOT_OWNED` | 403 | That image is not yours | `modules/media/media.service.ts`, `modules/ratings/ratings.moderation.ts` |
 | `MEDIA_TOO_LARGE` | 413 | Image must be at most… | `middlewares/upload.ts` |
 | `MEDIA_UNSUPPORTED_TYPE` | 415 | Only jpeg, png, webp and heic images are allowed | `middlewares/upload.ts`, `modules/verification/verification.service.ts` |
 
@@ -274,9 +285,13 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
+| `RATING_ALREADY_REMOVED` | 409 | This was already removed | `modules/ratings/ratings.moderation.ts` |
 | `RATING_EXISTS` | 409 | You already rated this | `modules/ratings/ratings.service.ts` |
 | `RATING_NOT_ELIGIBLE` | 409 | You were marked as a no-show for this match | `modules/ratings/ratings.service.ts` |
+| `RATING_NOT_FOUND` | 404 | Review not found | `modules/ratings/ratings.moderation.ts` |
 | `RATING_NOT_PARTICIPANT` | 403 | Only the poster and accepted players can rate this match | `modules/ratings/ratings.service.ts` |
+| `RATING_NOT_REPLYABLE` | 409 | A no-show can be disputed, not replied to | `modules/ratings/ratings.moderation.ts` |
+| `RATING_REPLY_LOCKED` | 409 | A reply can be edited for… | `modules/ratings/ratings.moderation.ts` |
 | `RATING_TARGET_NOT_FOUND` | 404 | No accepted player with that applicationId on this match | `modules/ratings/ratings.service.ts` |
 | `RATING_WINDOW_CLOSED` | 409 | Ratings close… | `modules/ratings/ratings.service.ts` |
 

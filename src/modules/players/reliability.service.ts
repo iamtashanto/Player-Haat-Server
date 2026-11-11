@@ -33,18 +33,17 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 export async function reliabilityAmong(profiles: { userId: string; avgRating: number; ratingCount: number }[]): Promise<Map<string, Reliability>> {
   const out = new Map<string, Reliability>();
   if (profiles.length === 0) return out;
-  const groups = await prisma.application.groupBy({
-    by: ["playerId", "attendance"],
-    where: { playerId: { in: profiles.map((p) => p.userId) }, attendance: { not: null } },
-    _count: { _all: true },
-  });
-  const tally = new Map<string, { played: number; noShow: number }>();
-  for (const g of groups) {
-    const t = tally.get(g.playerId) ?? { played: 0, noShow: 0 };
-    if (g.attendance === "ATTENDED") t.played += g._count._all;
-    else t.noShow += g._count._all;
-    tally.set(g.playerId, t);
-  }
+  // Attendance is the single source of truth. A no-show under an open dispute, or one an admin removed, isn't counted.
+  const ids = profiles.map((p) => p.userId);
+  const rows = await prisma.$queryRaw<{ playerId: string; played: number; noShow: number }[]>`
+    SELECT a."playerId",
+           COUNT(*) FILTER (WHERE a.attendance = 'ATTENDED')::int AS played,
+           COUNT(*) FILTER (WHERE a.attendance = 'NO_SHOW' AND NOT EXISTS (
+             SELECT 1 FROM "Rating" r LEFT JOIN "RatingDispute" d ON d."ratingId" = r.id AND d.status = 'OPEN'
+             WHERE r."requestId" = a."requestId" AND r."rateeId" = a."playerId" AND r."noShow"
+               AND (r."hiddenByAdminAt" IS NOT NULL OR d.id IS NOT NULL)))::int AS "noShow"
+    FROM "Application" a WHERE a."playerId" = ANY(${ids}) AND a.attendance IS NOT NULL GROUP BY a."playerId"`;
+  const tally = new Map<string, { played: number; noShow: number }>(rows.map((r) => [r.playerId, { played: r.played, noShow: r.noShow }]));
   for (const p of profiles) {
     const t = tally.get(p.userId) ?? { played: 0, noShow: 0 };
     const marked = t.played + t.noShow;

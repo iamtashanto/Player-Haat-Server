@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { locationInclude } from "../locations/location.service.js";
 import { storage } from "../../lib/storage/index.js";
 import { youtubeThumbnail, youtubeWatchUrl } from "../../lib/youtube.js";
+import { publicRating } from "../ratings/ratings.config.js";
 import { emptyReliability, noExtras, type CardExtras } from "./reliability.service.js";
 
 export const profileInclude = {
@@ -69,7 +70,7 @@ function sportEntry(s: FullProfile["sports"][number], detailed: boolean) {
     experienceYears: s.experienceYears,
     currentTeam: s.currentTeam,
     stats: s.stats as Record<string, number> | null,
-    rating: { average: round2(s.avgRating), count: s.ratingCount },
+    rating: publicRating(s.avgRating, s.ratingCount),
     statsVerified: s.statsVerifiedAt !== null,
     ...(detailed && {
       preferredFoot: s.preferredFoot,
@@ -92,7 +93,7 @@ export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], sho
     name: p.user.name,
     avatarUrl: p.user.avatarUrl,
     verifiedBadge: p.verifiedBadge,
-    rating: { average: round2(p.avgRating), count: p.ratingCount },
+    rating: publicRating(p.avgRating, p.ratingCount),
     noShowCount: p.noShowCount,
     lastActiveAt: p.lastActiveAt.toISOString(),
     location: { district: p.district, upazila: p.upazila, union: p.union },

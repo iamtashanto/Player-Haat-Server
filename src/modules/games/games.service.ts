@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
+import { recomputeEverything } from "../ratings/ratings.service.js";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { notify } from "../notifications/notifier.js";
@@ -153,9 +154,21 @@ export async function markAttendance(userId: string, id: string, input: z.infer<
       if (!a) throw AppError.invalid("marks", "Unknown player for this game");
       if (a.status !== "ACCEPTED") throw AppError.invalid("marks", "Only accepted players can be marked");
     }
+    const touched = new Set<string>();
     for (const m of input.marks) {
       await tx.application.update({ where: { id: m.applicationId }, data: { attendance: m.status, attendanceMarkedAt: now } });
+      const playerId = (await tx.application.findUniqueOrThrow({ where: { id: m.applicationId }, select: { playerId: true } })).playerId;
+      // The no-show strike mirrors attendance: marking "absent" creates it, marking "attended" again removes it.
+      if (m.status === "NO_SHOW") {
+        const existing = await tx.rating.findUnique({ where: { requestId_raterId_rateeId: { requestId: id, raterId: userId, rateeId: playerId } } });
+        if (existing && !existing.noShow) throw AppError.conflict("ATTENDANCE_ALREADY_RATED", "You already reviewed this player; a no-show can't be added");
+        if (!existing) await tx.rating.create({ data: { requestId: id, raterId: userId, rateeId: playerId, direction: "CAPTAIN_TO_PLAYER", scores: {}, overall: 1, noShow: true, revealedAt: now } });
+      } else {
+        await tx.rating.deleteMany({ where: { requestId: id, raterId: userId, rateeId: playerId, noShow: true } });
+      }
+      touched.add(playerId);
     }
+    for (const playerId of touched) await recomputeEverything(tx, playerId);
     const roster = await tx.application.findMany({ where: { requestId: id, status: "ACCEPTED" }, select: { id: true, playerId: true, attendance: true }, orderBy: { createdAt: "asc" } });
     return { items: roster.map((a) => ({ applicationId: a.id, playerId: a.playerId, attendance: a.attendance })) };
   });

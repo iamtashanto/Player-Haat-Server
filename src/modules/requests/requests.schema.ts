@@ -95,7 +95,7 @@ const RequestItem = z
     budgetMax: z.number().nullable(),
     notes: z.string().nullable(),
     team: z.object({ id: z.string(), name: z.string(), logoUrl: z.string().nullable() }).nullable(),
-    captain: z.object({ name: z.string(), avatarUrl: z.string().nullable(), rating: z.object({ average: z.number(), count: z.number() }), recruiterId: z.string().nullable(), recruiterVerified: z.boolean(), logoUrl: z.string().nullable() }),
+    captain: z.object({ name: z.string(), avatarUrl: z.string().nullable(), rating: z.object({ average: z.number(), count: z.number(), isNew: z.boolean() }), recruiterId: z.string().nullable(), recruiterVerified: z.boolean(), logoUrl: z.string().nullable() }),
     kind: z.enum(["MATCH", "EVENT"]),
     joinMode: z.enum(["APPROVAL", "OPEN_JOIN"]),
     title: z.string().nullable(),

@@ -21,6 +21,7 @@
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",
     "db:seed:dev": "tsx scripts/seed-dev.ts",
+    "ratings:reconcile": "tsx scripts/reconcile-ratings.ts",
     "cleanup:demo": "tsx scripts/cleanup-demo-and-e2e.ts",
     "admin:create": "tsx src/scripts/create-admin.ts",
     "db:reset": "prisma migrate reset --force",

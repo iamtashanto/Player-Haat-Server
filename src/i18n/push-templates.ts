@@ -19,7 +19,7 @@ export interface PushParams {
   /** How many messages a collapsed chat push stands for. */
   count?: number;
   /** Which outcome a SYSTEM notification reports; the copy lives here so it can be localized. */
-  code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED";
+  code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED" | "REVIEW_REVEALED" | "DISPUTE_UPHELD" | "DISPUTE_REMOVED" | "DISPUTE_OPENED";
 }
 
 const fmt = (when: Date, locale: Locale) =>
@@ -126,7 +126,15 @@ const templates: Record<NotificationType, Template> = {
   SYSTEM: (p, l) => ({
     title: "PlayerHaat",
     body:
-      p.code === "PAYMENT_APPROVED"
+      p.code === "REVIEW_REVEALED"
+        ? l === "bn" ? "নতুন রিভিউ এসেছে" : "You have a new review"
+        : p.code === "DISPUTE_UPHELD"
+          ? l === "bn" ? "আপত্তি পর্যালোচনা শেষ: রিভিউ/স্ট্রাইক বহাল থাকছে" : "Dispute reviewed: the review/strike stays"
+          : p.code === "DISPUTE_REMOVED"
+            ? l === "bn" ? "আপত্তি গৃহীত হয়েছে: রিভিউ/স্ট্রাইক সরানো হয়েছে" : "Dispute accepted: the review/strike was removed"
+            : p.code === "DISPUTE_OPENED"
+              ? l === "bn" ? "আপনার দেওয়া রিভিউ/স্ট্রাইকে আপত্তি এসেছে, পর্যালোচনা চলছে" : "A review/strike you gave was disputed and is under review"
+      : p.code === "PAYMENT_APPROVED"
         ? l === "bn" ? "আপনার পেমেন্ট নিশ্চিত হয়েছে, ক্রেডিট যোগ হয়েছে ✓" : "Payment confirmed — credits added ✓"
         : p.code === "PAYMENT_REJECTED"
           ? l === "bn" ? "আপনার পেমেন্ট যাচাই করা যায়নি" : "We couldn't verify your payment"

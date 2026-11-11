@@ -244,6 +244,11 @@ enum AdminActionType {
   CONFIG_SET
   MEDIA_REMOVE
   VERIFICATION_FILE_VIEW
+  RATING_HIDE
+  RATING_UNHIDE
+  RATING_DISPUTE_UPHOLD
+  RATING_DISPUTE_REMOVE
+  RATING_REPLY_REMOVE
 }
 
 enum ReportStatus {
@@ -500,8 +505,9 @@ model PlayerProfile {
   coverUrl          String?
   coverPublicId     String?
 
-  avgRating    Float    @default(0)
-  ratingCount  Int      @default(0)
+  avgRating    Float    @default(0) // raw mean of revealed reviews
+  ratingCount  Int      @default(0) // revealed reviews
+  bayesRating  Float    @default(3.5) // damped mean used only for ordering/featuring
   noShowCount  Int      @default(0)
   lastActiveAt DateTime @default(now())
 
@@ -528,6 +534,7 @@ model PlayerProfile {
   @@index([upazilaId, lastActiveAt(sort: Desc), id])
   @@index([districtId, lastActiveAt(sort: Desc), id])
   @@index([avgRating(sort: Desc), ratingCount(sort: Desc), id])
+  @@index([bayesRating(sort: Desc), ratingCount(sort: Desc), id], map: "PlayerProfile_bayesRating_ratingCount_id_idx")
   @@index([lastActiveAt(sort: Desc), id])
   @@index([unionId])
 }
@@ -797,25 +804,59 @@ model GameMessage {
 }
 
 model Rating {
-  id        String          @id @default(cuid())
-  requestId String
-  raterId   String
-  rateeId   String
-  direction RatingDirection
+  id              String          @id @default(cuid())
+  requestId       String
+  raterId         String
+  rateeId         String
+  direction       RatingDirection
   // CAPTAIN_TO_PLAYER: { skill, punctuality, behavior }   PLAYER_TO_CAPTAIN: { payment, behavior, organization }
   // each 1–5. Shape enforced by Zod per direction.
-  scores    Json
-  overall   Float // mean of `scores`, stored so aggregates are a cheap AVG()
-  comment   String?
-  noShow    Boolean         @default(false) // only valid for CAPTAIN_TO_PLAYER
-  createdAt DateTime        @default(now())
+  scores          Json
+  overall         Float // mean of `scores`, stored so aggregates are a cheap AVG()
+  comment         String?
+  noShow          Boolean         @default(false) // only valid for CAPTAIN_TO_PLAYER; mirrors Application.attendance = NO_SHOW
+  createdAt       DateTime        @default(now())
+  // Double-blind: a review stays hidden from its subject (and every aggregate) until both sides have rated or the
+  // window has closed. No-show strikes are revealed immediately (they carry no review text).
+  revealedAt      DateTime?
+  replyText       String?
+  repliedAt       DateTime?
+  // Set by an admin (moderation or an upheld dispute); hidden rows are excluded from every aggregate and list.
+  hiddenByAdminAt DateTime?
 
   request PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   rater   User          @relation("RatingRater", fields: [raterId], references: [id])
   ratee   User          @relation("RatingRatee", fields: [rateeId], references: [id])
 
+  disputes RatingDispute[]
+
   @@unique([requestId, raterId, rateeId])
   @@index([rateeId, direction])
+  @@index([revealedAt])
+}
+
+enum RatingDisputeStatus {
+  OPEN
+  UPHELD // the admin kept the review/strike
+  REMOVED // the admin removed it
+}
+
+model RatingDispute {
+  id            String              @id @default(cuid())
+  ratingId      String
+  disputerId    String
+  reason        String
+  photoPublicId String?
+  status        RatingDisputeStatus @default(OPEN)
+  adminNote     String?
+  resolvedById  String?
+  createdAt     DateTime            @default(now())
+  resolvedAt    DateTime?
+
+  rating Rating @relation(fields: [ratingId], references: [id], onDelete: Cascade)
+
+  @@unique([ratingId])
+  @@index([status, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

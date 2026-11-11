@@ -201,13 +201,15 @@ describe("availability day", () => {
 
 describe("sorting", () => {
   it("rating: average desc, then rating count desc, then a stable id order", async () => {
-    await makePlayer(w, { name: "A", avgRating: 4.5, ratingCount: 2 });
-    await makePlayer(w, { name: "B", avgRating: 4.5, ratingCount: 20 });
-    await makePlayer(w, { name: "C", avgRating: 5, ratingCount: 1 });
+    // Ordered by the damped average: one 5★ review (C) does not outrank 20 reviews at 4.5 (B).
+    const bayes = (avg: number, n: number) => (n * avg + 5 * 3.5) / (n + 5);
+    await makePlayer(w, { name: "A", avgRating: 4.5, ratingCount: 2, bayesRating: bayes(4.5, 2) });
+    await makePlayer(w, { name: "B", avgRating: 4.5, ratingCount: 20, bayesRating: bayes(4.5, 20) });
+    await makePlayer(w, { name: "C", avgRating: 5, ratingCount: 1, bayesRating: bayes(5, 1) });
     await makePlayer(w, { name: "D" });
     const res = await search({ sort: "rating" });
-    expect(res.body.data.map((p: { name: string }) => p.name)).toEqual(["C", "B", "A", "D"]);
-    expect((await search()).body.data.map((p: { name: string }) => p.name)).toEqual(["C", "B", "A", "D"]); // default
+    expect(res.body.data.map((p: { name: string }) => p.name)).toEqual(["B", "A", "C", "D"]);
+    expect((await search()).body.data.map((p: { name: string }) => p.name)).toEqual(["B", "A", "C", "D"]); // default
   });
 
   it("active: most recently active first", async () => {
