@@ -9,3 +9,9 @@ then app/web/admin UI; Step 4 functional verification; Step 5 hardening (builds,
 Then prompts/web-desktop-premium-and-gaps.md.
 
 Test env: export TEST_DATABASE_URL="postgresql://ta-shanto@localhost:5432/playerhaat_test?schema=public"; npx vitest run
+
+## Update: Step 4b (ratings) done on server + web + app + admin
+Server tests 814 pass (tests/ratings-v2.test.ts covers reveal, fairness, strikes, disputes, replies, admin).
+Remaining: Step 4 (verify flows from empty DB, e2e), Step 5 (prod builds, leak grep, DEPLOY_CHECKLIST, RELEASE_NOTES per repo),
+then prompts/web-desktop-premium-and-gaps.md. Not built (later idea): teammate ratings.
+Reconcile: `pnpm ratings:reconcile -- --dry-run`.
