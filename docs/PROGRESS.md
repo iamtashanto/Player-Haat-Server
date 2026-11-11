@@ -15,3 +15,13 @@ Server tests 814 pass (tests/ratings-v2.test.ts covers reveal, fairness, strikes
 Remaining: Step 4 (verify flows from empty DB, e2e), Step 5 (prod builds, leak grep, DEPLOY_CHECKLIST, RELEASE_NOTES per repo),
 then prompts/web-desktop-premium-and-gaps.md. Not built (later idea): teammate ratings.
 Reconcile: `pnpm ratings:reconcile -- --dry-run`.
+
+## Status at end of this session
+Done: phone-OTP off, audit, seed split + CLIs, prod guards, ratings v2 (server/web/app/admin), deploy checklist, release notes.
+Web e2e (desktop+mobile, real API on :4000, web on :3000 built with NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1):
+10 failed, 10 passed, 4 skipped. NOT yet diagnosed whether they pre-date this work. Known: journey.spec.ts:26 expects a
+PlayerMedia type 'VIDEO_LINK' (media model changed to YouTube ids earlier), so that spec is stale. Others (events "featured until"/boost,
+media profile-cover/media-manager, play attendance/available-today, notifications request/new, verification private-image on mobile) need a look.
+Next: `cd web && pnpm exec playwright test e2e/journey.spec.ts --project=desktop` to iterate; fix specs/UI; add admin Playwright (1440x900);
+Android emulator run with screenshots to app/test/screens/; then prompts/web-desktop-premium-and-gaps.md.
+Dev servers: API `cd server && npm run dev` (log /tmp/api.log), web `cd web && pnpm exec next start -p 3000`.
