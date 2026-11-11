@@ -53,9 +53,9 @@ const loadRecipients = (userIds: string[]): Promise<Array<Recipient & { prefs: P
   prisma.user
     .findMany({
       where: { id: { in: [...new Set(userIds)] }, status: "ACTIVE" },
-      select: { id: true, notificationPreference: true, _count: { select: { deviceTokens: true } } },
+      select: { id: true, notificationPreference: true, _count: { select: { deviceTokens: { where: { platform: { not: "WEB" } } }, webPushSubscriptions: true } } },
     })
-    .then((rows) => rows.map((u) => ({ id: u.id, devices: u._count.deviceTokens, prefs: u.notificationPreference ?? { ...DEFAULT_PREFS } })));
+    .then((rows) => rows.map((u) => ({ id: u.id, devices: u._count.deviceTokens + u._count.webPushSubscriptions, prefs: u.notificationPreference ?? { ...DEFAULT_PREFS } })));
 
 /** Push only (no inbox row) — for callers that write the inbox rows themselves, e.g. the reminder job. */
 export async function pushOnly(userIds: string[], type: NotificationType, data: Record<string, string>, params: PushParams, extra: { expiresAt?: Date; collapseKey?: string } = {}) {

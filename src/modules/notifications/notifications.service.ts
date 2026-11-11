@@ -3,6 +3,7 @@ import { paramsFromData, renderPush, type Locale } from "../../i18n/push-templat
 import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
+import { webPush } from "../../lib/webpush/index.js";
 import { categoryOf, linkFor } from "./categories.js";
 import { getPrefs, setPrefs, type Prefs } from "./preferences.js";
 
@@ -80,3 +81,20 @@ export async function deleteAllNotifications(userId: string) {
 
 export const myPreferences = (userId: string) => getPrefs(userId);
 export const savePreferences = (userId: string, input: Partial<Prefs>) => setPrefs(userId, input);
+
+export const webPushKey = () => ({ publicKey: webPush.publicKey });
+
+export async function saveWebSubscription(userId: string, input: { endpoint: string; keys: { p256dh: string; auth: string } }, userAgent?: string) {
+  if (!webPush.enabled) throw new AppError("WEB_PUSH_NOT_CONFIGURED", 503, "Web push isn't set up on this server");
+  await prisma.webPushSubscription.upsert({
+    where: { endpoint: input.endpoint },
+    update: { userId, p256dh: input.keys.p256dh, auth: input.keys.auth, userAgent: userAgent?.slice(0, 200) ?? null, lastSeenAt: new Date() },
+    create: { userId, endpoint: input.endpoint, p256dh: input.keys.p256dh, auth: input.keys.auth, userAgent: userAgent?.slice(0, 200) ?? null },
+  });
+  const all = await prisma.webPushSubscription.findMany({ where: { userId }, orderBy: { lastSeenAt: "desc" }, select: { id: true } });
+  if (all.length > MAX_DEVICES_PER_USER) await prisma.webPushSubscription.deleteMany({ where: { id: { in: all.slice(MAX_DEVICES_PER_USER).map((s) => s.id) } } });
+}
+
+export async function removeWebSubscription(userId: string, endpoint: string) {
+  await prisma.webPushSubscription.deleteMany({ where: { userId, endpoint } }); // idempotent; can't remove someone else's
+}

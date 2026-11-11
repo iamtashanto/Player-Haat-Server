@@ -4,7 +4,7 @@ import { z } from "../../lib/zod.js";
 
 export const deviceBody = z.strictObject({
   token: z.string().trim().min(20).max(4096).openapi({ description: "FCM registration token." }),
-  platform: z.enum(["ANDROID", "IOS", "WEB"]),
+  platform: z.enum(["ANDROID", "IOS"]).openapi({ description: "FCM is for the apps. Browsers use `/notifications/web-push/subscriptions`." }),
 });
 export const unregisterBody = z.strictObject({ token: deviceBody.shape.token });
 export const listQuery = pageQuery.extend({ unreadOnly: z.stringbool().optional() });
@@ -46,6 +46,12 @@ export const prefsBody = z
   .refine((b) => Object.keys(b).length > 0, "Send at least one setting");
 const Prefs = z.object({ games: z.boolean(), messages: z.boolean(), recruitment: z.boolean(), system: z.boolean(), nearbyAvailable: z.boolean(), quietHoursEnabled: z.boolean(), quietStart: z.string(), quietEnd: z.string(), chatInQuietHours: z.boolean() }).openapi("NotificationPreferences");
 
+export const webSubBody = z.strictObject({
+  endpoint: z.string().url().max(2048).refine((u) => u.startsWith("https://"), "endpoint must be https"),
+  keys: z.strictObject({ p256dh: z.string().min(20).max(256), auth: z.string().min(8).max(128) }),
+});
+export const webUnsubBody = z.strictObject({ endpoint: z.string().url().max(2048) });
+
 const T = "Notifications";
 registerRoute({ method: "post", path: "/notifications/devices", tag: T, summary: "Register an FCM token", description: "Idempotent upsert. A token that moves to a different account is reassigned. Keeps at most 10 devices per user.", auth: true, body: deviceBody, errors: [422] });
 registerRoute({ method: "delete", path: "/notifications/devices", tag: T, summary: "Unregister an FCM token (call on logout)", auth: true, body: unregisterBody, errors: [422] });
@@ -57,3 +63,6 @@ registerRoute({ method: "delete", path: "/notifications/{id}", tag: T, summary: 
 registerRoute({ method: "delete", path: "/notifications", tag: T, summary: "Clear my inbox", auth: true, response: z.object({ deleted: z.number().int() }) });
 registerRoute({ method: "get", path: "/notifications/preferences", tag: T, summary: "What I get notified about, and quiet hours", description: "Defaults when never saved: everything on, quiet hours 23:00–07:00 Asia/Dhaka. Switching a group off stops the push; the inbox still keeps the message.", auth: true, response: Prefs });
 registerRoute({ method: "put", path: "/notifications/preferences", tag: T, summary: "Change notification preferences", description: "Send only what changes.", auth: true, body: prefsBody, response: Prefs, errors: [422] });
+registerRoute({ method: "get", path: "/notifications/web-push/key", tag: T, summary: "The VAPID public key for browser push", description: "`publicKey` is null when web push isn't configured on this server.", auth: true, response: z.object({ publicKey: z.string().nullable() }) });
+registerRoute({ method: "post", path: "/notifications/web-push/subscriptions", tag: T, summary: "Save this browser's push subscription", description: "Idempotent by endpoint; a subscription that moves to another account is reassigned. At most 10 per user. Expired ones are removed when the push service answers 404/410.", auth: true, body: webSubBody, errors: [422, 503] });
+registerRoute({ method: "delete", path: "/notifications/web-push/subscriptions", tag: T, summary: "Remove this browser's push subscription", auth: true, body: webUnsubBody, errors: [422] });

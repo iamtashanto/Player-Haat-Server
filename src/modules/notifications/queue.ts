@@ -4,7 +4,7 @@ import { clock } from "../../lib/clock.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { push } from "../../lib/push/index.js";
-import { env } from "../../config/env.js";
+import { webPush } from "../../lib/webpush/index.js";
 import { categoryOf, linkFor } from "./categories.js";
 
 /**
@@ -79,32 +79,50 @@ async function claim(now: Date, limit: number, only?: string[]): Promise<string[
 }
 
 async function sendOne(id: string, now: Date) {
-  const job = await prisma.pushJob.findUnique({ where: { id }, include: { user: { select: { status: true, locale: true, deviceTokens: { select: { token: true } } } } } });
+  const job = await prisma.pushJob.findUnique({ where: { id }, include: { user: { select: { status: true, locale: true, deviceTokens: { where: { platform: { not: "WEB" } }, select: { token: true } }, webPushSubscriptions: { select: { id: true, endpoint: true, p256dh: true, auth: true } } } } } });
   if (!job || job.status !== "SENDING") return;
   const done = (data: Prisma.PushJobUpdateInput) => prisma.pushJob.update({ where: { id }, data });
 
   if (job.expiresAt && job.expiresAt.getTime() <= now.getTime()) return void (await done({ status: "SKIPPED", skipReason: "EXPIRED" }));
   const tokens = job.user.deviceTokens.map((d) => d.token);
-  if (job.user.status !== "ACTIVE" || tokens.length === 0) return void (await done({ status: "SKIPPED", skipReason: "NO_DEVICE" }));
-  if (!push.enabled) return void (await done({ status: "SKIPPED", skipReason: "PUSH_NOT_CONFIGURED", deviceCount: tokens.length }));
+  const subs = webPush.enabled ? job.user.webPushSubscriptions : [];
+  const fcm = push.enabled ? tokens : [];
+  const devices = tokens.length + job.user.webPushSubscriptions.length;
+  if (job.user.status !== "ACTIVE" || devices === 0) return void (await done({ status: "SKIPPED", skipReason: "NO_DEVICE" }));
+  if (fcm.length + subs.length === 0) return void (await done({ status: "SKIPPED", skipReason: "PUSH_NOT_CONFIGURED", deviceCount: devices }));
 
   const payload = (job.payload ?? {}) as Record<string, string>;
   const { title, body } = renderPush(job.type, paramsFromData(payload), job.user.locale);
-  try {
-    const link = linkFor(job.type, payload);
-    const webLink = env.WEB_APP_URL ? `${env.WEB_APP_URL.replace(/\/+$/, "")}/${job.user.locale}${link}` : undefined;
-    const { invalidTokens } = await push.send(tokens, { title, body, data: { type: job.type, link, ...payload }, channel: categoryOf(job.type), ...(webLink && { webLink }) });
-    if (invalidTokens.length) await prisma.deviceToken.deleteMany({ where: { token: { in: invalidTokens } } });
-    await done({ status: "SENT", sentAt: new Date(), deviceCount: tokens.length, deliveredCount: tokens.length - invalidTokens.length, lastError: null });
-  } catch (err) {
-    const message = String(err instanceof Error ? err.message : err).slice(0, 300);
-    if (job.attempts >= MAX_ATTEMPTS) {
-      logger.warn({ jobId: id, type: job.type }, "push gave up after retries");
-      await done({ status: "FAILED", lastError: message, deviceCount: tokens.length });
-    } else {
-      await done({ status: "PENDING", lastError: message, nextAttemptAt: new Date(now.getTime() + backoffMs(job.attempts)) });
+  const link = linkFor(job.type, payload);
+  let delivered = 0;
+  let error: string | undefined;
+  if (fcm.length > 0) {
+    try {
+      const { invalidTokens } = await push.send(fcm, { title, body, data: { type: job.type, link, ...payload }, channel: categoryOf(job.type) });
+      if (invalidTokens.length) await prisma.deviceToken.deleteMany({ where: { token: { in: invalidTokens } } });
+      delivered += fcm.length - invalidTokens.length;
+    } catch (err) {
+      error = String(err instanceof Error ? err.message : err).slice(0, 300);
     }
   }
+  const gone: string[] = [];
+  for (const sub of subs) {
+    try {
+      if ((await webPush.send(sub, { title, body, link: `/${job.user.locale}${link}`, data: { type: job.type, ...payload } })) === "gone") gone.push(sub.id);
+      else delivered++;
+    } catch (err) {
+      error = String(err instanceof Error ? err.message : err).slice(0, 300);
+    }
+  }
+  if (gone.length) await prisma.webPushSubscription.deleteMany({ where: { id: { in: gone } } });
+
+  // Something got through: done (retrying would notify that device twice). Nothing did and something failed: retry.
+  if (delivered > 0 || !error) return void (await done({ status: "SENT", sentAt: new Date(), deviceCount: devices, deliveredCount: delivered, lastError: error ?? null }));
+  if (job.attempts >= MAX_ATTEMPTS) {
+    logger.warn({ jobId: id, type: job.type }, "push gave up after retries");
+    return void (await done({ status: "FAILED", lastError: error, deviceCount: devices }));
+  }
+  await done({ status: "PENDING", lastError: error, nextAttemptAt: new Date(now.getTime() + backoffMs(job.attempts)) });
 }
 
 /** Sends what is due (all of it, or only `only`). Returns how many jobs were attempted. */

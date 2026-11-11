@@ -4,6 +4,7 @@ import { createApp } from "../src/app.js";
 import { clearConfigCache } from "../src/modules/app-config/app-config.service.js";
 import { flushBackground } from "../src/modules/notifications/notifier.js";
 import { fakeSms } from "./fake-sms.js";
+import { fakeWebPush } from "./fake-webpush.js";
 import { fakePush } from "./fake-push.js";
 import { fakeStorage } from "./fake-storage.js";
 import { mailbox } from "./mailbox.js";
@@ -23,6 +24,7 @@ export async function resetDb() {
   mailbox.length = 0;
   fakeStorage.reset();
   fakePush.reset();
+  fakeWebPush.reset();
   fakeSms.reset();
   clearConfigCache();
   await prisma.$executeRawUnsafe(

@@ -30,8 +30,10 @@ const schema = z
       .default("info"),
     CORS_ORIGINS: csv,
     TRUST_PROXY: bool.default(false),
-    /** Origin of the website (https://playerhaat.com). Web-push clicks open pages under it. */
-    WEB_APP_URL: optionalString,
+    /** Web Push (VAPID): `npm run vapid:generate`. Unset = web push off. */
+    VAPID_PUBLIC_KEY: optionalString,
+    VAPID_PRIVATE_KEY: optionalString,
+    VAPID_SUBJECT: optionalString,
     PUBLIC_API_URL: z.string().url().default("http://localhost:4000"),
     DOCS_ENABLED: bool.optional(),
     JOBS_ENABLED: bool.optional(),

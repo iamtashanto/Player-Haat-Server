@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-156 codes. Messages are developer-facing English and may change; **codes are stable**.
+157 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -412,3 +412,9 @@ Every error response has this shape — the app should translate `error.code`, n
 | `VERIFICATION_ALREADY_REVIEWED` | 409 | Already… | `modules/verification/verification.service.ts` |
 | `VERIFICATION_NOT_FOUND` | 404 | Verification request not found | `modules/verification/verification.service.ts` |
 | `VERIFICATION_PENDING` | 409 | You already have a request waiting for review | `modules/verification/verification.service.ts` |
+
+## WEB
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `WEB_PUSH_NOT_CONFIGURED` | 503 | Web push isn't set up on this server | `modules/notifications/notifications.service.ts` |

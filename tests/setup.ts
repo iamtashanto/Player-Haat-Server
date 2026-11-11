@@ -38,6 +38,10 @@ vi.mock("../src/lib/push/index.js", async () => {
   const { fakePush } = await import("./fake-push.js");
   return { push: fakePush };
 });
+vi.mock("../src/lib/webpush/index.js", async () => {
+  const { fakeWebPush } = await import("./fake-webpush.js");
+  return { webPush: fakeWebPush };
+});
 vi.mock("../src/lib/sms/index.js", async () => {
   const { fakeSms } = await import("./fake-sms.js");
   return { sms: fakeSms };

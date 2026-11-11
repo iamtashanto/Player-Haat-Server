@@ -387,7 +387,7 @@ describe("admin: announcements and the push log", () => {
     await device(cricket.user.id, "cr");
     await device(dhaka.user.id, "dh");
     await prisma.notificationPreference.create({ data: { userId: off.user.id, system: false } });
-    await prisma.deviceToken.create({ data: { userId: p2.user.id, token: "fcm-2b-".padEnd(30, "x"), platform: "WEB" } });
+    await prisma.webPushSubscription.create({ data: { userId: p2.user.id, endpoint: "https://push.example/p2", p256dh: "p".repeat(40), auth: "a".repeat(16) } });
 
     const q = { role: "PLAYER", sportId: w.football.id, districtId: w.patuakhali.id };
     expect((await get(admin.auth, "/admin/notifications/preview", q)).body.data.targetCount).toBe(4); // p1 p2 nodev off — not cricket, not Dhaka, not admin
@@ -424,5 +424,70 @@ describe("admin: announcements and the push log", () => {
     const p = await signedIn("p@example.com");
     for (const path of ["/admin/announcements", "/admin/push-log", "/admin/push-stats"]) expect((await get(p.auth, path)).status).toBe(403);
     expect((await api().post(`${V1}/admin/notifications/broadcast`).set(p.auth).send({ title: "hello", body: "world" })).status).toBe(403);
+  });
+});
+
+describe("web push (standard VAPID)", () => {
+  const sub = (n: string) => ({ endpoint: `https://push.example/${n}`, keys: { p256dh: "p".repeat(40), auth: "a".repeat(16) } });
+  const subscribe = (a: Auth, n: string) => api().post(`${V1}/notifications/web-push/subscriptions`).set(a).send(sub(n));
+
+  it("serves the public key, saves a subscription idempotently, and moves it to a new account", async () => {
+    const a = await signedIn("a@example.com");
+    const b = await signedIn("b@example.com");
+    expect((await get(a.auth, "/notifications/web-push/key")).body.data.publicKey).toBeTruthy();
+    expect((await subscribe(a.auth, "x")).status).toBe(200);
+    expect((await subscribe(a.auth, "x")).status).toBe(200);
+    expect(await prisma.webPushSubscription.count()).toBe(1);
+    await subscribe(b.auth, "x");
+    expect((await prisma.webPushSubscription.findFirstOrThrow()).userId).toBe(b.user.id);
+    expect((await api().delete(`${V1}/notifications/web-push/subscriptions`).set(a.auth).send({ endpoint: sub("x").endpoint })).status).toBe(200);
+    expect(await prisma.webPushSubscription.count()).toBe(1); // a can't remove b's
+    await api().delete(`${V1}/notifications/web-push/subscriptions`).set(b.auth).send({ endpoint: sub("x").endpoint });
+    expect(await prisma.webPushSubscription.count()).toBe(0);
+  });
+
+  it("validates, requires auth, caps at 10, and refuses when not configured", async () => {
+    const a = await signedIn("a@example.com");
+    expect((await api().post(`${V1}/notifications/web-push/subscriptions`).set(a.auth).send({ endpoint: "http://insecure.example/x", keys: sub("x").keys })).status).toBe(422);
+    expect((await api().post(`${V1}/notifications/web-push/subscriptions`).set(a.auth).send({ endpoint: sub("x").endpoint, keys: { p256dh: "x", auth: "y" } })).status).toBe(422);
+    expect((await api().post(`${V1}/notifications/web-push/subscriptions`).send(sub("x"))).status).toBe(401);
+    expect((await api().post(`${V1}/notifications/devices`).set(a.auth).send({ token: "t".repeat(30), platform: "WEB" })).status).toBe(422); // FCM is for the apps
+    for (let i = 0; i < 12; i++) await subscribe(a.auth, `d${i}`);
+    expect(await prisma.webPushSubscription.count()).toBe(10);
+    const { fakeWebPush } = await import("./fake-webpush.js");
+    fakeWebPush.enabled = false;
+    expect((await subscribe(a.auth, "z")).status).toBe(503);
+  });
+
+  it("pushes to the browser with the deep link in the user's language, and to the app, and removes expired subscriptions (404/410)", async () => {
+    const { fakeWebPush } = await import("./fake-webpush.js");
+    const a = await signedIn("a@example.com");
+    const tok = await device(a.user.id, "phone"); // sets locale en
+    await subscribe(a.auth, "live");
+    await subscribe(a.auth, "dead");
+    fakeWebPush.gone.add(sub("dead").endpoint);
+    ping(a.user.id, "NEW_APPLICANT", { requestId: "req-7" });
+    await settle();
+    expect(fakeWebPush.to(sub("live").endpoint)).toEqual([expect.objectContaining({ title: "New applicant", link: "/en/request/req-7" })]);
+    expect(fakePush.to(tok)).toHaveLength(1);
+    expect(await prisma.webPushSubscription.findMany({ select: { endpoint: true } })).toEqual([{ endpoint: sub("live").endpoint }]);
+    expect(await prisma.pushJob.findFirstOrThrow()).toMatchObject({ status: "SENT", deviceCount: 3, deliveredCount: 2 });
+  });
+
+  it("a browser-only user is reachable, honours quiet hours, and a failing endpoint is retried", async () => {
+    const { fakeWebPush } = await import("./fake-webpush.js");
+    const a = await signedIn("a@example.com");
+    await subscribe(a.auth, "only");
+    fakeWebPush.failing.add(sub("only").endpoint);
+    ping(a.user.id);
+    await settle();
+    expect(await prisma.pushJob.findFirstOrThrow()).toMatchObject({ status: "PENDING", attempts: 1, lastError: "web push failed (500)" });
+    fakeWebPush.failing.clear();
+    await processDue(new Date(realNow().getTime() + backoffMs(1)));
+    expect(fakeWebPush.to(sub("only").endpoint)).toHaveLength(1);
+    clock.now = () => at(2);
+    ping(a.user.id);
+    await settle();
+    expect(fakeWebPush.to(sub("only").endpoint)).toHaveLength(1); // held until 07:00
   });
 });
