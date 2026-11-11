@@ -107,6 +107,7 @@ export async function makePlayer(
     districtId?: number;
     unionId?: number | null;
     avgRating?: number;
+    bayesRating?: number;
     ratingCount?: number;
     lastActiveAt?: Date;
     isVisible?: boolean;
@@ -126,6 +127,7 @@ export async function makePlayer(
       upazilaId: o.upazilaId ?? w.kalapara.id,
       unionId: o.unionId ?? null,
       avgRating: o.avgRating ?? 0,
+      ...(o.bayesRating !== undefined && { bayesRating: o.bayesRating }),
       ratingCount: o.ratingCount ?? 0,
       lastActiveAt: o.lastActiveAt ?? new Date(),
       isVisible: o.isVisible ?? true,
@@ -179,6 +181,7 @@ async function makePlayerProfileFor(
       upazilaId: o.upazilaId ?? w.kalapara.id,
       unionId: o.unionId ?? null,
       avgRating: o.avgRating ?? 0,
+      ...(o.bayesRating !== undefined && { bayesRating: o.bayesRating }),
       isVisible: o.isVisible ?? true,
       sports: {
         create: sports.map((s) => ({
