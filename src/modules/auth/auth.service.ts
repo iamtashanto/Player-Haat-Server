@@ -86,6 +86,29 @@ export async function register(
   return startSession(user, ctx);
 }
 
+/**
+ * Gives an account that has no email (it was created with a phone number) an email + password, so it can sign in the
+ * normal way. The email must be verified from the code we send; nothing is trusted before that.
+ */
+export async function addEmail(userId: string, input: { email: string; password: string }) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: withAccounts });
+  if (user.email) throw AppError.conflict(ErrorCode.AUTH_EMAIL_TAKEN, "This account already has an email");
+  const passwordHash = await hashPassword(input.password);
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { email: input.email, emailVerifiedAt: null, passwordHash } });
+      await ensureEmailAccount(tx, userId, input.email);
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) throw AppError.conflict(ErrorCode.AUTH_EMAIL_TAKEN, "Email already registered");
+    throw err;
+  }
+  const updated = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: withAccounts });
+  const { code, expiresMinutes } = await issueCode("EMAIL_VERIFY", input.email, { userId });
+  await sendCodeEmail("verify", updated, code, expiresMinutes);
+  return toAuthUser(updated);
+}
+
 export async function login(input: { email: string; password: string }, ctx: SessionContext) {
   const user = await prisma.user.findUnique({ where: { email: input.email }, include: withAccounts });
   if (!user?.passwordHash || user.status === "DELETED") {

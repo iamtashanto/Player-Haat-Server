@@ -88,6 +88,11 @@ export async function listMethods(req: Request, res: Response) {
   ok(res, await methods.listMethods(authUser(req).userId));
 }
 
+export async function addEmail(req: Request, res: Response) {
+  const { body } = valid<Body<typeof s.addEmailBody>>(req);
+  ok(res, await auth.addEmail(authUser(req).userId, body));
+}
+
 export async function linkGoogle(req: Request, res: Response) {
   const { body } = valid<Body<typeof s.linkGoogleBody>>(req);
   ok(res, await methods.linkProvider(authUser(req).userId, await verifyGoogleIdToken(body.idToken)));

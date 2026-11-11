@@ -290,3 +290,37 @@ describe("phone sign-in switched off (AUTH_PHONE_OTP_ENABLED=false)", () => {
     expect(m).toMatchObject({ email: true, phone: true, google: true }); // tests set GOOGLE_CLIENT_IDS
   });
 });
+
+describe("an account made with only a phone can add email + password", () => {
+  async function phoneOnly() {
+    await requestCode();
+    const code = fakeSms.sent.at(-1)!.text.match(/\d{6}/)![0]!;
+    const res = await verify(code);
+    expect(res.status).toBe(200);
+    return res.body.data.tokens.accessToken as string;
+  }
+
+  it("adds it, sends a verification code, can then sign in with email + password, and the phone stays a contact field", async () => {
+    const token = await phoneOnly();
+    const mail = (await import("./mailbox.js")).mailbox;
+    mail.length = 0;
+    const res = await api().post(`${V1}/auth/methods/email`).set(bearer(token)).send({ email: "late@example.com", password: "Passw0rd1" });
+    expect(res.status).toBe(200);
+    expect(res.body.data.email).toBe("late@example.com");
+    expect(res.body.data.loginMethods).toEqual(expect.arrayContaining(["EMAIL", "PHONE"]));
+    expect(mail.at(-1)?.to).toBe("late@example.com");
+    expect((await api().post(`${V1}/auth/login`).send({ email: "late@example.com", password: "Passw0rd1" })).status).toBe(200);
+    expect((await prisma.user.findFirstOrThrow({ where: { email: "late@example.com" } })).emailVerifiedAt).toBeNull(); // not trusted until verified
+  });
+
+  it("refuses an address that is taken, and an account that already has one", async () => {
+    await api().post(`${V1}/auth/register`).send({ name: "Taken", email: "taken@example.com", password: "Passw0rd1" });
+    const token = await phoneOnly();
+    const taken = await api().post(`${V1}/auth/methods/email`).set(bearer(token)).send({ email: "taken@example.com", password: "Passw0rd1" });
+    expect(taken.status).toBe(409);
+    expect(taken.body.error.code).toBe("AUTH_EMAIL_TAKEN");
+    expect((await api().post(`${V1}/auth/methods/email`).set(bearer(token)).send({ email: "ok@example.com", password: "Passw0rd1" })).status).toBe(200);
+    expect((await api().post(`${V1}/auth/methods/email`).set(bearer(token)).send({ email: "another@example.com", password: "Passw0rd1" })).status).toBe(409);
+    expect((await api().post(`${V1}/auth/methods/email`).send({ email: "x@example.com", password: "Passw0rd1" })).status).toBe(401);
+  });
+});

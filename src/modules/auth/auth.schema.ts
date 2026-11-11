@@ -67,6 +67,7 @@ export const phoneVerifyBody = z.strictObject({
   role: signupRole,
   deviceId,
 });
+export const addEmailBody = z.strictObject({ email, password });
 export const linkPhoneBody = z.strictObject({ phone, code });
 export const providerParams = z.object({ provider: z.enum(["EMAIL", "PHONE", "GOOGLE", "APPLE"]) });
 
@@ -113,6 +114,7 @@ registerRoute({ method: "post", path: "/auth/reset-password", tag: T, summary: "
 registerRoute({ method: "put", path: "/auth/password", tag: T, summary: "Set or change password", description: "Social-only users can add a password; others must send `currentPassword`. Revokes all sessions and returns a new pair.", auth: true, body: setPasswordBody, response: SessionSchema, errors: [400, 409, 422] });
 registerRoute({ method: "get", path: "/auth/methods", tag: T, summary: "My login methods", auth: true, response: AuthUserSchema });
 registerRoute({ method: "post", path: "/auth/methods/phone", tag: T, summary: "Link a verified phone number", description: "Request a code with /auth/phone/request first.", auth: true, body: linkPhoneBody, response: AuthUserSchema, errors: [400, 409, 422] });
+registerRoute({ method: "post", path: "/auth/methods/email", tag: T, summary: "Add an email and password to an account that has none", description: "For accounts created with a phone number. A verification code is emailed; the email is not trusted until it is verified.", auth: true, body: addEmailBody, response: AuthUserSchema, errors: [409, 422] });
 registerRoute({ method: "post", path: "/auth/methods/google", tag: T, summary: "Link Google", auth: true, body: linkGoogleBody, response: AuthUserSchema, errors: [401, 409] });
 registerRoute({ method: "post", path: "/auth/methods/apple", tag: T, summary: "Link Apple", auth: true, body: linkAppleBody, response: AuthUserSchema, errors: [401, 409] });
 registerRoute({ method: "delete", path: "/auth/methods/{provider}", tag: T, summary: "Remove a login method", description: "The last remaining method cannot be removed.", auth: true, params: providerParams, response: AuthUserSchema, errors: [404, 409] });

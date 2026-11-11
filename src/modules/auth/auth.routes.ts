@@ -51,6 +51,7 @@ authRoutes.post("/reset-password", limits.reset, validate({ body: s.resetPasswor
 authRoutes.put("/password", requireAuth, limits.sensitive, validate({ body: s.setPasswordBody }), c.setPassword);
 authRoutes.get("/methods", requireAuth, c.listMethods);
 authRoutes.post("/methods/phone", phoneOtpOnly, requireAuth, limits.phoneVerify, validate({ body: s.linkPhoneBody }), c.linkPhone);
+authRoutes.post("/methods/email", requireAuth, limits.sensitive, validate({ body: s.addEmailBody }), c.addEmail);
 authRoutes.post("/methods/google", requireAuth, limits.social, validate({ body: s.linkGoogleBody }), c.linkGoogle);
 authRoutes.post("/methods/apple", requireAuth, limits.social, validate({ body: s.linkAppleBody }), c.linkApple);
 authRoutes.delete("/methods/:provider", requireAuth, limits.sensitive, validate({ params: s.providerParams }), c.unlinkMethod);
