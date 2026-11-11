@@ -4,7 +4,8 @@ import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
 import { assertValidLocation } from "../locations/location.service.js";
-import { notify } from "../notifications/notifier.js";
+import { notify, runInBackground } from "../notifications/notifier.js";
+import { notifyFilled } from "../notifications/triggers.js";
 import { getPricing, getPublicConfig } from "../app-config/app-config.service.js";
 import { spendCredits } from "../billing/credits.service.js";
 import { announceNewRequest } from "./matching.service.js";
@@ -151,6 +152,7 @@ export async function createRequest(userId: string, input: z.infer<typeof create
       budgetMax,
       notes: input.notes ?? null,
       kind,
+      joinMode: kind === "MATCH" ? (input.joinMode ?? "APPROVAL") : "APPROVAL",
       title: kind === "EVENT" ? (input.title ?? null) : null,
     },
     include: requestInclude,
@@ -190,6 +192,7 @@ export async function feed(viewerId: string, q: z.infer<typeof feedQuery>) {
     // A request listing no positions is open to everyone, so it matches any position filter.
     ...(q.position && { OR: [{ positionsNeeded: { has: q.position } }, { positionsNeeded: { isEmpty: true } }] }),
   };
+  if (q.sort === "near") return nearFeed(viewerId, where, q);
   const rows = await prisma.playerRequest.findMany({
     where,
     include: requestInclude,
@@ -197,6 +200,26 @@ export async function feed(viewerId: string, q: z.infer<typeof feedQuery>) {
     ...cursorArgs(q.cursor, q.limit),
   });
   const { items, nextCursor } = toPage(rows, q.limit);
+  const ctx = await viewerContext(viewerId, items);
+  return { items: items.map((r) => toRequest(r, ctx)), nextCursor };
+}
+
+const NEAR_WINDOW = 300; // open games are few; rank a bounded window in memory and page it with an offset cursor
+
+/** Same union → same upazila → same district → rest, soonest first inside each band. */
+async function nearFeed(viewerId: string, where: Prisma.PlayerRequestWhereInput, q: z.infer<typeof feedQuery>) {
+  const offset = (() => {
+    if (!q.cursor) return 0;
+    const m = /^o:(\d{1,6})$/.exec(q.cursor);
+    if (!m) throw AppError.invalid("cursor", "Invalid or mismatched cursor");
+    return Number(m[1]);
+  })();
+  const rows = await prisma.playerRequest.findMany({ where, include: requestInclude, orderBy: [{ matchAt: "asc" }, { id: "asc" }], take: NEAR_WINDOW });
+  const rank = (r: { unionId: number | null; upazilaId: number; districtId: number }) =>
+    q.nearUnionId !== undefined && r.unionId === q.nearUnionId ? 0 : q.nearUpazilaId !== undefined && r.upazilaId === q.nearUpazilaId ? 1 : r.districtId === q.nearDistrictId ? 2 : 3;
+  const sorted = rows.map((r, i) => ({ r, i, k: rank(r) })).sort((a, b) => a.k - b.k || a.i - b.i).map((x) => x.r);
+  const items = sorted.slice(offset, offset + q.limit);
+  const nextCursor = offset + q.limit < sorted.length ? `o:${offset + q.limit}` : null;
   const ctx = await viewerContext(viewerId, items);
   return { items: items.map((r) => toRequest(r, ctx)), nextCursor };
 }
@@ -296,13 +319,15 @@ export async function cancelRequest(userId: string, id: string) {
 }
 
 export async function fillRequest(userId: string, id: string) {
-  return prisma.$transaction(async (tx) => {
+  const filled = await prisma.$transaction(async (tx) => {
     const r = await lockRequest(tx, id);
     assertOwner(r, userId);
     if (r.status !== "OPEN") throw AppError.conflict("REQUEST_NOT_OPEN", `This request is ${r.status.toLowerCase()}`);
     const updated = await tx.playerRequest.update({ where: { id }, data: { status: "FILLED" }, include: requestInclude });
     return toRequest(updated, { viewerId: userId, pendingCounts: new Map() });
   });
+  runInBackground("filled", () => notifyFilled(id));
+  return filled;
 }
 
 export async function completeRequest(userId: string, id: string) {

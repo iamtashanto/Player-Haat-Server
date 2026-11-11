@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { fakeStorage } from "./fake-storage.js";
 import { fakeToken } from "./fake-social.js";
-import { DEFAULT_USER, V1, api, bearer, login, prisma, registerUser, resetDb } from "./helpers.js";
+import { DEFAULT_USER, V1, api, bearer, login, prisma, registerUser, resetDb, seedWorld } from "./helpers.js";
 
 beforeEach(resetDb);
 
@@ -126,6 +127,21 @@ describe("account deletion", () => {
     expect((await api().post(`${V1}/auth/refresh`).send({ refreshToken })).status).toBe(401);
     expect((await asUser(accessToken).get("/auth/methods")).status).toBe(401); // live access token dies at once
     expect((await login()).status).toBe(401);
+  });
+
+  it("deletes every stored image of the user: avatar, cover and gallery photos", async () => {
+    const w = await seedWorld();
+    const { accessToken, user } = await registerUser();
+    const ids = { avatar: `playerhaat/test/avatars/${user.id}/a`, cover: `playerhaat/test/player-covers/${user.id}/c`, photo: `playerhaat/test/player-photos/${user.id}/p` };
+    for (const id of Object.values(ids)) fakeStorage.put(id);
+    await prisma.user.update({ where: { id: user.id }, data: { avatarUrl: "https://x/a", avatarPublicId: ids.avatar } });
+    const profile = await prisma.playerProfile.create({ data: { userId: user.id, districtId: w.patuakhali.id, upazilaId: w.kalapara.id, coverUrl: "https://x/c", coverPublicId: ids.cover } });
+    await prisma.playerMedia.create({ data: { profileId: profile.id, type: "PHOTO", url: "https://x/p", publicId: ids.photo } });
+
+    expect((await del(accessToken, { confirm: "DELETE", password: DEFAULT_USER.password })).status).toBe(200);
+    expect(fakeStorage.files.size).toBe(0);
+    expect(fakeStorage.deleted.sort()).toEqual(Object.values(ids).sort());
+    expect(await prisma.playerProfile.findUniqueOrThrow({ where: { id: profile.id } })).toMatchObject({ coverUrl: null, coverPublicId: null });
   });
 
   it("lets a social-only user delete without a password", async () => {

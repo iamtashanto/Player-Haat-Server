@@ -108,6 +108,11 @@ enum VerificationType {
   PHONE_OTP
 }
 
+enum VideoSource {
+  YOUTUBE
+  UPLOAD // reserved for our own hosting (a paid feature later); the API answers UPLOAD_NOT_AVAILABLE for now
+}
+
 enum MediaType {
   PHOTO
   VIDEO_LINK
@@ -134,6 +139,16 @@ enum TeamMemberRole {
   CAPTAIN
   VICE_CAPTAIN
   PLAYER
+}
+
+enum JoinMode {
+  APPROVAL // players apply, the organiser accepts (default)
+  OPEN_JOIN // players join straight away until the game is full
+}
+
+enum Attendance {
+  ATTENDED
+  NO_SHOW
 }
 
 enum RequestStatus {
@@ -178,6 +193,20 @@ enum NotificationType {
   VERIFICATION_RESULT
   TEAM_JOINED
   SYSTEM
+  NEARBY_AVAILABLE // someone near you is free to play today
+  GAME_REMINDER // 2 hours before, and the morning of
+  REQUEST_FILLED // the game you applied to is now full
+  GAME_MESSAGE // a message in a game's group chat
+  ANNOUNCEMENT // from the admin dashboard
+  PROFILE_VIEWED // a recruiter opened your profile (once per recruiter per day)
+}
+
+enum PushStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
 }
 
 enum ReportTargetType {
@@ -213,6 +242,8 @@ enum AdminActionType {
   REPORT_RESOLVE
   REPORT_DISMISS
   CONFIG_SET
+  MEDIA_REMOVE
+  VERIFICATION_FILE_VIEW
 }
 
 enum ReportStatus {
@@ -253,32 +284,38 @@ model User {
   verificationCodes        VerificationCode[]
   playerProfile            PlayerProfile?
   recruiterProfile         RecruiterProfile?
-  creditBalance            Int                   @default(0) // maintained with the ledger, never negative (CHECK in the migration)
+  creditBalance            Int                     @default(0) // maintained with the ledger, never negative (CHECK in the migration)
   // Admin two-factor sign-in (TOTP). The secret is stored encrypted; backup codes only as hashes.
-  totpSecret       String?
-  totpEnabledAt    DateTime?
-  totpLastStep     Int? // the last 30-second step accepted, so one code can't be replayed
-  totpBackupHashes String[] @default([])
+  totpSecret               String?
+  totpEnabledAt            DateTime?
+  totpLastStep             Int? // the last 30-second step accepted, so one code can't be replayed
+  totpBackupHashes         String[]                @default([])
   creditTransactions       CreditTransaction[]
   payments                 Payment[]
-  contactReveals           ContactReveal[]       @relation("ContactViewer")
-  invitesSent              Invite[]              @relation("InviteRecruiter")
+  contactReveals           ContactReveal[]         @relation("ContactViewer")
+  invitesSent              Invite[]                @relation("InviteRecruiter")
   shortlist                ShortlistEntry[]
-  verificationRequests     VerificationRequest[] @relation("VerificationSubmitter")
-  verificationsReviewed    VerificationRequest[] @relation("VerificationReviewer")
-  conversationsAsRecruiter Conversation[]        @relation("ConversationRecruiter")
-  conversationsAsPlayer    Conversation[]        @relation("ConversationPlayer")
+  verificationRequests     VerificationRequest[]   @relation("VerificationSubmitter")
+  verificationsReviewed    VerificationRequest[]   @relation("VerificationReviewer")
+  conversationsAsRecruiter Conversation[]          @relation("ConversationRecruiter")
+  conversationsAsPlayer    Conversation[]          @relation("ConversationPlayer")
   messagesSent             Message[]
-  teamsCaptained           Team[]                @relation("TeamCaptain")
+  gameMessages             GameMessage[]           @relation("GameMessageSender")
+  notificationPreference   NotificationPreference?
+  pushJobs                 PushJob[]
+  webPushSubscriptions     WebPushSubscription[]
+  verificationFiles        VerificationFile[]      @relation("VerificationFileOwner")
+  profileViewsMade         ProfileView[]           @relation("ProfileViewer")
+  teamsCaptained           Team[]                  @relation("TeamCaptain")
   teamMemberships          TeamMember[]
   requestsCreated          PlayerRequest[]
   applications             Application[]
-  ratingsGiven             Rating[]              @relation("RatingRater")
-  ratingsReceived          Rating[]              @relation("RatingRatee")
+  ratingsGiven             Rating[]                @relation("RatingRater")
+  ratingsReceived          Rating[]                @relation("RatingRatee")
   deviceTokens             DeviceToken[]
   notifications            Notification[]
-  reportsFiled             Report[]              @relation("ReportReporter")
-  reportsResolved          Report[]              @relation("ReportResolver")
+  reportsFiled             Report[]                @relation("ReportReporter")
+  reportsResolved          Report[]                @relation("ReportResolver")
   adminActions             AdminAction[]
 
   @@index([status])
@@ -423,6 +460,8 @@ model Sport {
 
   positions    Position[]
   playerSports PlayerSport[]
+  availability PlayerAvailability[]
+  profileViews ProfileView[]
   teams        Team[]
   requests     PlayerRequest[]
 }
@@ -457,6 +496,9 @@ model PlayerProfile {
   // Set by an admin; unlike isVisible (the player's own switch) the player cannot clear it.
   hiddenByAdminAt   DateTime?
   contactVisibility ContactVisibility @default(ON_TAP)
+  // Wide banner behind the avatar (about 3:1). The URL is derived from the stored path at read time.
+  coverUrl          String?
+  coverPublicId     String?
 
   avgRating    Float    @default(0)
   ratingCount  Int      @default(0)
@@ -466,15 +508,17 @@ model PlayerProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  district       District         @relation(fields: [districtId], references: [id])
-  upazila        Upazila          @relation(fields: [upazilaId], references: [id])
-  union          Union?           @relation(fields: [unionId], references: [id])
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district       District             @relation(fields: [districtId], references: [id])
+  upazila        Upazila              @relation(fields: [upazilaId], references: [id])
+  union          Union?               @relation(fields: [unionId], references: [id])
   sports         PlayerSport[]
   media          PlayerMedia[]
   contactReveals ContactReveal[]
   invites        Invite[]
   shortlisted    ShortlistEntry[]
+  availability   PlayerAvailability[]
+  profileViews   ProfileView[]
 
   // Player search: filter by place, then walk the sort order — each index ends in `id`, the unique
   // tie-breaker the keyset cursor uses, so Postgres never has to sort. (Without the location-first
@@ -486,6 +530,24 @@ model PlayerProfile {
   @@index([avgRating(sort: Desc), ratingCount(sort: Desc), id])
   @@index([lastActiveAt(sort: Desc), id])
   @@index([unionId])
+}
+
+/// "Available to play today" per sport. Rows expire by time (endsAt) and are swept by a job; readers
+/// always filter on endsAt, so a late sweep never shows a stale player.
+model PlayerAvailability {
+  id        String   @id @default(cuid())
+  profileId String
+  sportId   Int
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+
+  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  sport   Sport         @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, sportId])
+  @@index([sportId, endsAt])
+  @@index([endsAt])
 }
 
 model PlayerSport {
@@ -547,17 +609,23 @@ model PlayerAchievement {
 }
 
 model PlayerMedia {
-  id        String    @id @default(cuid())
+  id        String       @id @default(cuid())
   profileId String
   type      MediaType
   url       String
-  publicId  String? // Cloudinary public id (PHOTO only)
-  order     Int       @default(0)
-  createdAt DateTime  @default(now())
+  publicId  String? // storage path / provider id (PHOTO only)
+  order     Int          @default(0)
+  caption   String?
+  // Videos: where it is hosted, the id there, and which sports profile it belongs to (max 6 each).
+  source    VideoSource?
+  videoId   String?
+  sportId   Int?
+  createdAt DateTime     @default(now())
 
   profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId, order])
+  @@index([profileId, type, sportId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -575,6 +643,9 @@ model RecruiterProfile {
   sportIds      Int[]
   // Set by an admin after checking who they are; players can see it on the recruiter's public card.
   verifiedBadge Boolean       @default(false)
+  // Club / academy / organisation logo, shown on the recruiter card and on their requests.
+  logoUrl       String?
+  logoPublicId  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -653,6 +724,7 @@ model PlayerRequest {
   isPaid          Boolean       @default(false)
   notes           String?
   kind            RequestKind   @default(MATCH)
+  joinMode        JoinMode      @default(APPROVAL)
   title           String? // events only: "Under-17 trial, Barishal"
   status          RequestStatus @default(OPEN)
   isHidden        Boolean       @default(false) // admin moderation
@@ -671,6 +743,7 @@ model PlayerRequest {
   applications Application[]
   ratings      Rating[]
   invites      Invite[]
+  chatMessages GameMessage[]
 
   @@index([status, matchAt])
   @@index([upazilaId, status, matchAt])
@@ -682,20 +755,24 @@ model PlayerRequest {
 }
 
 model Application {
-  id           String            @id @default(cuid())
-  requestId    String
-  playerId     String // User.id of the applicant
-  proposedRate Int?
-  message      String?
-  status       ApplicationStatus @default(PENDING)
-  respondedAt  DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id                 String            @id @default(cuid())
+  requestId          String
+  playerId           String // User.id of the applicant
+  proposedRate       Int?
+  message            String?
+  status             ApplicationStatus @default(PENDING)
+  respondedAt        DateTime?
+  // Marked by the organiser after the game; drives the player's reliability score.
+  attendance         Attendance?
+  attendanceMarkedAt DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   request PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   player  User          @relation(fields: [playerId], references: [id])
 
   @@unique([requestId, playerId])
+  @@index([playerId, attendance])
   @@index([playerId, status])
   @@index([requestId, status])
 }
@@ -703,6 +780,21 @@ model Application {
 // ─────────────────────────────────────────────────────────────────────────────
 // Ratings
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// One group chat per game. Membership is derived (organiser + ACCEPTED applicants), so there is no
+/// member table to drift; the chat turns read-only 7 days after the game.
+model GameMessage {
+  id        String   @id @default(cuid())
+  requestId String
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  request PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sender  User          @relation("GameMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt(sort: Desc)])
+}
 
 model Rating {
   id        String          @id @default(cuid())
@@ -756,6 +848,133 @@ model Notification {
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, readAt])
   @@index([createdAt]) // retention purge
+}
+
+/// A recruiter opening a player's profile: one row per recruiter per player per Dhaka day.
+model ProfileView {
+  id        String   @id @default(cuid())
+  profileId String
+  viewerId  String
+  day       DateTime @db.Date // Asia/Dhaka calendar day
+  createdAt DateTime @default(now())
+
+  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  viewer  User          @relation("ProfileViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  sport   Sport?        @relation(fields: [sportId], references: [id])
+  sportId Int?
+
+  @@unique([profileId, viewerId, day])
+  @@index([profileId, createdAt(sort: Desc)])
+}
+
+/// Facts about every uploaded image, keyed by its storage path: so layouts can reserve the space before it loads.
+model MediaAsset {
+  path      String   @id // the media service path (= publicId everywhere else)
+  mediaId   String? // the media service's own id
+  mime      String
+  width     Int?
+  height    Int?
+  size      Int?
+  createdAt DateTime @default(now())
+
+  @@index([mediaId])
+}
+
+/// A verification document. Stored AES-256-GCM encrypted (as base64 text, the only shape the media service accepts
+/// besides images) in `verification/<userId>/`: the service has no private mode, so what sits at its public URL is
+/// unreadable. Only our API, with the key, can turn it back into the picture. No public URL is ever built for it.
+model VerificationFile {
+  id        String   @id @default(cuid())
+  userId    String
+  requestId String? // null until it is attached to a submitted request
+  path      String   @unique // media service path of the encrypted blob
+  mediaId   String?
+  mime      String // of the original image
+  width     Int?
+  height    Int?
+  size      Int // of the original image, bytes
+  createdAt DateTime @default(now())
+
+  user    User                 @relation("VerificationFileOwner", fields: [userId], references: [id], onDelete: Cascade)
+  request VerificationRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([userId, createdAt])
+}
+
+/// What the user wants to hear about. No row = the defaults below.
+model NotificationPreference {
+  userId            String   @id
+  games             Boolean  @default(true) // matches near me, applications, reminders, filled/cancelled, rating reminders
+  messages          Boolean  @default(true) // chats and game chats
+  recruitment       Boolean  @default(true) // invites, number viewed
+  system            Boolean  @default(true) // payments, verification, announcements
+  nearbyAvailable   Boolean  @default(true) // "someone near you is free today"
+  profileViewed     Boolean  @default(true) // "a recruiter viewed your profile"
+  quietHoursEnabled Boolean  @default(true)
+  quietStart        String   @default("23:00") // Asia/Dhaka, HH:MM
+  quietEnd          String   @default("07:00")
+  chatInQuietHours  Boolean  @default(false) // let chat messages through during quiet hours
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// A browser's standard Web Push (VAPID) subscription. Removed when the push service answers 404/410.
+model WebPushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// The push queue AND the send log: a row per (notification × user). Request handlers only enqueue; a worker
+/// sends, retries with backoff, and the dashboard reads this table to show what happened.
+model PushJob {
+  id             String           @id @default(cuid())
+  userId         String
+  type           NotificationType
+  payload        Json // strings only: deep-link ids + display params (what the inbox row holds too)
+  status         PushStatus       @default(PENDING)
+  attempts       Int              @default(0)
+  nextAttemptAt  DateTime         @default(now())
+  expiresAt      DateTime? // a game reminder that would arrive after the game is dropped
+  collapseKey    String? // a still-pending job with the same key absorbs newer ones (chat bursts)
+  announcementId String?
+  deviceCount    Int              @default(0)
+  deliveredCount Int              @default(0)
+  skipReason     String?
+  lastError      String?
+  createdAt      DateTime         @default(now())
+  sentAt         DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([announcementId, status])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([createdAt])
+}
+
+/// A message from the dashboard to a slice of users, kept so delivery can be reviewed afterwards.
+model Announcement {
+  id          String   @id @default(cuid())
+  createdById String
+  title       String
+  body        String
+  audience    Json // { role, sportId, divisionId, districtId }
+  recipients  Int
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -875,7 +1094,8 @@ model VerificationRequest {
   playerSportId      String?
   note               String?
   evidenceLinks      String[] // https links: a page, a federation record, a match report
-  evidenceImages     Json? // [{ url, publicId }] — uploaded through /media/images
+  evidenceImages     Json? // LEGACY public images; `scripts/migrate-evidence-private.ts` moves them into `files` and clears this
+  files              VerificationFile[]
   status             VerificationStatus @default(PENDING)
   reviewedById       String?
   reviewedAt         DateTime?

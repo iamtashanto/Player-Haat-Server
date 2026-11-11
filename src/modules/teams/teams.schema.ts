@@ -30,6 +30,8 @@ const Team = z
     id: z.string(),
     name: z.string(),
     logoUrl: z.string().nullable(),
+    logoWidth: z.number().int().nullable(),
+    logoHeight: z.number().int().nullable(),
     sport: z.object({ id: z.number(), code: z.string(), nameBn: z.string(), nameEn: z.string() }),
     location: z.object({ district: Ref, upazila: Ref, union: Ref.nullable() }),
     memberCount: z.number().int(),

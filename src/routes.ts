@@ -5,6 +5,8 @@ import { adminAuthRoutes } from "./modules/admin/admin-auth.routes.js";
 import { adminExtraRoutes } from "./modules/admin/admin-extra.routes.js";
 import { adminRoutes } from "./modules/admin/admin.routes.js";
 import { billingRoutes } from "./modules/billing/billing.routes.js";
+import { verificationRoutes } from "./modules/verification/verification.routes.js";
+import { gamesRoutes } from "./modules/games/games.routes.js";
 import { chatRoutes } from "./modules/chat/chat.routes.js";
 import { invitesRoutes } from "./modules/invites/invites.routes.js";
 import { shortlistRoutes } from "./modules/shortlist/shortlist.routes.js";
@@ -58,6 +60,8 @@ apiRouter.use("/billing", requireAppUser, billingRoutes);
 apiRouter.use("/invites", requireAppUser, invitesRoutes);
 apiRouter.use("/shortlist", requireAppUser, shortlistRoutes);
 apiRouter.use("/conversations", requireAppUser, chatRoutes);
+apiRouter.use("/games", requireAppUser, gamesRoutes);
+apiRouter.use("/verification", requireAppUser, verificationRoutes);
 apiRouter.use("/teams", requireAppUser, teamsRoutes);
 
 // The dashboard's API: ADMIN only (its own login lives inside this router).

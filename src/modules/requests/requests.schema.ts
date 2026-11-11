@@ -25,8 +25,11 @@ export const createRequestBody = z.strictObject({
   notes: z.string().trim().max(500).nullable().optional(),
   teamId: z.string().min(1).max(40).nullable().optional(),
   kind: z.enum(["MATCH", "EVENT"]).optional().openapi({ description: "MATCH (default): players apply. EVENT: a recruiter's trial or camp — players tap 'interested'. Events are for recruiters and need a `title`." }),
+  joinMode: z.enum(["APPROVAL", "OPEN_JOIN"]).optional().openapi({ description: "APPROVAL (default): you accept each applicant. OPEN_JOIN: players are in as soon as they join, until the game is full (matches only)." }),
   title: z.string().trim().min(3).max(80).nullable().optional().openapi({ description: "Required for events, e.g. 'Under-17 trial, Barishal'." }),
-}).refine((b) => b.kind !== "EVENT" || !!b.title, { message: "An event needs a title", path: ["title"] });
+})
+  .refine((b) => b.kind !== "EVENT" || !!b.title, { message: "An event needs a title", path: ["title"] })
+  .refine((b) => b.kind !== "EVENT" || b.joinMode !== "OPEN_JOIN", { message: "Events can't use open join", path: ["joinMode"] });
 
 // Sport and location are fixed once posted: players were matched and notified on them.
 export const updateRequestBody = z
@@ -55,8 +58,13 @@ export const feedQuery = pageQuery
     unionId: qid.optional(),
     isPaid: z.stringbool().optional(),
     kind: z.enum(["MATCH", "EVENT"]).optional().openapi({ description: "Only matches, or only events (recruiters' trials and camps)." }),
+    sort: z.enum(["soonest", "near"]).default("soonest").openapi({ description: "`near`: same union, then same upazila, then same district, then the rest, soonest first within each; needs `nearDistrictId`. Area ids only, no coordinates." }),
+    nearDistrictId: qid.optional(),
+    nearUpazilaId: qid.optional(),
+    nearUnionId: qid.optional(),
   })
-  .refine((q) => !q.position || q.sportId !== undefined, { message: "position requires sportId", path: ["position"] });
+  .refine((q) => !q.position || q.sportId !== undefined, { message: "position requires sportId", path: ["position"] })
+  .refine((q) => q.sort !== "near" || q.nearDistrictId !== undefined, { message: "sort=near requires nearDistrictId", path: ["nearDistrictId"] });
 
 export const featuredQuery = z.object({
   kind: z.enum(["MATCH", "EVENT"]).optional(),
@@ -87,8 +95,9 @@ const RequestItem = z
     budgetMax: z.number().nullable(),
     notes: z.string().nullable(),
     team: z.object({ id: z.string(), name: z.string(), logoUrl: z.string().nullable() }).nullable(),
-    captain: z.object({ name: z.string(), avatarUrl: z.string().nullable(), rating: z.object({ average: z.number(), count: z.number() }), recruiterId: z.string().nullable(), recruiterVerified: z.boolean() }),
+    captain: z.object({ name: z.string(), avatarUrl: z.string().nullable(), rating: z.object({ average: z.number(), count: z.number() }), recruiterId: z.string().nullable(), recruiterVerified: z.boolean(), logoUrl: z.string().nullable() }),
     kind: z.enum(["MATCH", "EVENT"]),
+    joinMode: z.enum(["APPROVAL", "OPEN_JOIN"]),
     title: z.string().nullable(),
     boostedUntil: z.string().datetime().nullable().openapi({ description: "Set while a paid boost is running; boosted requests appear in /requests/featured." }),
     interested: z.object({ count: z.number().int(), preview: z.array(z.object({ profileId: z.string(), name: z.string(), avatarUrl: z.string().nullable() })) }).openapi({ description: "People who applied / tapped 'interested' (pending or accepted). `preview` lists a few visible players, newest first, for events." }),

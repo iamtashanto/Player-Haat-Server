@@ -23,6 +23,12 @@ describe("health", () => {
     expect(queryRaw).not.toHaveBeenCalled();
   });
 
+  it("is also served under /api/v1 (outside the rate limiter)", async () => {
+    const [a, b] = await Promise.all([request(createApp()).get("/api/v1/health"), request(createApp()).get("/api/v1/health/ready")]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+  });
+
   it("GET /health/ready returns 200 when the DB answers", async () => {
     queryRaw.mockResolvedValue([{ "?column?": 1 }]);
     const res = await request(createApp()).get("/health/ready");

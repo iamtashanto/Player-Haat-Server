@@ -3,6 +3,9 @@ import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
+import { deleteImagesQuietly } from "../../lib/storage/safe-delete.js";
+import { storage } from "../../lib/storage/index.js";
+import { imageUrl, toMediaItem } from "../players/players.presenter.js";
 import { hashPassword, verifyPassword } from "../../lib/password.js";
 import { CONFIG_SCHEMAS, clearConfigCache, readAll, type ConfigKey } from "../app-config/app-config.service.js";
 import { retireParticipation } from "../moderation/participation.js";
@@ -206,6 +209,7 @@ export async function getUser(id: string) {
           type: u.recruiterProfile.type,
           organization: u.recruiterProfile.organization,
           verifiedBadge: u.recruiterProfile.verifiedBadge,
+          logoUrl: imageUrl(u.recruiterProfile.logoPublicId, u.recruiterProfile.logoUrl),
           district: u.recruiterProfile.district,
         }
       : null,
@@ -235,7 +239,8 @@ export async function getUser(id: string) {
             hiddenByAdmin: sp.hiddenByAdminAt !== null,
             achievements: sp.achievements,
           })),
-          media: u.playerProfile.media,
+          coverUrl: imageUrl(u.playerProfile.coverPublicId, u.playerProfile.coverUrl),
+          media: u.playerProfile.media.map((m) => toMediaItem(m)),
         }
       : null,
     recentRequests: u.requestsCreated.map((r) => ({
@@ -675,11 +680,46 @@ export async function deleteSportMedia(adminId: string, sportProfileId: string, 
   const media = await prisma.playerMedia.findFirst({ where: { id: mediaId, profileId: sp.profileId } });
   if (!media) throw AppError.notFound("MEDIA_NOT_FOUND", "Media not found");
 
-  return prisma.$transaction(async (tx) => {
-    await tx.playerMedia.delete({ where: { id: mediaId } });
-    await audit(tx, adminId, "SPORT_PROFILE_HIDE", "PLAYER_MEDIA", mediaId, "Inappropriate media removed by admin");
+  return removeMediaAsAdmin(adminId, media, "Inappropriate media removed by admin");
+}
+
+async function removeMediaAsAdmin(adminId: string, media: { id: string; publicId: string | null; type: string }, reason: string) {
+  const out = await prisma.$transaction(async (tx) => {
+    await tx.playerMedia.delete({ where: { id: media.id } });
+    await audit(tx, adminId, "MEDIA_REMOVE", "PLAYER_MEDIA", media.id, reason, { type: media.type });
     return { success: true };
   });
+  await deleteImagesQuietly([media.publicId]); // the DB row is gone: take the file down too
+  return out;
+}
+
+/** Moderation by user: a photo or video from their gallery. Written to the audit log with the admin's reason. */
+export async function removeUserMedia(adminId: string, userId: string, mediaId: string, reason: string) {
+  const media = await prisma.playerMedia.findFirst({ where: { id: mediaId, profile: { userId } } });
+  if (!media) throw AppError.notFound("MEDIA_NOT_FOUND", "Media not found");
+  return removeMediaAsAdmin(adminId, media, reason);
+}
+
+/** Removes a user's avatar or cover (offensive picture) and the stored file. */
+export async function removeUserImage(adminId: string, userId: string, which: "avatar" | "cover" | "logo", reason: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarPublicId: true, playerProfile: { select: { id: true, coverPublicId: true } }, recruiterProfile: { select: { id: true, logoPublicId: true } } } });
+  if (!user) throw AppError.notFound("USER_NOT_FOUND", "User not found");
+  const publicId = which === "avatar" ? user.avatarPublicId : which === "logo" ? (user.recruiterProfile?.logoPublicId ?? null) : (user.playerProfile?.coverPublicId ?? null);
+  const has = publicId !== null;
+  if (!has) throw AppError.notFound("MEDIA_NOT_FOUND", `No ${which} to remove`);
+  await prisma.$transaction(async (tx) => {
+    if (which === "avatar") await tx.user.update({ where: { id: userId }, data: { avatarUrl: null, avatarPublicId: null } });
+    else if (which === "logo") await tx.recruiterProfile.update({ where: { id: user.recruiterProfile!.id }, data: { logoUrl: null, logoPublicId: null } });
+    else await tx.playerProfile.update({ where: { id: user.playerProfile!.id }, data: { coverUrl: null, coverPublicId: null } });
+    await audit(tx, adminId, "MEDIA_REMOVE", "USER", userId, reason, { which });
+  });
+  await deleteImagesQuietly([publicId]);
+  return { success: true };
+}
+
+/** Storage used vs quota, read through our server so the media key never reaches the dashboard. */
+export async function mediaUsage() {
+  return (await storage.usage?.()) ?? { provider: "none" as const };
 }
 
 export async function setSportProfileHidden(adminId: string, id: string, hidden: boolean, reason?: string) {
@@ -1148,24 +1188,14 @@ export async function updateUnion(adminId: string, id: number, input: z.infer<ty
 // ───────────────────────── Push Announcements ─────────────────────────
 
 function buildNotificationTargetWhere(filters: z.infer<typeof notificationFilterQuery>): Prisma.UserWhereInput {
+  const and: Prisma.UserWhereInput[] = [];
+  if (filters.districtId) and.push({ OR: [{ playerProfile: { districtId: filters.districtId } }, { recruiterProfile: { districtId: filters.districtId } }] });
+  if (filters.divisionId) and.push({ OR: [{ playerProfile: { district: { divisionId: filters.divisionId } } }, { recruiterProfile: { district: { divisionId: filters.divisionId } } }] });
+  if (filters.sportId) and.push({ playerProfile: { sports: { some: { sportId: filters.sportId } } } });
   return {
     status: "ACTIVE",
-    ...(filters.role && { role: filters.role as UserRole }),
-    ...(filters.districtId && {
-      OR: [
-        { playerProfile: { districtId: filters.districtId } },
-        { recruiterProfile: { districtId: filters.districtId } },
-      ],
-    }),
-    ...(filters.divisionId && {
-      OR: [
-        { playerProfile: { district: { divisionId: filters.divisionId } } },
-        { recruiterProfile: { district: { divisionId: filters.divisionId } } },
-      ],
-    }),
-    ...(filters.sportId && {
-      playerProfile: { sports: { some: { sportId: filters.sportId } } },
-    }),
+    role: filters.role ? (filters.role as UserRole) : { in: ["PLAYER", "RECRUITER"] }, // never the dashboard's own accounts
+    ...(and.length > 0 && { AND: and }),
   };
 }
 
@@ -1174,56 +1204,105 @@ export async function previewNotificationCount(filters: z.infer<typeof notificat
   return { targetCount: count };
 }
 
+/**
+ * Sends an announcement: one inbox row and one queued push per recipient (their language, their quiet hours, their
+ * switches). The Announcement row keeps what was sent and to whom, so delivery can be reviewed afterwards.
+ */
 export async function broadcastNotification(adminId: string, input: z.infer<typeof broadcastNotificationBody>) {
-  const where = buildNotificationTargetWhere({
-    role: input.role,
-    sportId: input.sportId,
-    divisionId: input.divisionId,
-    districtId: input.districtId,
+  const audience = { role: input.role, sportId: input.sportId, divisionId: input.divisionId, districtId: input.districtId };
+  const userIds = (await prisma.user.findMany({ where: buildNotificationTargetWhere(audience), select: { id: true } })).map((r) => r.id);
+
+  const announcement = await prisma.$transaction(async (tx) => {
+    const row = await tx.announcement.create({ data: { createdById: adminId, title: input.title, body: input.body, audience, recipients: userIds.length } });
+    await audit(tx, adminId, "CONFIG_SET", "ANNOUNCEMENT", row.id, input.title, { title: input.title, body: input.body, recipientCount: userIds.length, filters: audience });
+    return row;
   });
 
-  const recipients = await prisma.user.findMany({
-    where,
-    select: { id: true },
-  });
-
-  const userIds = recipients.map((r) => r.id);
-
-  if (userIds.length > 0) {
-    // Write in-app Notification records in chunks
-    const chunk = 500;
-    for (let i = 0; i < userIds.length; i += chunk) {
-      const slice = userIds.slice(i, i + chunk);
-      await prisma.notification.createMany({
-        data: slice.map((uid) => ({
-          userId: uid,
-          type: "SYSTEM",
-          title: input.title,
-          body: input.body,
-          data: {},
-        })),
-      });
-    }
-
-    // Trigger push notifications
+  // Chunks keep each background task small; they run one after another.
+  for (let i = 0; i < userIds.length; i += 500) {
     notify({
-      userIds,
-      type: "SYSTEM",
-      data: { title: input.title, body: input.body },
-      params: { sport: { en: "", bn: "" }, venue: "", when: new Date() },
+      userIds: userIds.slice(i, i + 500),
+      type: "ANNOUNCEMENT",
+      data: { announcementId: announcement.id },
+      params: { heading: input.title, text: input.body },
+      announcementId: announcement.id,
     });
   }
+  return { id: announcement.id, sentCount: userIds.length };
+}
 
-  await prisma.$transaction(async (tx) => {
-    await audit(tx, adminId, "CONFIG_SET", "NOTIFICATION", "BROADCAST", input.title, {
-      title: input.title,
-      body: input.body,
-      recipientCount: userIds.length,
-      filters: { role: input.role, sportId: input.sportId, divisionId: input.divisionId, districtId: input.districtId },
-    });
+/** Past announcements with delivery numbers: queued, sent, failed, skipped (and why) and how many were opened. */
+export async function listAnnouncements(q: { cursor?: string; limit: number }) {
+  const rows = await prisma.announcement.findMany({ orderBy: [{ createdAt: "desc" }, { id: "desc" }], ...cursorArgs(q.cursor, q.limit) });
+  const { items, nextCursor } = toPage(rows, q.limit);
+  const ids = items.map((a) => a.id);
+  const [jobs, opened] = await Promise.all([
+    prisma.pushJob.groupBy({ by: ["announcementId", "status", "skipReason"], where: { announcementId: { in: ids } }, _count: { _all: true }, _sum: { deliveredCount: true } }),
+    prisma.$queryRaw<{ id: string; opened: bigint }[]>`SELECT data->>'announcementId' AS id, count(*) FILTER (WHERE "readAt" IS NOT NULL) AS opened FROM "Notification" WHERE type = 'ANNOUNCEMENT' AND data->>'announcementId' = ANY(${ids}) GROUP BY 1`,
+  ]);
+  return {
+    items: items.map((a) => {
+      const mine = jobs.filter((j) => j.announcementId === a.id);
+      const n = (status: string) => mine.filter((j) => j.status === status).reduce((t, j) => t + j._count._all, 0);
+      const skipped: Record<string, number> = {};
+      for (const j of mine.filter((x) => x.status === "SKIPPED")) skipped[j.skipReason ?? "OTHER"] = (skipped[j.skipReason ?? "OTHER"] ?? 0) + j._count._all;
+      return {
+        id: a.id,
+        title: a.title,
+        body: a.body,
+        audience: a.audience,
+        recipients: a.recipients,
+        createdAt: a.createdAt.toISOString(),
+        delivery: {
+          queued: n("PENDING") + n("SENDING"),
+          sent: n("SENT"),
+          devicesReached: mine.reduce((t, j) => t + (j._sum.deliveredCount ?? 0), 0),
+          failed: n("FAILED"),
+          skipped,
+          opened: Number(opened.find((o) => o.id === a.id)?.opened ?? 0),
+        },
+      };
+    }),
+    nextCursor,
+  };
+}
+
+/** The push log: every queued/sent/failed/skipped push, newest first, with the reason when it didn't go. */
+export async function listPushLog(q: { cursor?: string; limit: number; status?: string; type?: string; userId?: string }) {
+  const rows = await prisma.pushJob.findMany({
+    where: { ...(q.status && { status: q.status as never }), ...(q.type && { type: q.type as never }), ...(q.userId && { userId: q.userId }) },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    include: { user: { select: { name: true } } },
+    ...cursorArgs(q.cursor, q.limit),
   });
+  const { items, nextCursor } = toPage(rows, q.limit);
+  return {
+    items: items.map((j) => ({
+      id: j.id,
+      userId: j.userId,
+      userName: j.user.name,
+      type: j.type,
+      status: j.status,
+      attempts: j.attempts,
+      skipReason: j.skipReason,
+      lastError: j.lastError,
+      deviceCount: j.deviceCount,
+      deliveredCount: j.deliveredCount,
+      announcementId: j.announcementId,
+      createdAt: j.createdAt.toISOString(),
+      sentAt: j.sentAt?.toISOString() ?? null,
+      nextAttemptAt: j.status === "PENDING" ? j.nextAttemptAt.toISOString() : null,
+    })),
+    nextCursor,
+  };
+}
 
-  return { sentCount: userIds.length };
+export async function pushStats() {
+  const since = new Date(Date.now() - 24 * 3_600_000);
+  const groups = await prisma.pushJob.groupBy({ by: ["status"], where: { createdAt: { gte: since } }, _count: { _all: true } });
+  const byStatus = Object.fromEntries(groups.map((g) => [g.status, g._count._all]));
+  const backlog = await prisma.pushJob.count({ where: { status: { in: ["PENDING", "SENDING"] } } });
+  return { last24h: byStatus, backlog };
 }
 
 // ───────────────────────── overview & analytics ─────────────────────────
@@ -1359,8 +1438,25 @@ export async function stats() {
     prisma.payment.count({ where: { status: "SUBMITTED" } }),
   ]);
 
+  // Casual play: who says they're free today, open-join games waiting for players, how attendance is being marked.
+  const nowDate = new Date();
+  const [freeToday, openJoinOpen, attended30, noShow30, gameChats] = await Promise.all([
+    prisma.playerAvailability.groupBy({ by: ["profileId"], where: { startsAt: { lte: nowDate }, endsAt: { gt: nowDate } } }).then((r) => r.length),
+    prisma.playerRequest.count({ where: { kind: "MATCH", joinMode: "OPEN_JOIN", status: "OPEN", isHidden: false, matchAt: { gt: nowDate } } }),
+    prisma.application.count({ where: { attendance: "ATTENDED", attendanceMarkedAt: { gte: thirtyDaysAgo } } }),
+    prisma.application.count({ where: { attendance: "NO_SHOW", attendanceMarkedAt: { gte: thirtyDaysAgo } } }),
+    prisma.gameMessage.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+  ]);
+
   return {
     summary: {
+      play: {
+        freeToday,
+        openJoinGamesOpen: openJoinOpen,
+        attendedLast30Days: attended30,
+        noShowsLast30Days: noShow30,
+        gameChatMessagesLast7Days: gameChats,
+      },
       users: {
         total: byRole.reduce((acc, r) => acc + r._count._all, 0),
         byRole: count(byRole, "role"),

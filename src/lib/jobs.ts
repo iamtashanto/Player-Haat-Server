@@ -1,6 +1,9 @@
+import { runQueue } from "../modules/notifications/queue.js";
+import { sendGameReminders } from "../modules/notifications/triggers.js";
+import { sweepExpiredAvailability } from "../modules/players/availability.service.js";
 import { expireStaleRequests } from "../modules/maintenance/expire-stale-requests.js";
 import { purgeExpiredData } from "../modules/maintenance/purge-expired-data.js";
-import { sweepOrphanUploads } from "../modules/maintenance/sweep-orphan-uploads.js";
+import { sweepOrphanUploads, sweepUnattachedEvidence } from "../modules/maintenance/sweep-orphan-uploads.js";
 import { sendFollowupRatingReminders } from "../modules/ratings/rating-reminders.js";
 import { logger } from "./logger.js";
 
@@ -15,9 +18,13 @@ interface Job {
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const jobs: Job[] = [
+  { name: "push-queue", everyMs: 20_000, firstRunMs: 10_000, run: () => runQueue() },
+  { name: "game-reminders", everyMs: 5 * MINUTE, firstRunMs: 45_000, run: () => sendGameReminders() },
   { name: "rating-reminders", everyMs: 15 * MINUTE, firstRunMs: MINUTE, run: () => sendFollowupRatingReminders() },
   { name: "expire-stale-requests", everyMs: HOUR, firstRunMs: 5 * MINUTE, run: () => expireStaleRequests() },
+  { name: "sweep-availability", everyMs: 30 * MINUTE, firstRunMs: 2 * MINUTE, run: () => sweepExpiredAvailability() },
   { name: "purge-expired-data", everyMs: 24 * HOUR, firstRunMs: 10 * MINUTE, run: () => purgeExpiredData() },
+  { name: "sweep-unattached-evidence", everyMs: HOUR, firstRunMs: 20 * MINUTE, run: () => sweepUnattachedEvidence() },
   { name: "sweep-orphan-uploads", everyMs: 24 * HOUR, firstRunMs: 30 * MINUTE, run: () => sweepOrphanUploads() },
 ];
 

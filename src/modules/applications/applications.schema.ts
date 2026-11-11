@@ -25,7 +25,7 @@ const Base = {
   contact: Contact.optional(),
 };
 const ApplicantItem = z
-  .object({ ...Base, player: z.object({ id: z.string(), name: z.string(), avatarUrl: z.string().nullable(), rating: z.object({ average: z.number(), count: z.number() }), noShowCount: z.number(), verifiedBadge: z.boolean(), sports: z.array(z.unknown()) }).nullable() })
+  .object({ ...Base, player: z.object({ id: z.string(), name: z.string(), avatarUrl: z.string().nullable(), rating: z.object({ average: z.number(), count: z.number() }), noShowCount: z.number(), verifiedBadge: z.boolean(), sports: z.array(z.unknown()), reliability: z.record(z.string(), z.unknown()).openapi({ description: "Same shape as PlayerCard.reliability." }), availableToday: z.boolean() }).nullable(), attendance: z.enum(["ATTENDED", "NO_SHOW"]).nullable().openapi({ description: "Marked by the organiser after the game." }) })
   .openapi("Applicant");
 const MyApplicationItem = z.object({ ...Base, request: z.record(z.string(), z.unknown()).openapi({ description: "Same shape as a request (see PlayerRequest)." }) }).openapi("MyApplication");
 

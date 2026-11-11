@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
+import { cardExtras } from "../players/reliability.service.js";
 import { profileInclude, toPlayerCard } from "../players/players.presenter.js";
 import { MAX_SHORTLIST, type saveBody, type shortlistQuery } from "./shortlist.schema.js";
 
@@ -46,8 +47,9 @@ export async function list(recruiterId: string, q: z.infer<typeof shortlistQuery
     ...cursorArgs(q.cursor, q.limit),
   });
   const { items, nextCursor } = toPage(rows, q.limit);
+  const extras = await cardExtras(items.map((r) => r.profile));
   return {
-    items: items.map((r) => ({ savedAt: r.createdAt.toISOString(), note: r.note, player: toPlayerCard(r.profile, q.sportId ? [q.sportId] : [], true) })),
+    items: items.map((r) => ({ savedAt: r.createdAt.toISOString(), note: r.note, player: toPlayerCard(r.profile, q.sportId ? [q.sportId] : [], true, extras) })),
     nextCursor,
   };
 }

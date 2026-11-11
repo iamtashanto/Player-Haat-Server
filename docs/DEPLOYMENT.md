@@ -66,8 +66,11 @@ npm run db:seed              # locations (full national dataset), sports, defaul
 | `SMTP_HOST` (+`SMTP_*`, `MAIL_FROM`) | your mail provider — required for verification and reset emails |
 | `SMS_HTTP_URL_TEMPLATE` | your SMS gateway, for phone sign-in (otherwise phone endpoints answer 503) |
 | `GOOGLE_CLIENT_IDS`, `APPLE_CLIENT_IDS` | OAuth client ids, or social sign-in answers 503 |
-| `CLOUDINARY_*` | image uploads |
-| `FIREBASE_SERVICE_ACCOUNT` | path to the service-account JSON (chmod 600), for push |
+| `MEDIA_BASE_URL`, `MEDIA_API_KEY` | image storage on our media service (`mk_xxxx`; secret, server only, never in a client, log or git) |
+| `STORAGE_PROVIDER` | optional: `tashanto` (default when the key is set) or `cloudinary` |
+| `CLOUDINARY_*` | fallback image store only |
+| `FIREBASE_SERVICE_ACCOUNT` | path to the service-account JSON (chmod 600), for push to the **app** (FCM) |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | website push (standard Web Push). Generate once with `npm run vapid:generate`; keep the private key secret and never change it later (it would orphan every subscription) |
 | `PUBLIC_API_URL` | `https://playerhaat-api.tashanto.com` |
 
 Create the first admin (there's no API for it, on purpose), after that person has registered in the app:

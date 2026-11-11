@@ -285,19 +285,31 @@ describe("player sports", () => {
 describe("player media", () => {
   const photo = (a: Auth, buf = JPEG, type = "image/jpeg") =>
     api().post(`${V1}/players/me/media/photos`).set(a).attach("file", buf, { filename: "p.jpg", contentType: type });
+  const cover = (a: Auth, buf = JPEG, type = "image/jpeg") =>
+    api().put(`${V1}/players/me/media/cover`).set(a).attach("file", buf, { filename: "c.jpg", contentType: type });
+  const video = (a: Auth, url: string, extra: object = {}) => post(a, "/players/me/media/videos", { sportId: w.football.id, url, ...extra });
+  async function withFootball(email = "me@example.com") {
+    const s = await withProfile(email);
+    expect((await post(s.auth, "/players/me/sports", { sportId: w.football.id, positions: ["GK"], skillLevel: 3, preferredFoot: "RIGHT" })).status).toBe(201);
+    return s;
+  }
+  const YT = (n: number) => `https://youtu.be/${String(n).padStart(11, "x")}`;
 
   it("needs a profile first", async () => {
     const { auth } = await signedIn();
     expect((await photo(auth)).status).toBe(404);
-    expect((await post(auth, "/players/me/media/videos", { url: "https://youtu.be/abc" })).status).toBe(404);
+    expect((await cover(auth)).status).toBe(404);
+    expect((await video(auth, YT(1))).status).toBe(404);
   });
 
-  it("adds photos in my namespace, in order, and records the public id", async () => {
+  it("adds photos in my namespace, in order, with renditions, and records the public id", async () => {
     const { auth, user } = await withProfile();
     await photo(auth);
     const res = await photo(auth, PNG, "image/png");
     expect(res.status).toBe(201);
     expect(res.body.data.media.map((m: { order: number }) => m.order)).toEqual([0, 1]);
+    expect(res.body.data.media[0]).toMatchObject({ type: "PHOTO", caption: null, source: null, videoId: null, sportId: null });
+    expect(res.body.data.media[0].thumbnailUrl).toContain("/w_400/");
     const rows = await prisma.playerMedia.findMany({ orderBy: { order: "asc" } });
     expect(rows.every((r) => r.publicId!.includes(`/player-photos/${user.id}/`))).toBe(true);
     expect(rows.every((r) => fakeStorage.files.has(r.publicId!))).toBe(true);
@@ -313,44 +325,122 @@ describe("player media", () => {
     expect(fakeStorage.files.size).toBe(1);
   });
 
-  it("caps photos at 6 without uploading the rejected one", async () => {
+  it("caps the gallery at 12 photos without uploading the rejected one", async () => {
     const { auth } = await withProfile();
-    for (let i = 0; i < 6; i++) expect((await photo(auth)).status).toBe(201);
+    for (let i = 0; i < 12; i++) expect((await photo(auth)).status).toBe(201);
     const res = await photo(auth);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("PLAYER_MEDIA_LIMIT");
-    expect(fakeStorage.files.size).toBe(6);
+    expect(fakeStorage.files.size).toBe(12);
   });
 
   it("can't be pushed past the cap by concurrent uploads, and cleans up the losers", async () => {
     const { auth } = await withProfile();
-    for (let i = 0; i < 4; i++) await photo(auth);
+    for (let i = 0; i < 10; i++) await photo(auth);
     const results = await Promise.all([photo(auth), photo(auth), photo(auth), photo(auth)]);
     expect(results.filter((r) => r.status === 201)).toHaveLength(2);
-    expect(await prisma.playerMedia.count()).toBe(6);
-    expect(fakeStorage.files.size).toBe(6); // losers' uploads were deleted
+    expect(await prisma.playerMedia.count()).toBe(12);
+    expect(fakeStorage.files.size).toBe(12); // losers' uploads were deleted
   });
 
   it("surfaces a storage outage as 502 and creates nothing", async () => {
     const { auth } = await withProfile();
     fakeStorage.failUploads = true;
-    const res = await photo(auth);
-    expect(res.status).toBe(502);
+    expect((await photo(auth)).status).toBe(502);
+    expect((await cover(auth)).status).toBe(502);
     expect(await prisma.playerMedia.count()).toBe(0);
   });
 
-  it("adds video links only from allowed hosts over https, max 3", async () => {
+  it("strips EXIF/XMP/comment segments (GPS) from jpeg uploads before they are stored", async () => {
     const { auth } = await withProfile();
-    const add = (url: string) => post(auth, "/players/me/media/videos", { url });
-    expect((await add("https://www.youtube.com/watch?v=abc123")).status).toBe(201);
-    expect((await add("https://youtu.be/abc123")).status).toBe(201);
-    expect((await add("https://fb.watch/xyz")).status).toBe(201);
-    expect((await add("https://vimeo.com/123")).body.error.code).toBe("PLAYER_MEDIA_LIMIT");
+    const seg = (marker: number, payload: string) => {
+      const body = Buffer.from(payload, "latin1");
+      return Buffer.concat([Buffer.from([0xff, marker, (body.length + 2) >> 8, (body.length + 2) & 0xff]), body]);
+    };
+    const jpeg = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      seg(0xe0, "JFIF\0\x01\x01"),
+      seg(0xe1, "Exif\0\0GPSLatitude=22.3569;GPSLongitude=91.7832"),
+      seg(0xe1, "http://ns.adobe.com/xap/1.0/\0<x:xmpmeta/>"),
+      seg(0xfe, "taken at home"),
+      seg(0xdb, "quantisation"),
+      Buffer.from([0xff, 0xda, 0, 4, 1, 2, 0xaa, 0xbb, 0xff, 0xd9]),
+    ]);
+    expect((await photo(auth, jpeg)).status).toBe(201);
+    const stored = [...fakeStorage.bytes.values()][0]!;
+    expect(stored.toString("latin1")).not.toMatch(/GPSLatitude|xmpmeta|taken at home/);
+    expect(stored.toString("latin1")).toContain("quantisation"); // the image itself is intact
+    expect(stored.subarray(stored.length - 2).equals(Buffer.from([0xff, 0xd9]))).toBe(true);
+  });
 
-    const fresh = await withProfile("other@example.com");
-    for (const bad of ["http://youtube.com/watch?v=1", "https://evil.example.com/v", "https://youtube.com.evil.com/v", "javascript:alert(1)", "not a url"]) {
-      expect((await post(fresh.auth, "/players/me/media/videos", { url: bad })).status).toBe(422);
+  it("adds YouTube videos to a sports profile — any link form is stored as an id — max 6 per sport", async () => {
+    const { auth } = await withFootball();
+    const ID = "dQw4w9WgXcQ";
+    for (const [i, url] of [`https://www.youtube.com/watch?v=${ID}&t=5s`, `https://youtu.be/${YT(2).slice(-11)}`, `https://youtube.com/shorts/${YT(3).slice(-11)}`, `https://www.youtube.com/embed/${YT(4).slice(-11)}`, YT(5).slice(-11), `https://m.youtube.com/watch?v=${YT(6).slice(-11)}`].entries()) {
+      const res = await video(auth, url);
+      expect(res.status, `${i} ${url}`).toBe(201);
     }
+    const last = (await get(auth, "/players/me")).body.data.media;
+    expect(last[0]).toMatchObject({ type: "VIDEO_LINK", source: "YOUTUBE", videoId: ID, sportId: w.football.id, url: `https://www.youtube.com/watch?v=${ID}`, thumbnailUrl: `https://img.youtube.com/vi/${ID}/hqdefault.jpg` });
+    const over = await video(auth, YT(7));
+    expect(over.status).toBe(409);
+    expect(over.body.error.code).toBe("PLAYER_MEDIA_LIMIT");
+  });
+
+  it("rejects other sites and junk, duplicates, sports the player doesn't have, and UPLOAD (not available yet)", async () => {
+    const { auth } = await withFootball();
+    for (const bad of ["https://vimeo.com/123", "https://fb.watch/xyz", "https://evil.example.com/watch?v=dQw4w9WgXcQ", "https://youtube.com.evil.com/watch?v=dQw4w9WgXcQ", "https://www.youtube.com/playlist?list=PL123", "javascript:alert(1)", "not a url", "https://youtu.be/short"]) {
+      expect((await video(auth, bad)).status, bad).toBe(422);
+    }
+    expect((await video(auth, YT(1))).status).toBe(201);
+    expect((await video(auth, YT(1))).body.error.code).toBe("PLAYER_MEDIA_DUPLICATE");
+    expect((await post(auth, "/players/me/media/videos", { sportId: w.cricket.id, url: YT(2) })).status).toBe(404);
+    const up = await video(auth, YT(3), { source: "UPLOAD" });
+    expect(up.status).toBe(400);
+    expect(up.body.error.code).toBe("UPLOAD_NOT_AVAILABLE");
+    expect(await prisma.playerMedia.count()).toBe(1);
+  });
+
+  it("sets and clears a caption, only on my own media", async () => {
+    const a = await withFootball("a@example.com");
+    const b = await withFootball("b@example.com");
+    await photo(a.auth);
+    const m = await prisma.playerMedia.findFirstOrThrow();
+    const set = await patch(a.auth, `/players/me/media/${m.id}`, { caption: "  Final, 2026  " });
+    expect(set.body.data.media[0].caption).toBe("Final, 2026");
+    expect((await patch(b.auth, `/players/me/media/${m.id}`, { caption: "mine now" })).status).toBe(404);
+    expect((await patch(a.auth, `/players/me/media/${m.id}`, { caption: null })).body.data.media[0].caption).toBeNull();
+    expect((await patch(a.auth, `/players/me/media/${m.id}`, { caption: "x".repeat(121) })).status).toBe(422);
+  });
+
+  it("sets a cover photo, replaces it (the old file is deleted), and removes it", async () => {
+    const { auth, user } = await withProfile();
+    expect((await get(auth, "/players/me")).body.data.coverUrl).toBeNull();
+    const first = await cover(auth);
+    expect(first.status).toBe(200);
+    expect(first.body.data.coverUrl).toContain("/player-covers/" + user.id + "/");
+    const oldId = (await prisma.playerProfile.findFirstOrThrow()).coverPublicId!;
+    const second = await cover(auth, PNG, "image/png");
+    expect(second.body.data.coverUrl).not.toBe(first.body.data.coverUrl);
+    expect(fakeStorage.files.has(oldId)).toBe(false);
+    expect(fakeStorage.files.size).toBe(1);
+    const gone = await del(auth, "/players/me/media/cover");
+    expect(gone.body.data.coverUrl).toBeNull();
+    expect(fakeStorage.files.size).toBe(0);
+    expect(JSON.stringify(second.body)).not.toContain("coverPublicId");
+  });
+
+  it("shows the cover, captions and videos on the public profile", async () => {
+    const { auth } = await withFootball();
+    await cover(auth);
+    await photo(auth);
+    await video(auth, YT(1), { caption: "Goal vs Rangpur" });
+    const viewer = await signedIn("viewer@example.com");
+    const pid = (await prisma.playerProfile.findFirstOrThrow()).id;
+    const pub = (await get(viewer.auth, `/players/${pid}`)).body.data;
+    expect(pub.coverUrl).toBeTruthy();
+    expect(pub.media.map((m: { type: string }) => m.type)).toEqual(["PHOTO", "VIDEO_LINK"]);
+    expect(pub.media[1].caption).toBe("Goal vs Rangpur");
   });
 
   it("removes a photo from the DB and from storage; a storage failure doesn't block removal", async () => {
@@ -369,10 +459,10 @@ describe("player media", () => {
     expect(await prisma.playerMedia.count()).toBe(0);
   });
 
-  it("removing a video link touches no storage; unknown/other users' media is 404", async () => {
-    const a = await withProfile("a@example.com");
-    const b = await withProfile("b@example.com");
-    await post(a.auth, "/players/me/media/videos", { url: "https://youtu.be/abc" });
+  it("removing a video touches no storage; unknown/other users' media is 404", async () => {
+    const a = await withFootball("a@example.com");
+    const b = await withFootball("b@example.com");
+    await video(a.auth, YT(1));
     const m = await prisma.playerMedia.findFirstOrThrow();
     expect((await del(b.auth, `/players/me/media/${m.id}`)).status).toBe(404);
     expect(await prisma.playerMedia.count()).toBe(1);
@@ -381,17 +471,21 @@ describe("player media", () => {
     expect((await del(a.auth, "/players/me/media/nope")).status).toBe(404);
   });
 
-  it("reorders media, and insists on the exact set of ids", async () => {
-    const { auth } = await withProfile();
+  it("reorders the gallery photos, and insists on the exact set of photo ids", async () => {
+    const { auth } = await withFootball();
     await photo(auth);
-    await post(auth, "/players/me/media/videos", { url: "https://youtu.be/abc" });
+    await video(auth, YT(1));
     await photo(auth);
-    const [a, b, c] = (await prisma.playerMedia.findMany({ orderBy: { order: "asc" } })).map((m) => m.id);
+    await photo(auth);
+    const photos = (await prisma.playerMedia.findMany({ where: { type: "PHOTO" }, orderBy: { order: "asc" } })).map((m) => m.id);
+    const [a, b, c] = photos as [string, string, string];
 
     const ok = await api().put(`${V1}/players/me/media/order`).set(auth).send({ ids: [c, a, b] });
-    expect(ok.body.data.media.map((m: { id: string }) => m.id)).toEqual([c, a, b]);
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.media.filter((m: { type: string }) => m.type === "PHOTO").map((m: { id: string }) => m.id)).toEqual([c, a, b]);
 
-    for (const ids of [[a, b], [a, b, c, c], [a, b, "other"], [a, a, b]]) {
+    const videoId = (await prisma.playerMedia.findFirstOrThrow({ where: { type: "VIDEO_LINK" } })).id;
+    for (const ids of [[a, b], [a, b, c, c], [a, b, "other"], [a, a, b], [a, b, c, videoId]]) {
       expect((await api().put(`${V1}/players/me/media/order`).set(auth).send({ ids })).status).toBe(422);
     }
   });

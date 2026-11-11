@@ -3,6 +3,8 @@ export interface PushMessage {
   body: string;
   /** FCM data payload — every value must be a string. */
   data: Record<string, string>;
+  /** Android notification channel (games, messages, recruitment, system). */
+  channel?: string;
 }
 
 export interface PushResult {

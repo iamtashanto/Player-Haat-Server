@@ -1,5 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { locationInclude } from "../locations/location.service.js";
+import { storage } from "../../lib/storage/index.js";
+import { youtubeThumbnail, youtubeWatchUrl } from "../../lib/youtube.js";
+import { emptyReliability, noExtras, type CardExtras } from "./reliability.service.js";
 
 export const profileInclude = {
   user: { select: { name: true, avatarUrl: true } },
@@ -15,6 +18,37 @@ export const profileInclude = {
 } satisfies Prisma.PlayerProfileInclude;
 
 export type FullProfile = Prisma.PlayerProfileGetPayload<{ include: typeof profileInclude }>;
+
+/** URLs are built from the stored path, so changing the media domain never needs a data migration. */
+export function imageUrl(publicId: string | null | undefined, stored: string | null | undefined, transform?: string): string | null {
+  if (!publicId) return stored ?? null;
+  try {
+    return storage.urlFor(publicId, transform);
+  } catch {
+    return stored ?? null; // provider not configured (tests, local): fall back to what was stored
+  }
+}
+
+const coverUrl = (p: { coverPublicId: string | null; coverUrl: string | null }) => imageUrl(p.coverPublicId, p.coverUrl);
+
+type MediaRow = FullProfile["media"][number];
+export function toMediaItem(m: MediaRow, assets?: Map<string, { width: number | null; height: number | null }>) {
+  const dims = (!assets || m.type === "VIDEO_LINK" || !m.publicId ? undefined : assets.get(m.publicId)) ?? undefined;
+  const video = m.type === "VIDEO_LINK";
+  return {
+    id: m.id,
+    type: m.type,
+    url: video && m.videoId ? youtubeWatchUrl(m.videoId) : (imageUrl(m.publicId, m.url) ?? m.url),
+    thumbnailUrl: video ? (m.videoId ? youtubeThumbnail(m.videoId) : null) : imageUrl(m.publicId, m.url, "w_400"),
+    order: m.order,
+    caption: m.caption,
+    source: m.source,
+    videoId: m.videoId,
+    sportId: m.sportId,
+    width: dims?.width ?? null,
+    height: dims?.height ?? null,
+  };
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -50,7 +84,7 @@ function sportEntry(s: FullProfile["sports"][number], detailed: boolean) {
  * The compact shape used in search results. Only public sport profiles are listed; those that matched
  * the search's sport-level filters come first, so a recruiter lands on the most relevant one.
  */
-export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], shortlisted = false) {
+export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], shortlisted = false, extras: CardExtras = noExtras) {
   const matched = new Set(matchedSportIds);
   const sports = p.sports.filter(isPublicSport).sort((a, b) => Number(matched.has(b.sportId)) - Number(matched.has(a.sportId)));
   return {
@@ -66,24 +100,29 @@ export function toPlayerCard(p: FullProfile, matchedSportIds: number[] = [], sho
     matchedSportIds: sports.filter((s) => matched.has(s.sportId)).map((s) => s.sportId),
     // Whether the viewing recruiter has saved this player (always false for everyone else).
     shortlisted,
+    availableToday: extras.available.has(p.id),
+    reliability: extras.reliability.get(p.userId) ?? emptyReliability(round2(p.avgRating), p.ratingCount),
   };
 }
 
 /** What other users see. Deliberately omits email, phone, birth year and the user id. */
-export function toPublicProfile(p: FullProfile, shortlisted = false) {
+export function toPublicProfile(p: FullProfile, shortlisted = false, extras: CardExtras = noExtras) {
   return {
-    ...toPlayerCard(p, [], shortlisted),
+    ...toPlayerCard(p, [], shortlisted, extras),
     sports: p.sports.filter(isPublicSport).map((s) => sportEntry(s, true)),
     bio: p.bio,
-    media: p.media.map((m) => ({ id: m.id, type: m.type, url: m.url, order: m.order })),
+    coverUrl: coverUrl(p),
+    coverWidth: (p.coverPublicId && extras.assets.get(p.coverPublicId)?.width) || null,
+    coverHeight: (p.coverPublicId && extras.assets.get(p.coverPublicId)?.height) || null,
+    media: p.media.map((m) => toMediaItem(m, extras.assets)),
     memberSince: p.createdAt.toISOString(),
   };
 }
 
 /** The owner sees every sport profile, including ones they (or an admin) have hidden, and why. */
-export function toMyProfile(p: FullProfile) {
+export function toMyProfile(p: FullProfile, extras: CardExtras = noExtras) {
   return {
-    ...toPublicProfile(p),
+    ...toPublicProfile(p, false, extras),
     sports: p.sports.map((s) => ({ ...sportEntry(s, true), isVisible: s.isVisible, hiddenByAdmin: s.hiddenByAdminAt !== null })),
     isVisible: p.isVisible,
     hiddenByAdmin: p.hiddenByAdminAt !== null,

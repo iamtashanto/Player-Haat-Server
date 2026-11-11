@@ -3,6 +3,9 @@ import type { RequestHandler } from "express";
 import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { deleteImagesQuietly } from "../../lib/storage/safe-delete.js";
+import { uploadOwnedImage } from "../media/media.service.js";
+import { imageUrl } from "../players/players.presenter.js";
 import { authUser } from "../../middlewares/auth.js";
 import type { createRecruiterBody, updateRecruiterBody } from "./recruiters.schema.js";
 
@@ -25,6 +28,7 @@ const toCard = (r: Full) => ({
   district: r.district,
   sportIds: r.sportIds,
   verifiedBadge: r.verifiedBadge,
+  logoUrl: imageUrl(r.logoPublicId, r.logoUrl),
 });
 
 async function assertValidSports(sportIds: number[]) {
@@ -42,6 +46,21 @@ export async function getMyRecruiterProfile(userId: string) {
   const r = await prisma.recruiterProfile.findUnique({ where: { userId }, include });
   if (!r) throw AppError.notFound(NOT_FOUND, "Set up your recruiter profile first");
   return toCard(r);
+}
+
+/** Sets the organisation logo (replacing the old file), or clears it with `null`. */
+export async function setLogo(userId: string, buffer: Buffer | null) {
+  const profile = await prisma.recruiterProfile.findUnique({ where: { userId }, select: { id: true, logoPublicId: true } });
+  if (!profile) throw AppError.notFound(NOT_FOUND, "Set up your recruiter profile first");
+  const image = buffer ? await uploadOwnedImage(userId, "recruiter-logo", buffer) : null;
+  try {
+    await prisma.recruiterProfile.update({ where: { id: profile.id }, data: { logoUrl: image?.url ?? null, logoPublicId: image?.publicId ?? null } });
+  } catch (err) {
+    await deleteImagesQuietly([image?.publicId]);
+    throw err;
+  }
+  await deleteImagesQuietly([profile.logoPublicId]);
+  return getMyRecruiterProfile(userId);
 }
 
 export async function createRecruiterProfile(userId: string, input: z.infer<typeof createRecruiterBody>) {

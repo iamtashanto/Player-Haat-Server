@@ -66,3 +66,27 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
     .sort((a, b) => rank(a) - rank(b))
     .slice(0, limit);
 }
+
+import { AppError } from "../../lib/errors.js";
+import { locate } from "./boundaries.js";
+
+/**
+ * The district and upazila that CONTAIN a point (polygons from OCHA/HDX COD-AB, in memory), with parents and ids.
+ * Upazila is null where the dataset has no polygon (city-corporation thanas, newer upazilas): the client then asks the
+ * user to pick it. Unions have no boundary data, so they stay a manual pick (the client pre-filters by upazila).
+ * The coordinate is used for this lookup only: never stored, never logged.
+ */
+export async function containingArea(lat: number, lng: number) {
+  const hit = locate(lat, lng);
+  if (!hit) throw AppError.notFound(undefined, "No Bangladesh area at this point");
+  const district = await prisma.district.findFirst({
+    where: { nameEn: hit.district },
+    select: { id: true, nameBn: true, nameEn: true, division: { select: { id: true, nameBn: true, nameEn: true } } },
+  });
+  if (!district) throw AppError.notFound(undefined, "No Bangladesh area at this point");
+  const upazila = hit.upazila
+    ? await prisma.upazila.findFirst({ where: { districtId: district.id, nameEn: hit.upazila }, select: { id: true, nameBn: true, nameEn: true } })
+    : null;
+  const { division, ...d } = district;
+  return { division, district: d, upazila, precision: upazila ? ("upazila" as const) : ("district" as const), nearBorder: hit.nearBorder };
+}

@@ -9,7 +9,9 @@ export const STORAGE_PREFIX = `${ROOT}/`;
 const FOLDER: Record<ImageKind, string> = {
   avatar: "avatars",
   "player-photo": "player-photos",
+  "player-cover": "player-covers",
   "team-logo": "team-logos",
+  "recruiter-logo": "recruiter-logos",
   "verification-doc": "verification-docs",
 };
 

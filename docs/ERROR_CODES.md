@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-149 codes. Messages are developer-facing English and may change; **codes are stable**.
+160 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -32,6 +32,12 @@ Every error response has this shape — the app should translate `error.code`, n
 | `APPLICATION_EXISTS` | 409 | You already applied (… | `modules/applications/applications.service.ts` |
 | `APPLICATION_NOT_FOUND` | 404 | Application not found | `modules/applications/applications.service.ts` |
 | `APPLICATION_NOT_PENDING` | 409 | Application is… | `modules/applications/applications.service.ts` |
+
+## ATTENDANCE
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `ATTENDANCE_WINDOW_CLOSED` | 409 | Attendance can be marked for… | `modules/games/games.service.ts` |
 
 ## AUTH
 
@@ -67,6 +73,13 @@ Every error response has this shape — the app should translate `error.code`, n
 | `AUTH_TOTP_NOT_STARTED` | 409 | Start the setup first | `modules/admin/admin-auth.service.ts` |
 | `AUTH_UNAUTHENTICATED` | 401 | Missing, malformed or invalid access token | `lib/jwt.ts`, `middlewares/auth.ts` |
 | `AUTH_WRONG_PASSWORD` | 400 | Password is incorrect | `modules/auth/account.service.ts`, `modules/auth/auth.service.ts` |
+
+## AVAILABILITY
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `AVAILABILITY_SPORT_NOT_ADDED` | 400 | You can only mark yourself available for sports on your profile | `modules/players/availability.service.ts` |
+| `AVAILABILITY_WINDOW_INVALID` | 400 | Times must be HH:MM | `modules/players/availability.service.ts` |
 
 ## BOOST
 
@@ -130,6 +143,20 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `EVENT_RECRUITERS_ONLY` | 403 | Only recruiters can launch events | `modules/requests/requests.service.ts` |
 
+## EVIDENCE
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `EVIDENCE_CORRUPT` | 500 | Document can't be read | `lib/evidence-crypto.ts` |
+| `EVIDENCE_NOT_CONFIGURED` | 503 | Document uploads aren't set up on this server | `lib/evidence-crypto.ts` |
+
+## GAME
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `GAME_CHAT_ARCHIVED` | 409 | This chat is archived and read-only | `modules/games/games.service.ts` |
+| `GAME_CHAT_NOT_FOUND` | 404 | Game chat not found | `modules/games/games.service.ts` |
+
 ## INTERNAL
 
 | Code | HTTP | Developer message | Raised in |
@@ -174,13 +201,13 @@ Every error response has this shape — the app should translate `error.code`, n
 | `MEDIA_NOT_FOUND` | 404 | Media not found | `modules/admin/admin.service.ts` |
 | `MEDIA_NOT_OWNED` | 403 | That image is not yours | `modules/media/media.service.ts` |
 | `MEDIA_TOO_LARGE` | 413 | Image must be at most… | `middlewares/upload.ts` |
-| `MEDIA_UNSUPPORTED_TYPE` | 415 | Only jpeg, png, webp and heic images are allowed | `middlewares/upload.ts` |
+| `MEDIA_UNSUPPORTED_TYPE` | 415 | Only jpeg, png, webp and heic images are allowed | `middlewares/upload.ts`, `modules/verification/verification.service.ts` |
 
 ## NOT
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
-| `NOT_FOUND` | 404 | Resource not found | `(shared middleware)`, `modules/players/players.service.ts`, `modules/recruiters/recruiters.service.ts` |
+| `NOT_FOUND` | 404 | Resource not found | `(shared middleware)`, `modules/locations/locations.service.ts`, `modules/players/players.service.ts`, `modules/recruiters/recruiters.service.ts` |
 
 ## NOTIFICATION
 
@@ -211,14 +238,15 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `PLAYER_ACHIEVEMENT_LIMIT` | 409 | You can list up to… | `modules/players/players.service.ts` |
 | `PLAYER_ACHIEVEMENT_NOT_FOUND` | 404 | Achievement not found | `modules/players/players.service.ts` |
+| `PLAYER_MEDIA_DUPLICATE` | 409 | That video is already on this sports profile | `modules/players/player-media.service.ts` |
 | `PLAYER_MEDIA_LIMIT` | 409 | You can have at most… | `modules/players/player-media.service.ts` |
 | `PLAYER_MEDIA_NOT_FOUND` | 404 | Media not found | `modules/players/player-media.service.ts` |
 | `PLAYER_NO_PHONE` | 409 | This player hasn't added a phone number | `modules/contact/contact.service.ts` |
 | `PLAYER_PROFILE_EXISTS` | 409 | You already have a player profile | `modules/players/players.service.ts` |
-| `PLAYER_PROFILE_NOT_FOUND` | 404 | Player profile not found | `modules/admin/admin.service.ts`, `modules/chat/chat.service.ts`, `modules/contact/contact.service.ts`, `modules/invites/invites.service.ts`, `modules/players/player-media.service.ts`, `modules/ratings/ratings.service.ts`, `modules/shortlist/shortlist.service.ts` |
+| `PLAYER_PROFILE_NOT_FOUND` | 404 | Player profile not found | `modules/admin/admin.service.ts`, `modules/chat/chat.service.ts`, `modules/contact/contact.service.ts`, `modules/invites/invites.service.ts`, `modules/players/availability.service.ts`, `modules/players/player-media.service.ts`, `modules/ratings/ratings.service.ts`, `modules/shortlist/shortlist.service.ts` |
 | `PLAYER_PROFILE_REQUIRED` | 409 | Create your player profile before applying | `modules/applications/applications.service.ts` |
 | `PLAYER_SPORT_EXISTS` | 409 | You already added that sport; update it instead | `modules/players/players.service.ts` |
-| `PLAYER_SPORT_NOT_FOUND` | 404 | Sport profile not found | `modules/admin/admin.service.ts`, `modules/players/players.service.ts`, `modules/verification/verification.service.ts` |
+| `PLAYER_SPORT_NOT_FOUND` | 404 | Sport profile not found | `modules/admin/admin.service.ts`, `modules/players/player-media.service.ts`, `modules/players/players.service.ts`, `modules/verification/verification.service.ts` |
 | `PLAYER_SPORT_REQUIRED` | 409 | Add… | `modules/applications/applications.service.ts` |
 
 ## POSITION
@@ -280,11 +308,11 @@ Every error response has this shape — the app should translate `error.code`, n
 | `REQUEST_LIMIT` | 409 | You can have at most… | `modules/requests/requests.service.ts` |
 | `REQUEST_NO_ACCEPTED_PLAYERS` | 409 | No players were accepted — cancel the request instead | `modules/requests/requests.service.ts` |
 | `REQUEST_NOT_COMPLETED` | 409 | You can rate once the poster marks the match completed | `modules/ratings/ratings.service.ts` |
-| `REQUEST_NOT_FOUND` | 404 | Request not found | `modules/admin/admin.service.ts`, `modules/applications/applications.service.ts`, `modules/public/public.routes.ts`, `modules/ratings/ratings.service.ts`, `modules/requests/request-lock.ts`, `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_FOUND` | 404 | Request not found | `modules/admin/admin.service.ts`, `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/public/public.routes.ts`, `modules/ratings/ratings.service.ts`, `modules/requests/request-lock.ts`, `modules/requests/requests.service.ts` |
 | `REQUEST_NOT_HIDDEN` | 409 | Not hidden | `modules/admin/admin.service.ts` |
-| `REQUEST_NOT_OPEN` | 409 | This request is… | `modules/applications/applications.service.ts`, `modules/requests/requests.service.ts` |
-| `REQUEST_NOT_OWNER` | 403 | Only the poster can see applicants | `modules/applications/applications.service.ts`, `modules/requests/requests.service.ts` |
-| `REQUEST_NOT_STARTED` | 409 | The match hasn't started yet | `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_OPEN` | 409 | This request is… | `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_OWNER` | 403 | Only the poster can see applicants | `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_STARTED` | 409 | The game hasn't started yet | `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
 | `REQUEST_OWN` | 403 | You can't apply to your own request | `modules/applications/applications.service.ts` |
 
 ## ROUTE
@@ -331,8 +359,8 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
-| `STORAGE_NOT_CONFIGURED` | 503 | Image storage is not configured | `lib/storage/cloudinary.ts` |
-| `STORAGE_UPLOAD_FAILED` | 502 | Image upload failed | `lib/storage/cloudinary.ts` |
+| `STORAGE_NOT_CONFIGURED` | 503 | Image storage is not configured | `lib/storage/cloudinary.ts`, `lib/storage/tashanto.ts`, `modules/verification/verification.service.ts` |
+| `STORAGE_UPLOAD_FAILED` | 502 | Image upload failed | `lib/storage/cloudinary.ts`, `lib/storage/tashanto.ts` |
 
 ## TEAM
 
@@ -359,6 +387,12 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `UPAZILA_NOT_FOUND` | 404 | Upazila not found | `modules/admin/admin.service.ts` |
 
+## UPLOAD
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `UPLOAD_NOT_AVAILABLE` | 400 | Uploading videos isn't available yet. Add a YouTube link instead. | `modules/players/player-media.service.ts` |
+
 ## USER
 
 | Code | HTTP | Developer message | Raised in |
@@ -383,5 +417,12 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `VERIFICATION_ALREADY_REVIEWED` | 409 | Already… | `modules/verification/verification.service.ts` |
+| `VERIFICATION_FILE_NOT_FOUND` | 404 | Document not found | `modules/verification/verification.service.ts` |
 | `VERIFICATION_NOT_FOUND` | 404 | Verification request not found | `modules/verification/verification.service.ts` |
 | `VERIFICATION_PENDING` | 409 | You already have a request waiting for review | `modules/verification/verification.service.ts` |
+
+## WEB
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `WEB_PUSH_NOT_CONFIGURED` | 503 | Web push isn't set up on this server | `modules/notifications/notifications.service.ts` |

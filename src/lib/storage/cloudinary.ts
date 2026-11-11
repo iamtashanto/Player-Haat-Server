@@ -7,6 +7,8 @@ import type { ImageKind, StorageProvider, StoredImage } from "./types.js";
 const TRANSFORM: Record<ImageKind, UploadApiOptions["transformation"]> = {
   avatar: [{ width: 512, height: 512, crop: "fill", gravity: "face" }],
   "player-photo": [{ width: 1600, height: 1600, crop: "limit" }],
+  "player-cover": [{ width: 1800, height: 600, crop: "limit" }],
+  "recruiter-logo": [{ width: 512, height: 512, crop: "limit" }],
   "team-logo": [{ width: 512, height: 512, crop: "limit" }],
   "verification-doc": [{ width: 2000, height: 2000, crop: "limit" }], // legible documents, bounded size
 };

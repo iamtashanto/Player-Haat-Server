@@ -159,6 +159,21 @@ adminRoutes.delete("/sport-profiles/:id/media/:mediaId", validate({ params: s.me
   ok(res, await svc.deleteSportMedia(adminId(req), params.id, params.mediaId));
 });
 
+adminRoutes.delete("/users/:id/media/:mediaId", validate({ params: s.mediaParams, body: s.reasonBody }), async (req, res) => {
+  const { params, body } = valid<B<typeof s.reasonBody>, B<typeof s.mediaParams>>(req);
+  ok(res, await svc.removeUserMedia(adminId(req), params.id, params.mediaId, body.reason));
+});
+adminRoutes.delete("/users/:id/avatar", validate({ params: s.userParams, body: s.reasonBody }), async (req, res) => {
+  ok(res, await svc.removeUserImage(adminId(req), idOf(req), "avatar", valid<B<typeof s.reasonBody>>(req).body.reason));
+});
+adminRoutes.delete("/users/:id/cover", validate({ params: s.userParams, body: s.reasonBody }), async (req, res) => {
+  ok(res, await svc.removeUserImage(adminId(req), idOf(req), "cover", valid<B<typeof s.reasonBody>>(req).body.reason));
+});
+adminRoutes.delete("/users/:id/logo", validate({ params: s.userParams, body: s.reasonBody }), async (req, res) => {
+  ok(res, await svc.removeUserImage(adminId(req), idOf(req), "logo", valid<B<typeof s.reasonBody>>(req).body.reason));
+});
+adminRoutes.get("/media/usage", async (_req, res) => ok(res, await svc.mediaUsage()));
+
 adminRoutes.post("/sport-profiles/:id/hide", validate({ params: s.sportProfileParams, body: s.reasonBody }), async (req, res) => {
   ok(res, await svc.setSportProfileHidden(adminId(req), idOf(req), true, valid<B<typeof s.reasonBody>>(req).body.reason));
 });
@@ -277,6 +292,17 @@ adminRoutes.get("/notifications/preview", validate({ query: s.notificationFilter
   ok(res, await svc.previewNotificationCount(query));
 });
 
+adminRoutes.get("/announcements", validate({ query: s.announcementsQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, B<typeof s.announcementsQuery>>(req);
+  const { items, nextCursor } = await svc.listAnnouncements(query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
+adminRoutes.get("/push-log", validate({ query: s.pushLogQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, B<typeof s.pushLogQuery>>(req);
+  const { items, nextCursor } = await svc.listPushLog(query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
+adminRoutes.get("/push-stats", async (_req, res) => ok(res, await svc.pushStats()));
 adminRoutes.post("/notifications/broadcast", validate({ body: s.broadcastNotificationBody }), async (req, res) => {
   const { body } = valid<B<typeof s.broadcastNotificationBody>>(req);
   ok(res, await svc.broadcastNotification(adminId(req), body));

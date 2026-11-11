@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
+import { assetDims } from "../players/reliability.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { deleteImagesQuietly } from "../../lib/storage/safe-delete.js";
 import { storage } from "../../lib/storage/index.js";
@@ -23,13 +24,15 @@ type Row = Prisma.TeamGetPayload<{ include: typeof include }>;
 
 const newCode = () => randomBytes(4).toString("hex").toUpperCase(); // 8 chars, 32 bits; joins are rate-limited
 
-function present(t: Row, viewerId: string, detailed: boolean) {
+function present(t: Row, viewerId: string, detailed: boolean, dims?: { width: number | null; height: number | null }) {
   const isCaptain = t.captainId === viewerId;
   const active = t.members.filter((m) => m.user.status === "ACTIVE");
   return {
     id: t.id,
     name: t.name,
     logoUrl: t.logoUrl,
+    logoWidth: dims?.width ?? null,
+    logoHeight: dims?.height ?? null,
     sport: t.sport,
     location: { district: t.district, upazila: t.upazila, union: t.union },
     memberCount: active.length,
@@ -39,6 +42,15 @@ function present(t: Row, viewerId: string, detailed: boolean) {
     ...(isCaptain && { joinCode: t.joinCode }), // only the captain can hand it out
     ...(detailed && { members: active.map((m) => ({ memberId: m.id, name: m.user.name, avatarUrl: m.user.avatarUrl, role: m.role, profileId: m.user.playerProfile?.id ?? null })) }),
   };
+}
+
+async function presentOne(t: Row, viewerId: string, detailed: boolean) {
+  const dims = t.logoPublicId ? (await assetDims([t.logoPublicId])).get(t.logoPublicId) : undefined;
+  return present(t, viewerId, detailed, dims);
+}
+async function presentMany(rows: Row[], viewerId: string) {
+  const dims = await assetDims(rows.map((r) => r.logoPublicId));
+  return rows.map((t) => present(t, viewerId, false, t.logoPublicId ? dims.get(t.logoPublicId) : undefined));
 }
 
 const load = async (id: string) => {
@@ -62,16 +74,16 @@ export async function create(userId: string, input: z.infer<typeof createTeamBod
     data: { name: input.name, sportId: input.sportId, districtId: input.districtId, upazilaId: input.upazilaId, unionId: input.unionId ?? null, captainId: userId, members: { create: { userId, role: "CAPTAIN" } } },
     include,
   });
-  return present(t, userId, true);
+  return presentOne(t, userId, true);
 }
 
 export async function mine(userId: string) {
   const rows = await prisma.team.findMany({ where: { OR: [{ captainId: userId }, { members: { some: { userId } } }] }, include, orderBy: { createdAt: "desc" } });
-  return rows.map((t) => present(t, userId, false));
+  return presentMany(rows, userId);
 }
 
 export async function get(userId: string, id: string) {
-  return present(await load(id), userId, true);
+  return presentOne(await load(id), userId, true);
 }
 
 export async function update(userId: string, id: string, patch: z.infer<typeof updateTeamBody>) {
@@ -88,13 +100,13 @@ export async function update(userId: string, id: string, patch: z.infer<typeof u
   }
   const updated = await prisma.team.update({ where: { id }, data: { ...(patch.name !== undefined && { name: patch.name }), districtId, upazilaId, unionId, ...logo }, include });
   if (logo && t.logoPublicId && t.logoPublicId !== logo.logoPublicId) await deleteImagesQuietly([t.logoPublicId]);
-  return present(updated, userId, true);
+  return presentOne(updated, userId, true);
 }
 
 export async function resetCode(userId: string, id: string) {
   await loadAsCaptain(userId, id);
   // A fresh code each call; a clash with another team's is astronomically unlikely, and the unique index would refuse it.
-  return present(await prisma.team.update({ where: { id }, data: { joinCode: newCode() }, include }), userId, true);
+  return presentOne(await prisma.team.update({ where: { id }, data: { joinCode: newCode() }, include }), userId, true);
 }
 
 export async function join(userId: string, input: z.infer<typeof joinBody>) {
@@ -110,7 +122,7 @@ export async function join(userId: string, input: z.infer<typeof joinBody>) {
   }
   const joiner = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
   notify({ userIds: [t.captainId], type: "TEAM_JOINED", data: { teamId: t.id }, params: { actor: `${joiner.name} · ${t.name}` } });
-  return present(await load(t.id), userId, true);
+  return presentOne(await load(t.id), userId, true);
 }
 
 export async function leave(userId: string, id: string) {
@@ -127,7 +139,7 @@ export async function removeMember(userId: string, id: string, memberId: string)
   if (!m) throw AppError.notFound("TEAM_MEMBER_NOT_FOUND", "Member not found");
   if (m.userId === userId) throw AppError.conflict("TEAM_CAPTAIN_CANNOT_LEAVE", "You can't remove yourself; delete the team instead");
   await prisma.teamMember.delete({ where: { id: memberId } });
-  return present(await load(id), userId, true);
+  return presentOne(await load(id), userId, true);
 }
 
 export async function remove(userId: string, id: string) {

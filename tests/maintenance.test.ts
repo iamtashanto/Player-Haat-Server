@@ -113,7 +113,7 @@ describe("purgeExpiredData", () => {
       data: Array.from({ length: 11 }, (_, i) => ({ userId: u.user.id, tokenHash: `old-${i}`, familyId: "f", expiresAt: daysAgo(30) })),
     });
     expect((await purgeExpiredData(new Date(), { chunk: 4 })).refreshTokens).toBe(11);
-    expect(await purgeExpiredData()).toEqual({ refreshTokens: 0, verificationCodes: 0, notifications: 0 });
+    expect(await purgeExpiredData()).toEqual({ refreshTokens: 0, verificationCodes: 0, notifications: 0, pushLog: 0 });
   });
 });
 

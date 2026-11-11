@@ -219,6 +219,37 @@ describe("sorting", () => {
     expect(res.body.data.map((p: { name: string }) => p.name)).toEqual(["New", "Mid", "Old"]);
   });
 
+  it("near: same union, then same upazila, then same district, then the rest (rating breaks ties); pages never overlap", async () => {
+    await makePlayer(w, { name: "Far", avgRating: 5, ratingCount: 9, districtId: w.dhaka.id, upazilaId: w.savar.id });
+    await makePlayer(w, { name: "SameDistrict", avgRating: 5, ratingCount: 9, upazilaId: w.galachipa.id });
+    await makePlayer(w, { name: "SameUpazilaLow", avgRating: 3, ratingCount: 2, upazilaId: w.kalapara.id });
+    await makePlayer(w, { name: "SameUpazilaHigh", avgRating: 4.8, ratingCount: 5, upazilaId: w.kalapara.id });
+    await makePlayer(w, { name: "SameUnion", avgRating: 1, ratingCount: 1, upazilaId: w.kalapara.id, unionId: w.latachapli.id });
+    const near = { sort: "near", nearDistrictId: w.patuakhali.id, nearUpazilaId: w.kalapara.id, nearUnionId: w.latachapli.id };
+    const order = ["SameUnion", "SameUpazilaHigh", "SameUpazilaLow", "SameDistrict", "Far"];
+    expect((await search(near)).body.data.map((p: { name: string }) => p.name)).toEqual(order);
+    // keyset paging over the proximity rank
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let i = 0; i < 6; i++) {
+      const res = await search({ ...near, limit: 2, ...(cursor ? { cursor } : {}) });
+      seen.push(...res.body.data.map((p: { name: string }) => p.name));
+      cursor = res.body.meta.nextCursor ?? undefined;
+      if (!cursor) break;
+    }
+    expect(seen).toEqual(order);
+    // district only (no upazila/union detected)
+    const d = await search({ sort: "near", nearDistrictId: w.patuakhali.id });
+    expect(d.body.data.map((p: { name: string }) => p.name).slice(-1)).toEqual(["Far"]);
+  });
+
+  it("near needs the viewer's district and a cursor from another sort is refused", async () => {
+    expect((await search({ sort: "near" })).status).toBe(422);
+    await makePlayer(w, { name: "X" });
+    const first = await search({ sort: "rating", limit: 1 });
+    expect((await search({ sort: "near", nearDistrictId: w.patuakhali.id, cursor: first.body.meta.nextCursor ?? "bad" })).status).toBe(422);
+  });
+
   it("rejects an unknown sort", async () => {
     expect((await search({ sort: "price" })).status).toBe(422);
   });

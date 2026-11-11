@@ -9,7 +9,19 @@ process.env.JWT_ACCESS_SECRET = "test-secret-test-secret-test-secret-123";
 process.env.GOOGLE_CLIENT_IDS = "test-google-client";
 process.env.APPLE_CLIENT_IDS = "com.playerhaat.test";
 process.env.SMTP_HOST = "";
+process.env.EVIDENCE_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 process.env.PAYMENT_BKASH_NUMBER = "01700000000"; // so the manual mobile-banking flow can be exercised
+
+// Pin the notification clock to noon in Dhaka, so quiet hours never depend on when the suite runs.
+{
+  const { clock } = await import("../src/lib/clock.js");
+  const dhakaNoon = () => {
+    const d = new Date();
+    const local = new Date(d.getTime() + 6 * 3_600_000);
+    return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 12, 0) - 6 * 3_600_000);
+  };
+  clock.now = dhakaNoon;
+}
 
 vi.mock("../src/lib/mailer.js", async () => {
   const { mailbox } = await import("./mailbox.js");
@@ -26,6 +38,10 @@ vi.mock("../src/lib/storage/index.js", async () => {
 vi.mock("../src/lib/push/index.js", async () => {
   const { fakePush } = await import("./fake-push.js");
   return { push: fakePush };
+});
+vi.mock("../src/lib/webpush/index.js", async () => {
+  const { fakeWebPush } = await import("./fake-webpush.js");
+  return { webPush: fakeWebPush };
 });
 vi.mock("../src/lib/sms/index.js", async () => {
   const { fakeSms } = await import("./fake-sms.js");

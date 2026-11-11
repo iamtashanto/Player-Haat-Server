@@ -3,40 +3,88 @@ import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
+import { randomUUID } from "node:crypto";
+import { decryptEvidence, encryptEvidence } from "../../lib/evidence-crypto.js";
+import { stripImageMetadata } from "../../lib/image-meta.js";
+import { imageSize } from "../../lib/image-size.js";
+import { sniffImageType } from "../../lib/image-sniff.js";
 import { storage } from "../../lib/storage/index.js";
-import { isOwnedBy } from "../../lib/storage/paths.js";
+import { deleteImagesQuietly } from "../../lib/storage/safe-delete.js";
 import { notify } from "../notifications/notifier.js";
 import type { adminQuery, reviewBody, submitRecruiterBody } from "./verification.schema.js";
 
 type Evidence = z.infer<typeof submitRecruiterBody>;
-type Images = { url: string; publicId: string }[];
+type FileRow = { id: string; mime: string; width: number | null; height: number | null };
+type WithFiles = VerificationRequest & { files: FileRow[] };
 
-const images = (v: VerificationRequest): Images => (Array.isArray(v.evidenceImages) ? (v.evidenceImages as Images) : []);
+const filesOf = (v: WithFiles) => v.files.map((f) => ({ id: f.id, mime: f.mime, width: f.width, height: f.height }));
 
-function toStatus(v: VerificationRequest) {
+function toStatus(v: WithFiles) {
   return {
     id: v.id,
     kind: v.kind,
     status: v.status,
     note: v.note,
     evidenceLinks: v.evidenceLinks,
-    evidenceImages: images(v).map((i) => ({ url: i.url })), // the owner never needs the storage ids
+    files: filesOf(v), // ids only: a document has no URL
     reviewNote: v.status === "REJECTED" ? v.reviewNote : null,
     createdAt: v.createdAt.toISOString(),
     reviewedAt: v.reviewedAt?.toISOString() ?? null,
   };
 }
 
-/**
- * Evidence images are named by the client but never trusted: each id must sit in the submitter's own upload
- * folder (so nobody can attach someone else's file), and the URL is rebuilt here from the id.
- */
-function resolveImages(userId: string, input: Evidence): Images {
-  const unique = [...new Set(input.evidenceImages.map((i) => i.publicId))];
-  for (const id of unique) {
-    if (!isOwnedBy(userId, id) || !id.includes("/verification-docs/")) throw AppError.invalid("evidenceImages", "Upload each document with type verification-doc first");
+const withFiles = { files: { select: { id: true, mime: true, width: true, height: true }, orderBy: { createdAt: "asc" } } } satisfies Prisma.VerificationRequestInclude;
+
+// ───────────────────────── private documents ─────────────────────────
+
+/** Encrypts and stores one document under `verification/<userId>/`. Returns facts only; there is no URL to give. */
+export async function uploadFile(userId: string, buffer: Buffer) {
+  const mime = sniffImageType(buffer);
+  if (!mime || mime === "image/heic") throw new AppError("MEDIA_UNSUPPORTED_TYPE", 415, "Documents must be jpeg, png or webp images");
+  if (!storage.putText) throw new AppError("STORAGE_NOT_CONFIGURED", 503, "Document storage isn't set up on this server");
+  const clean = stripImageMetadata(buffer, mime);
+  const size = imageSize(clean, mime);
+  const cipher = encryptEvidence(clean, userId);
+  const stored = await storage.putText(cipher, { folder: `verification/${userId}`, name: randomUUID() });
+  try {
+    const f = await prisma.verificationFile.create({
+      data: { userId, path: stored.path, mediaId: stored.mediaId ?? null, mime, width: size?.width ?? null, height: size?.height ?? null, size: clean.length },
+      select: { id: true, mime: true, width: true, height: true },
+    });
+    return f;
+  } catch (err) {
+    await deleteImagesQuietly([stored.path]);
+    throw err;
   }
-  return unique.map((publicId) => ({ publicId, url: storage.urlFor(publicId) }));
+}
+
+async function readFile(f: { userId: string; path: string; mime: string }) {
+  if (!storage.getText) throw new AppError("STORAGE_NOT_CONFIGURED", 503, "Document storage isn't set up on this server");
+  return { bytes: decryptEvidence(await storage.getText(f.path), f.userId), mime: f.mime };
+}
+
+/** The submitter opens their own upload — attached or not. Everyone else gets a 404, as if it did not exist. */
+export async function ownFile(userId: string, fileId: string) {
+  const f = await prisma.verificationFile.findFirst({ where: { id: fileId, userId } });
+  if (!f) throw AppError.notFound("VERIFICATION_FILE_NOT_FOUND", "Document not found");
+  return readFile(f);
+}
+
+/** An admin opens a document of a request. Every view is audit-logged. */
+export async function adminFile(adminId: string, requestId: string, fileId: string) {
+  const f = await prisma.verificationFile.findFirst({ where: { id: fileId, requestId } });
+  if (!f) throw AppError.notFound("VERIFICATION_FILE_NOT_FOUND", "Document not found");
+  const out = await readFile(f);
+  await prisma.adminAction.create({ data: { adminId, action: "VERIFICATION_FILE_VIEW", targetType: "VERIFICATION", targetId: requestId, metadata: { fileId, ownerId: f.userId } } });
+  return out;
+}
+
+/** Each id must be the submitter's own, still-unattached upload. */
+async function claimFiles(tx: Prisma.TransactionClient, userId: string, requestId: string, input: Evidence) {
+  const ids = [...new Set(input.fileIds)];
+  if (ids.length === 0) return;
+  const { count } = await tx.verificationFile.updateMany({ where: { id: { in: ids }, userId, requestId: null }, data: { requestId } });
+  if (count !== ids.length) throw AppError.invalid("fileIds", "Upload each document with POST /verification/files first");
 }
 
 const isUnique = (e: unknown) => (e as Prisma.PrismaClientKnownRequestError).code === "P2002";
@@ -47,10 +95,11 @@ export async function submitRecruiter(userId: string, input: Evidence) {
   const profile = await prisma.recruiterProfile.findUnique({ where: { userId }, select: { id: true, verifiedBadge: true } });
   if (!profile) throw AppError.notFound("RECRUITER_PROFILE_NOT_FOUND", "Set up your recruiter profile first");
   if (profile.verifiedBadge) throw AppError.conflict("ALREADY_VERIFIED", "You're already verified");
-  const evidenceImages = resolveImages(userId, input);
   try {
-    return toStatus(await prisma.verificationRequest.create({
-      data: { kind: "RECRUITER", submitterId: userId, recruiterProfileId: profile.id, note: input.note ?? null, evidenceLinks: [...new Set(input.evidenceLinks)], evidenceImages },
+    return toStatus(await prisma.$transaction(async (tx) => {
+      const v = await tx.verificationRequest.create({ data: { kind: "RECRUITER", submitterId: userId, recruiterProfileId: profile.id, note: input.note ?? null, evidenceLinks: [...new Set(input.evidenceLinks)] } });
+      await claimFiles(tx, userId, v.id, input);
+      return tx.verificationRequest.findUniqueOrThrow({ where: { id: v.id }, include: withFiles });
     }));
   } catch (err) {
     if (isUnique(err)) throw AppError.conflict("VERIFICATION_PENDING", "You already have a request waiting for review");
@@ -59,7 +108,7 @@ export async function submitRecruiter(userId: string, input: Evidence) {
 }
 
 export async function latestRecruiter(userId: string) {
-  const v = await prisma.verificationRequest.findFirst({ where: { submitterId: userId, kind: "RECRUITER" }, orderBy: { createdAt: "desc" } });
+  const v = await prisma.verificationRequest.findFirst({ where: { submitterId: userId, kind: "RECRUITER" }, orderBy: { createdAt: "desc" }, include: withFiles });
   return v && toStatus(v);
 }
 
@@ -75,10 +124,11 @@ export async function submitStats(userId: string, sportId: number, input: Eviden
   const sp = await ownSport(userId, sportId);
   if (sp.stats === null) throw AppError.invalid("stats", "Add your stats to this sport profile first");
   if (sp.statsVerifiedAt) throw AppError.conflict("ALREADY_VERIFIED", "These stats are already verified");
-  const evidenceImages = resolveImages(userId, input);
   try {
-    return toStatus(await prisma.verificationRequest.create({
-      data: { kind: "PLAYER_STATS", submitterId: userId, playerSportId: sp.id, note: input.note ?? null, evidenceLinks: [...new Set(input.evidenceLinks)], evidenceImages },
+    return toStatus(await prisma.$transaction(async (tx) => {
+      const v = await tx.verificationRequest.create({ data: { kind: "PLAYER_STATS", submitterId: userId, playerSportId: sp.id, note: input.note ?? null, evidenceLinks: [...new Set(input.evidenceLinks)] } });
+      await claimFiles(tx, userId, v.id, input);
+      return tx.verificationRequest.findUniqueOrThrow({ where: { id: v.id }, include: withFiles });
     }));
   } catch (err) {
     if (isUnique(err)) throw AppError.conflict("VERIFICATION_PENDING", "You already have a request waiting for review");
@@ -88,13 +138,14 @@ export async function submitStats(userId: string, sportId: number, input: Eviden
 
 export async function latestStats(userId: string, sportId: number) {
   const sp = await ownSport(userId, sportId);
-  const v = await prisma.verificationRequest.findFirst({ where: { playerSportId: sp.id }, orderBy: { createdAt: "desc" } });
+  const v = await prisma.verificationRequest.findFirst({ where: { playerSportId: sp.id }, orderBy: { createdAt: "desc" }, include: withFiles });
   return v && toStatus(v);
 }
 
 // ───────────────────────── admin ─────────────────────────
 
 const adminInclude = {
+  ...withFiles,
   submitter: { select: { id: true, name: true, email: true, phone: true } },
   recruiterProfile: { select: { id: true, type: true, organization: true, bio: true, verifiedBadge: true } },
   playerSport: { select: { id: true, stats: true, experienceYears: true, currentTeam: true, sport: { select: { code: true, nameEn: true } }, profile: { select: { id: true, user: { select: { name: true } } } } } },

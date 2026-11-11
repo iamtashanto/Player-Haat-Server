@@ -20,6 +20,7 @@ describe("Admin Dashboard Extensions", () => {
     const { summary, charts, recentActivity } = res.body.data;
     expect(summary).toBeDefined();
     expect(summary.users.total).toBeGreaterThanOrEqual(1);
+    expect(summary.play).toEqual({ freeToday: 0, openJoinGamesOpen: 0, attendedLast30Days: 0, noShowsLast30Days: 0, gameChatMessagesLast7Days: 0 });
     expect(charts.signupsTrend).toBeInstanceOf(Array);
     expect(charts.signupsTrend.length).toBe(30);
     expect(charts.sportsDistribution).toBeInstanceOf(Array);

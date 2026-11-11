@@ -3,13 +3,16 @@ import { paramsFromData, renderPush, type Locale } from "../../i18n/push-templat
 import { AppError } from "../../lib/errors.js";
 import { cursorArgs, toPage } from "../../lib/pagination.js";
 import { prisma } from "../../lib/prisma.js";
+import { webPush } from "../../lib/webpush/index.js";
+import { categoryOf, linkFor } from "./categories.js";
+import { getPrefs, setPrefs, type Prefs } from "./preferences.js";
 
 const MAX_DEVICES_PER_USER = 10;
 
 export function toNotification(n: Notification, locale: Locale) {
   const data = (n.data ?? {}) as Record<string, unknown>;
   const { title, body } = renderPush(n.type, paramsFromData(data), locale);
-  return { id: n.id, type: n.type, title, body, data, readAt: n.readAt?.toISOString() ?? null, createdAt: n.createdAt.toISOString() };
+  return { id: n.id, type: n.type, category: categoryOf(n.type), link: linkFor(n.type, data), title, body, data, readAt: n.readAt?.toISOString() ?? null, createdAt: n.createdAt.toISOString() };
 }
 
 export async function registerDevice(userId: string, input: { token: string; platform: "ANDROID" | "IOS" | "WEB" }) {
@@ -63,4 +66,35 @@ export async function markRead(userId: string, id: string) {
 export async function markAllRead(userId: string) {
   const { count } = await prisma.notification.updateMany({ where: { userId, readAt: null }, data: { readAt: new Date() } });
   return { updated: count };
+}
+
+export async function deleteNotification(userId: string, id: string) {
+  const { count } = await prisma.notification.deleteMany({ where: { id, userId } });
+  if (count === 0) throw AppError.notFound("NOTIFICATION_NOT_FOUND", "Notification not found");
+  return { deleted: 1 };
+}
+
+export async function deleteAllNotifications(userId: string) {
+  const { count } = await prisma.notification.deleteMany({ where: { userId } });
+  return { deleted: count };
+}
+
+export const myPreferences = (userId: string) => getPrefs(userId);
+export const savePreferences = (userId: string, input: Partial<Prefs>) => setPrefs(userId, input);
+
+export const webPushKey = () => ({ publicKey: webPush.publicKey });
+
+export async function saveWebSubscription(userId: string, input: { endpoint: string; keys: { p256dh: string; auth: string } }, userAgent?: string) {
+  if (!webPush.enabled) throw new AppError("WEB_PUSH_NOT_CONFIGURED", 503, "Web push isn't set up on this server");
+  await prisma.webPushSubscription.upsert({
+    where: { endpoint: input.endpoint },
+    update: { userId, p256dh: input.keys.p256dh, auth: input.keys.auth, userAgent: userAgent?.slice(0, 200) ?? null, lastSeenAt: new Date() },
+    create: { userId, endpoint: input.endpoint, p256dh: input.keys.p256dh, auth: input.keys.auth, userAgent: userAgent?.slice(0, 200) ?? null },
+  });
+  const all = await prisma.webPushSubscription.findMany({ where: { userId }, orderBy: { lastSeenAt: "desc" }, select: { id: true } });
+  if (all.length > MAX_DEVICES_PER_USER) await prisma.webPushSubscription.deleteMany({ where: { id: { in: all.slice(MAX_DEVICES_PER_USER).map((s) => s.id) } } });
+}
+
+export async function removeWebSubscription(userId: string, endpoint: string) {
+  await prisma.webPushSubscription.deleteMany({ where: { userId, endpoint } }); // idempotent; can't remove someone else's
 }

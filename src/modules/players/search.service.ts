@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { availableNowSql } from "./availability.service.js";
+import { cardExtras } from "./reliability.service.js";
 import { shortlistedAmong } from "../shortlist/shortlist.service.js";
 import { profileInclude, toPlayerCard } from "./players.presenter.js";
 import type { searchQuery } from "./players.schema.js";
@@ -14,10 +16,11 @@ interface Row {
   ratingCount: number;
   lastActiveAt: Date;
   matchedSportIds: number[];
+  prox: number;
 }
 
 // ── opaque cursor: the sort keys of the last row returned ──
-type Cursor = { s: "rating"; v: [number, number, string] } | { s: "active"; v: [string, string] };
+type Cursor = { s: "rating"; v: [number, number, string] } | { s: "active"; v: [string, string] } | { s: "near"; v: [number, number, number, string] };
 
 const encode = (c: Cursor) => Buffer.from(JSON.stringify(c)).toString("base64url");
 function decode(raw: string, sort: Query["sort"]): Cursor {
@@ -27,7 +30,9 @@ function decode(raw: string, sort: Query["sort"]): Cursor {
       c.s === sort &&
       (c.s === "rating"
         ? typeof c.v[0] === "number" && typeof c.v[1] === "number" && typeof c.v[2] === "string"
-        : typeof c.v[0] === "string" && !Number.isNaN(Date.parse(c.v[0])) && typeof c.v[1] === "string");
+        : c.s === "near"
+          ? typeof c.v[0] === "number" && typeof c.v[1] === "number" && typeof c.v[2] === "number" && typeof c.v[3] === "string"
+          : typeof c.v[0] === "string" && !Number.isNaN(Date.parse(c.v[0])) && typeof c.v[1] === "string");
     if (ok) return c;
   } catch {
     /* fall through */
@@ -38,7 +43,9 @@ function decode(raw: string, sort: Query["sort"]): Cursor {
 const rowCursor = (sort: Query["sort"], r: Row): Cursor =>
   sort === "rating"
     ? { s: "rating", v: [r.avgRating, r.ratingCount, r.id] }
-    : { s: "active", v: [r.lastActiveAt.toISOString(), r.id] };
+    : sort === "near"
+      ? { s: "near", v: [Number(r.prox), r.avgRating, r.ratingCount, r.id] }
+      : { s: "active", v: [r.lastActiveAt.toISOString(), r.id] };
 
 /**
  * Raw SQL (not Prisma's query builder) because the filters need things it can't express well:
@@ -61,6 +68,7 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
 
   if (q.districtId !== undefined) where.push(Prisma.sql`p."districtId" = ${q.districtId}`);
   if (q.upazilaId !== undefined) where.push(Prisma.sql`p."upazilaId" = ${q.upazilaId}`);
+  if (q.availableToday) where.push(availableNowSql(q.sportId, new Date()));
   if (q.unionId !== undefined) where.push(Prisma.sql`p."unionId" = ${q.unionId}`);
   if (q.q) where.push(Prisma.sql`u.name ILIKE ${`%${q.q.replace(/[\\%_]/g, "\\$&")}%`}`);
   // With a sport chosen, "rated 4+" means rated 4+ *in that sport*; otherwise the overall rating decides.
@@ -98,9 +106,20 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
     ? Prisma.sql`ARRAY(SELECT ps."sportId" FROM "PlayerSport" ps WHERE ps."profileId" = p.id AND ${sportMatch})`
     : Prisma.sql`ARRAY[]::int[]`;
 
+  // Proximity rank of a profile to the viewer's detected area (area ids only; no coordinates).
+  const prox =
+    q.sort === "near"
+      ? Prisma.sql`(CASE WHEN ${q.nearUnionId ?? null}::int IS NOT NULL AND p."unionId" = ${q.nearUnionId ?? null}::int THEN 0 WHEN ${q.nearUpazilaId ?? null}::int IS NOT NULL AND p."upazilaId" = ${q.nearUpazilaId ?? null}::int THEN 1 WHEN p."districtId" = ${q.nearDistrictId ?? null}::int THEN 2 ELSE 3 END)`
+      : Prisma.sql`0`;
+
   if (q.cursor) {
     const c = decode(q.cursor, q.sort);
-    if (c.s === "rating") {
+    if (c.s === "near") {
+      const [rank, avg, cnt, id] = c.v;
+      where.push(
+        Prisma.sql`(${prox} > ${rank} OR (${prox} = ${rank} AND (p."avgRating" < ${avg} OR (p."avgRating" = ${avg} AND (p."ratingCount" < ${cnt} OR (p."ratingCount" = ${cnt} AND p.id > ${id}))))))`,
+      );
+    } else if (c.s === "rating") {
       const [avg, cnt, id] = c.v;
       where.push(
         Prisma.sql`(p."avgRating" < ${avg} OR (p."avgRating" = ${avg} AND (p."ratingCount" < ${cnt} OR (p."ratingCount" = ${cnt} AND p.id > ${id}))))`,
@@ -118,10 +137,12 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
   const orderBy =
     q.sort === "rating"
       ? Prisma.sql`p."avgRating" DESC, p."ratingCount" DESC, p.id ASC`
-      : Prisma.sql`p."lastActiveAt" DESC, p.id ASC`;
+      : q.sort === "near"
+        ? Prisma.sql`${prox} ASC, p."avgRating" DESC, p."ratingCount" DESC, p.id ASC`
+        : Prisma.sql`p."lastActiveAt" DESC, p.id ASC`;
 
   return Prisma.sql`
-    SELECT p.id, p."avgRating", p."ratingCount", p."lastActiveAt", ${matched} AS "matchedSportIds"
+    SELECT p.id, p."avgRating", p."ratingCount", p."lastActiveAt", ${matched} AS "matchedSportIds", ${prox} AS prox
     FROM "PlayerProfile" p
     JOIN "User" u ON u.id = p."userId"
     WHERE ${Prisma.join(where, " AND ")}
@@ -142,7 +163,8 @@ export async function searchPlayers(viewerId: string, q: Query) {
   });
   const byId = new Map(profiles.map((p) => [p.id, p]));
   const saved = await shortlistedAmong(viewerId, page.map((r) => r.id));
-  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!, r.matchedSportIds, saved.has(r.id))] : []));
+  const extras = await cardExtras(profiles);
+  const items = page.flatMap((r) => (byId.has(r.id) ? [toPlayerCard(byId.get(r.id)!, r.matchedSportIds, saved.has(r.id), extras)] : []));
 
   return { items, nextCursor: hasMore ? encode(rowCursor(q.sort, page[page.length - 1]!)) : null };
 }

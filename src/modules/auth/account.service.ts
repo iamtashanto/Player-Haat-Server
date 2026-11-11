@@ -51,16 +51,21 @@ export async function deleteAccount(userId: string, input: { password?: string }
     // Stop the account from taking part in anything still in motion (and tell the other side).
     effects = await retireParticipation(tx, userId);
 
-    const avatar = user.avatarPublicId ? [user.avatarPublicId] : [];
-    const profile = await tx.playerProfile.findUnique({ where: { userId }, select: { id: true } });
+    const recruiter = await tx.recruiterProfile.findUnique({ where: { userId }, select: { id: true, logoPublicId: true } });
+    if (recruiter?.logoPublicId) await tx.recruiterProfile.update({ where: { id: recruiter.id }, data: { logoUrl: null, logoPublicId: null } });
+    const avatar = [...(user.avatarPublicId ? [user.avatarPublicId] : []), ...(recruiter?.logoPublicId ? [recruiter.logoPublicId] : [])];
+    const profile = await tx.playerProfile.findUnique({ where: { userId }, select: { id: true, coverPublicId: true } });
     if (!profile) return avatar;
-    await tx.playerProfile.update({ where: { id: profile.id }, data: { isVisible: false, bio: null } });
+    await tx.playerProfile.update({ where: { id: profile.id }, data: { isVisible: false, bio: null, coverUrl: null, coverPublicId: null } });
     const media = await tx.playerMedia.findMany({ where: { profileId: profile.id, publicId: { not: null } } });
     await tx.playerMedia.deleteMany({ where: { profileId: profile.id } });
-    return [...avatar, ...media.map((m) => m.publicId!)];
+    return [...avatar, ...(profile.coverPublicId ? [profile.coverPublicId] : []), ...media.map((m) => m.publicId!)];
   });
 
   // The DB is already anonymized; purge the stored images (best-effort, failures are logged).
   await deleteImagesQuietly(orphanedMedia);
+  const docs = await prisma.verificationFile.findMany({ where: { userId }, select: { path: true } });
+  await deleteImagesQuietly(docs.map((d) => d.path));
+  await prisma.verificationFile.deleteMany({ where: { userId } });
   for (const e of effects) notify(e);
 }

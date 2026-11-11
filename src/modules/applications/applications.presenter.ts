@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { profileInclude, toPlayerCard } from "../players/players.presenter.js";
+import type { CardExtras } from "../players/reliability.service.js";
 import { requestInclude, toRequest } from "../requests/requests.presenter.js";
 
 export const applicantInclude = {
@@ -22,11 +23,12 @@ const base = (a: { id: string; status: string; proposedRate: number | null; mess
 });
 
 /** The poster's view of an applicant. The player's phone appears only after they've been accepted. */
-export function toApplicant(a: ApplicantRow) {
+export function toApplicant(a: ApplicantRow, extras?: CardExtras) {
   const profile = a.player.playerProfile;
   return {
     ...base(a),
-    player: profile ? { ...toPlayerCard(profile), id: profile.id } : null,
+    player: profile ? { ...toPlayerCard(profile, [], false, extras), id: profile.id } : null,
+    attendance: a.attendance,
     ...(a.status === "ACCEPTED" && { contact: { phone: a.player.phone } }),
   };
 }

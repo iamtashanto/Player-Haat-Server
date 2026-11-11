@@ -14,6 +14,8 @@ import * as media from "./player-media.service.js";
 import * as svc from "./players.service.js";
 import * as s from "./players.schema.js";
 import { requireOnboardedRecruiter } from "../recruiters/recruiters.service.js";
+import * as avail from "./availability.service.js";
+import { myProfileViews } from "./profile-views.service.js";
 import { searchPlayers } from "./search.service.js";
 
 type B<T extends z.ZodType> = z.infer<T>;
@@ -37,6 +39,12 @@ playersRoutes.patch("/me", validate({ body: s.updateProfileBody }), async (req, 
   ok(res, await svc.updateProfile(me(req), valid<B<typeof s.updateProfileBody>>(req).body));
 });
 
+playersRoutes.get("/me/availability", async (req, res) => ok(res, await avail.getMyAvailability(me(req))));
+playersRoutes.put("/me/availability", validate({ body: s.availabilityBody }), async (req, res) => {
+  ok(res, await avail.setMyAvailability(me(req), valid<B<typeof s.availabilityBody>>(req).body));
+});
+playersRoutes.delete("/me/availability", async (req, res) => ok(res, await avail.clearMyAvailability(me(req))));
+
 playersRoutes.post("/me/sports", validate({ body: s.addSportBody }), async (req, res) => {
   created(res, await svc.addSport(me(req), valid<B<typeof s.addSportBody>>(req).body));
 });
@@ -57,6 +65,11 @@ playersRoutes.delete("/me/sports/:sportId/achievements/:achievementId", validate
   ok(res, await svc.removeAchievement(me(req), params.sportId, params.achievementId));
 });
 
+playersRoutes.get("/me/profile-views", validate({ query: contactViewsQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, z.infer<typeof contactViewsQuery>>(req);
+  const { items, nextCursor } = await myProfileViews(me(req), query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
 playersRoutes.get("/me/contact-views", validate({ query: contactViewsQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, B<typeof contactViewsQuery>>(req);
   const { items, nextCursor } = await contact.myContactViews(me(req), query);
@@ -75,7 +88,15 @@ playersRoutes.post("/me/media/photos", uploadLimiter, imageUpload("file"), async
   created(res, await media.addPhoto(me(req), req.image!.buffer));
 });
 playersRoutes.post("/me/media/videos", validate({ body: s.addVideoBody }), async (req, res) => {
-  created(res, await media.addVideo(me(req), valid<B<typeof s.addVideoBody>>(req).body.url));
+  created(res, await media.addVideo(me(req), valid<B<typeof s.addVideoBody>>(req).body));
+});
+playersRoutes.put("/me/media/cover", uploadLimiter, imageUpload("file"), async (req, res) => {
+  ok(res, await media.setCover(me(req), req.image!.buffer));
+});
+playersRoutes.delete("/me/media/cover", async (req, res) => ok(res, await media.removeCover(me(req))));
+playersRoutes.patch("/me/media/:mediaId", validate({ params: s.mediaParams, body: s.updateMediaBody }), async (req, res) => {
+  const { params, body } = valid<B<typeof s.updateMediaBody>, B<typeof s.mediaParams>>(req);
+  ok(res, await media.setCaption(me(req), params.mediaId, body.caption));
 });
 playersRoutes.put("/me/media/order", validate({ body: s.reorderBody }), async (req, res) => {
   ok(res, await media.reorderMedia(me(req), valid<B<typeof s.reorderBody>>(req).body.ids));
