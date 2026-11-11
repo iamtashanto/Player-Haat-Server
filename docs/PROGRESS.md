@@ -60,3 +60,8 @@ Updated after the last commit below. Pick up from **Next**.
 - `docs/SYSTEM_AUDIT.md` rewritten with evidence, the defects found and fixed, per-area status, and the plans that still need a decision.
 - Real Playwright pass at 411×914 and 1440×900 (`web/e2e/audit-pass.spec.ts`), admin UI opened at both sizes, live smoke incl. 25 admin routes. Final counts: server 763 tests, web 27 unit + all e2e green on desktop and mobile, app 104 tests, admin 7 tests and build.
 - Left on purpose: cost split, team vs team, tournaments, turf; private verification documents; recruiter logo; coarse-location storage; HEIC metadata stripping.
+
+## Web push switched from FCM to standard VAPID (2026-11-11)
+- Server: `web-push` package, `src/lib/webpush`, `WebPushSubscription` (migration `20261111100000`, which also deletes old `DeviceToken` rows with platform WEB), endpoints under `/notifications/web-push/*`, queue sends to FCM tokens (apps) and browser subscriptions, 404/410 removes the subscription, a send counts as delivered if any channel got through (no double notifying on retry). `npm run vapid:generate`; env `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. `WEB_APP_URL` and the `platform: WEB` FCM token are gone.
+- Web: `firebase` removed entirely; `public/sw.js`; `NEXT_PUBLIC_FIREBASE_*` no longer exist. The app is unchanged (FCM).
+- Production: run `npm run vapid:generate` once, put the keys in `server/.env`, never rotate them casually (every subscription would stop working).
