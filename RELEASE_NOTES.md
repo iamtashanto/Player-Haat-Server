@@ -1,19 +1,8 @@
-# Server: release/v1
-
-**Casual play.** "Free today" per sport (expires at the window end or midnight Dhaka), nearby-available filter, open-join games (never over-fill, concurrency-tested), per-game group chat (read-only 7 days after), attendance marked by the organiser, reliability score on every player card.
-
-**Location.** `GET /locations/nearest` returns the containing district and upazila from our own boundary polygons (OCHA/HDX COD-AB); no coordinates stored or logged. `sort=near` for players and games ranks by area ids.
-
-**Media.** Our media service replaces Cloudinary (the key stays server-side). Cover photo, 12-photo gallery with captions and reorder, YouTube-id videos (6 per sport, `UPLOAD` reserved), EXIF/GPS stripped, renditions through `/img/`. Facts (media id, mime, size, width, height) stored for every upload (`MediaAsset`) and returned as `width`/`height`. Scripts: Cloudinary migration, media-facts backfill.
-
-**Security: private verification documents.** The media service has no private mode (every file is publicly reachable), so documents are AES-256-GCM encrypted before upload and stored in `verification/<userId>/`. Only the owner (`GET /verification/files/:id`) and an admin (`GET /admin/verification/:id/files/:fileId`, audit-logged) can open them; no public URL exists anywhere. Script moves old public evidence into private storage and deletes the public copies.
-
-**Notifications.** Preferences with quiet hours (23:00–07:00 Dhaka), a DB-backed push queue with retry/backoff and a send log, new triggers (someone near you is free, game reminders, game full, game chat, profile viewed), admin announcements with targeting and delivery stats. Website push is standard VAPID (`web-push`); the Android app keeps FCM.
-
-**Small gaps.** Recruiter/organisation logo; profile views counted once per recruiter per day with "who viewed me" and a preference-gated notification.
-
-**Fixes found in the audit.** Admin broadcast wrote columns that don't exist; division+district audience filters overrode each other; admin media removal left the file in storage; cover photos were swept as orphans after 24 h.
-
-**Housekeeping.** `scripts/cleanup-e2e-data.ts` removes test accounts (`@e2e.test` only) with their files. 796 tests.
-
-Breaking for old clients: verification submit takes `fileIds` (not `evidenceImages`), `POST /media/images` no longer accepts `verification-doc`, `POST /notifications/devices` no longer accepts `WEB`, video links need a `sportId` and must be YouTube. See `DEPLOY_CHECKLIST.md`.
+# Server release notes (release/v1)
+- **No demo data in production.** `prisma db seed` is reference-only. Demo users live in `pnpm db:seed:dev` (refuses production/non-local DBs); `pnpm cleanup:demo` removes demo + e2e data. First admin: `pnpm admin:create`.
+- **Phone/SMS login is off** (`AUTH_PHONE_OTP_ENABLED=false`): phone routes return 404 `AUTH_METHOD_DISABLED`; enabled methods are exposed in `/app-config`. Phone-only accounts can add email + password (`POST /auth/methods/email`) or link Google. Phone is a contact detail, not verified.
+- **Ratings v2:** double-blind reveal (both rated or 7 days), fair averages ("New" until 3 revealed reviews; damped average for ordering), attendance as the single no-show source, disputes (7 days after reveal) with an admin queue, one public reply (300 chars, editable 24 h), admin hide/recompute, flagged organisers, `ratings:reconcile`.
+- Production boot refuses a localhost `PUBLIC_API_URL`.
+- Admin stats accept `?days=7|30|90`.
+- Migrations added: `ratings_reveal_disputes`, `rating_admin_actions`, `bayes_default`. See `docs/DEPLOY_CHECKLIST.md`.
+- Not built (later): teammate (player-to-player) ratings.
