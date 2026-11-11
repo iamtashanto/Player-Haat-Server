@@ -97,6 +97,24 @@ export const reasonBody = z.strictObject({ reason: z.string().trim().min(3).max(
 export const disputesQuery = pageQuery.extend({ status: z.enum(["OPEN", "UPHELD", "REMOVED"]).optional() });
 
 const Any = z.record(z.string(), z.unknown());
-registerRoute({ method: "get", path: "/ratings/received", tag: T, summary: "Reviews and no-show strikes I received", description: "Revealed ones only, with reply/dispute state and whether I can still reply or dispute.", auth: true, query: playerRatingsQuery, response: z.array(Any) });
+const Received = z
+  .object({
+    id: z.string(),
+    direction: z.enum(["CAPTAIN_TO_PLAYER", "PLAYER_TO_CAPTAIN"]),
+    noShow: z.boolean(),
+    overall: z.number().nullable(),
+    scores: Scores,
+    comment: z.string().nullable(),
+    reply: z.object({ text: z.string(), at: z.string().datetime().nullable() }).nullable(),
+    hidden: z.boolean(),
+    dispute: z.object({ status: z.enum(["OPEN", "UPHELD", "REMOVED"]) }).nullable(),
+    canDispute: z.boolean(),
+    canReply: z.boolean(),
+    createdAt: z.string().datetime(),
+    rater: z.object({ name: z.string(), avatarUrl: z.string().nullable() }),
+    request: z.object({ sport: z.object({ id: z.number(), code: z.string(), nameBn: z.string(), nameEn: z.string() }), matchAt: z.string().datetime() }),
+  })
+  .openapi("ReceivedRating");
+registerRoute({ method: "get", path: "/ratings/received", tag: T, summary: "Reviews and no-show strikes I received", description: "Revealed ones only, with reply/dispute state and whether I can still reply or dispute.", auth: true, query: playerRatingsQuery, response: z.array(Received) });
 registerRoute({ method: "post", path: "/ratings/{id}/reply", tag: T, summary: "Answer a review in public", description: "One reply of at most 300 characters, editable for 24 hours after it is first posted.", auth: true, params: ratingParams, body: replyBody, response: Any, errors: [404, 409, 422] });
 registerRoute({ method: "post", path: "/ratings/{id}/dispute", tag: T, summary: "Dispute a review or a no-show", description: "Within 7 days of it being revealed; a reason (10+ characters) and an optional photo. While open, a no-show strike is not counted.", auth: true, params: ratingParams, body: disputeBody, response: Any, status: 201, errors: [403, 404, 409, 422] });
