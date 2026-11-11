@@ -36,7 +36,7 @@ export async function sweepOrphanUploads(now = new Date(), opts: { minAgeHours?:
   const ids = candidates.map((c) => c.publicId).filter((id) => id.startsWith(STORAGE_PREFIX)); // belt and braces
   if (ids.length === 0) return { scanned: 0, deleted: 0 };
 
-  const [avatars, photos, logos, evidence, covers] = await Promise.all([
+  const [avatars, photos, logos, evidence, covers, orgLogos] = await Promise.all([
     prisma.user.findMany({ where: { avatarPublicId: { in: ids } }, select: { avatarPublicId: true } }),
     prisma.playerMedia.findMany({ where: { publicId: { in: ids } }, select: { publicId: true } }),
     prisma.team.findMany({ where: { logoPublicId: { in: ids } }, select: { logoPublicId: true } }),
@@ -45,8 +45,9 @@ export async function sweepOrphanUploads(now = new Date(), opts: { minAgeHours?:
       SELECT elem->>'publicId' AS "publicId" FROM "VerificationRequest", jsonb_array_elements(COALESCE("evidenceImages", '[]'::jsonb)) elem
       WHERE elem->>'publicId' = ANY(${ids})`,
     prisma.playerProfile.findMany({ where: { coverPublicId: { in: ids } }, select: { coverPublicId: true } }),
+    prisma.recruiterProfile.findMany({ where: { logoPublicId: { in: ids } }, select: { logoPublicId: true } }),
   ]);
-  const referenced = new Set<string>([...avatars.map((a) => a.avatarPublicId!), ...photos.map((p) => p.publicId!), ...logos.map((l) => l.logoPublicId!), ...evidence.map((e) => e.publicId), ...covers.map((c) => c.coverPublicId!)]);
+  const referenced = new Set<string>([...avatars.map((a) => a.avatarPublicId!), ...photos.map((p) => p.publicId!), ...logos.map((l) => l.logoPublicId!), ...evidence.map((e) => e.publicId), ...covers.map((c) => c.coverPublicId!), ...orgLogos.map((l) => l.logoPublicId!)]);
   const orphans = ids.filter((id) => !referenced.has(id));
 
   let deleted = 0;

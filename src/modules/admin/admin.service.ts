@@ -209,6 +209,7 @@ export async function getUser(id: string) {
           type: u.recruiterProfile.type,
           organization: u.recruiterProfile.organization,
           verifiedBadge: u.recruiterProfile.verifiedBadge,
+          logoUrl: imageUrl(u.recruiterProfile.logoPublicId, u.recruiterProfile.logoUrl),
           district: u.recruiterProfile.district,
         }
       : null,
@@ -700,14 +701,15 @@ export async function removeUserMedia(adminId: string, userId: string, mediaId: 
 }
 
 /** Removes a user's avatar or cover (offensive picture) and the stored file. */
-export async function removeUserImage(adminId: string, userId: string, which: "avatar" | "cover", reason: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarPublicId: true, playerProfile: { select: { id: true, coverPublicId: true } } } });
+export async function removeUserImage(adminId: string, userId: string, which: "avatar" | "cover" | "logo", reason: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarPublicId: true, playerProfile: { select: { id: true, coverPublicId: true } }, recruiterProfile: { select: { id: true, logoPublicId: true } } } });
   if (!user) throw AppError.notFound("USER_NOT_FOUND", "User not found");
-  const publicId = which === "avatar" ? user.avatarPublicId : (user.playerProfile?.coverPublicId ?? null);
-  const has = which === "avatar" ? user.avatarPublicId !== null : user.playerProfile?.coverPublicId != null;
+  const publicId = which === "avatar" ? user.avatarPublicId : which === "logo" ? (user.recruiterProfile?.logoPublicId ?? null) : (user.playerProfile?.coverPublicId ?? null);
+  const has = publicId !== null;
   if (!has) throw AppError.notFound("MEDIA_NOT_FOUND", `No ${which} to remove`);
   await prisma.$transaction(async (tx) => {
     if (which === "avatar") await tx.user.update({ where: { id: userId }, data: { avatarUrl: null, avatarPublicId: null } });
+    else if (which === "logo") await tx.recruiterProfile.update({ where: { id: user.recruiterProfile!.id }, data: { logoUrl: null, logoPublicId: null } });
     else await tx.playerProfile.update({ where: { id: user.playerProfile!.id }, data: { coverUrl: null, coverPublicId: null } });
     await audit(tx, adminId, "MEDIA_REMOVE", "USER", userId, reason, { which });
   });

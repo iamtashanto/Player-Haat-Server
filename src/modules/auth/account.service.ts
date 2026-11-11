@@ -51,7 +51,9 @@ export async function deleteAccount(userId: string, input: { password?: string }
     // Stop the account from taking part in anything still in motion (and tell the other side).
     effects = await retireParticipation(tx, userId);
 
-    const avatar = user.avatarPublicId ? [user.avatarPublicId] : [];
+    const recruiter = await tx.recruiterProfile.findUnique({ where: { userId }, select: { id: true, logoPublicId: true } });
+    if (recruiter?.logoPublicId) await tx.recruiterProfile.update({ where: { id: recruiter.id }, data: { logoUrl: null, logoPublicId: null } });
+    const avatar = [...(user.avatarPublicId ? [user.avatarPublicId] : []), ...(recruiter?.logoPublicId ? [recruiter.logoPublicId] : [])];
     const profile = await tx.playerProfile.findUnique({ where: { userId }, select: { id: true, coverPublicId: true } });
     if (!profile) return avatar;
     await tx.playerProfile.update({ where: { id: profile.id }, data: { isVisible: false, bio: null, coverUrl: null, coverPublicId: null } });

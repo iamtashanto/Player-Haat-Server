@@ -23,13 +23,14 @@ export interface BackfillReport {
 
 /** Every image path our tables point at (avatars, covers, gallery photos, team logos). */
 async function referencedPaths(): Promise<string[]> {
-  const [a, c, p, t] = await Promise.all([
+  const [a, c, p, t, r] = await Promise.all([
     prisma.user.findMany({ where: { avatarPublicId: { not: null } }, select: { avatarPublicId: true } }),
     prisma.playerProfile.findMany({ where: { coverPublicId: { not: null } }, select: { coverPublicId: true } }),
     prisma.playerMedia.findMany({ where: { publicId: { not: null } }, select: { publicId: true } }),
     prisma.team.findMany({ where: { logoPublicId: { not: null } }, select: { logoPublicId: true } }),
+    prisma.recruiterProfile.findMany({ where: { logoPublicId: { not: null } }, select: { logoPublicId: true } }),
   ]);
-  return [...new Set([...a.map((x) => x.avatarPublicId!), ...c.map((x) => x.coverPublicId!), ...p.map((x) => x.publicId!), ...t.map((x) => x.logoPublicId!)])];
+  return [...new Set([...a.map((x) => x.avatarPublicId!), ...c.map((x) => x.coverPublicId!), ...p.map((x) => x.publicId!), ...t.map((x) => x.logoPublicId!), ...r.map((x) => x.logoPublicId!)])];
 }
 
 /** Fills `MediaAsset` for uploads made before we kept their facts. Safe to run twice: known paths are skipped. */

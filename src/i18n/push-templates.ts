@@ -87,6 +87,10 @@ const templates: Record<NotificationType, Template> = {
     title: l === "bn" ? "কেউ আপনার নম্বর দেখেছেন" : "Someone viewed your number",
     body: p.actor ?? "",
   }),
+  PROFILE_VIEWED: (p, l) => ({
+    title: l === "bn" ? "একজন রিক্রুটার আপনার প্রোফাইল দেখেছেন" : "A recruiter viewed your profile",
+    body: p.actor ?? "",
+  }),
   NEW_MESSAGE: (p, l) => ({ title: p.actor ?? (l === "bn" ? "নতুন বার্তা" : "New message"), body: p.text ?? "" }),
   VERIFICATION_RESULT: (p, l) => ({
     title: l === "bn" ? "ভেরিফিকেশন আপডেট" : "Verification update",

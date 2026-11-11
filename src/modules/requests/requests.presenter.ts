@@ -1,3 +1,4 @@
+import { imageUrl } from "../players/players.presenter.js";
 import type { Prisma } from "@prisma/client";
 import { locationInclude } from "../locations/location.service.js";
 
@@ -5,7 +6,7 @@ export const requestInclude = {
   sport: { select: { id: true, code: true, nameBn: true, nameEn: true } },
   ...locationInclude,
   team: { select: { id: true, name: true, logoUrl: true } },
-  createdBy: { select: { name: true, avatarUrl: true, captainAvgRating: true, captainRatingCount: true, recruiterProfile: { select: { id: true, verifiedBadge: true } } } },
+  createdBy: { select: { name: true, avatarUrl: true, captainAvgRating: true, captainRatingCount: true, recruiterProfile: { select: { id: true, verifiedBadge: true, logoUrl: true, logoPublicId: true } } } },
 } satisfies Prisma.PlayerRequestInclude;
 
 export type RequestRow = Prisma.PlayerRequestGetPayload<{ include: typeof requestInclude }>;
@@ -53,6 +54,7 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
       // Set when the poster is a recruiter with a profile: the app links to their public card.
       recruiterId: r.createdBy.recruiterProfile?.id ?? null,
       recruiterVerified: r.createdBy.recruiterProfile?.verifiedBadge ?? false,
+      logoUrl: r.createdBy.recruiterProfile ? imageUrl(r.createdBy.recruiterProfile.logoPublicId, r.createdBy.recruiterProfile.logoUrl) : null,
     },
     isOwner,
     myApplication: isOwner ? null : (ctx.myApplications?.get(r.id) ?? null),

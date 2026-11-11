@@ -169,6 +169,9 @@ adminRoutes.delete("/users/:id/avatar", validate({ params: s.userParams, body: s
 adminRoutes.delete("/users/:id/cover", validate({ params: s.userParams, body: s.reasonBody }), async (req, res) => {
   ok(res, await svc.removeUserImage(adminId(req), idOf(req), "cover", valid<B<typeof s.reasonBody>>(req).body.reason));
 });
+adminRoutes.delete("/users/:id/logo", validate({ params: s.userParams, body: s.reasonBody }), async (req, res) => {
+  ok(res, await svc.removeUserImage(adminId(req), idOf(req), "logo", valid<B<typeof s.reasonBody>>(req).body.reason));
+});
 adminRoutes.get("/media/usage", async (_req, res) => ok(res, await svc.mediaUsage()));
 
 adminRoutes.post("/sport-profiles/:id/hide", validate({ params: s.sportProfileParams, body: s.reasonBody }), async (req, res) => {

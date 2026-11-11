@@ -3,6 +3,8 @@ import type { z } from "zod";
 import { created, ok, valid } from "../../lib/http.js";
 import { authUser, requireRole } from "../../middlewares/auth.js";
 import { validate } from "../../middlewares/validate.js";
+import { imageUpload } from "../../middlewares/upload.js";
+import { uploadLimiter } from "../media/media.routes.js";
 import * as s from "./recruiters.schema.js";
 import * as verification from "../verification/verification.service.js";
 import * as vs from "../verification/verification.schema.js";
@@ -23,6 +25,9 @@ recruitersRoutes.post("/me", validate({ body: s.createRecruiterBody }), async (r
 recruitersRoutes.patch("/me", validate({ body: s.updateRecruiterBody }), async (req, res) => {
   ok(res, await svc.updateRecruiterProfile(me(req), valid<B<typeof s.updateRecruiterBody>>(req).body));
 });
+
+recruitersRoutes.put("/me/logo", uploadLimiter, imageUpload("file"), async (req, res) => ok(res, await svc.setLogo(me(req), req.image!.buffer)));
+recruitersRoutes.delete("/me/logo", async (req, res) => ok(res, await svc.setLogo(me(req), null)));
 
 recruitersRoutes.post("/me/verification", validate({ body: vs.submitRecruiterBody }), async (req, res) => {
   created(res, await verification.submitRecruiter(me(req), valid<B<typeof vs.submitRecruiterBody>>(req).body));

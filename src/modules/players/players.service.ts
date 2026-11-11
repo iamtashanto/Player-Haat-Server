@@ -6,6 +6,7 @@ import { assertValidLocation } from "../locations/location.service.js";
 import { shortlistedAmong } from "../shortlist/shortlist.service.js";
 import { toMyProfile, toPublicProfile, profileInclude, type FullProfile } from "./players.presenter.js";
 import { MAX_ACHIEVEMENTS, type addAchievementBody, type addSportBody, type createProfileBody, type updateProfileBody, type updateSportBody } from "./players.schema.js";
+import { recordProfileView } from "./profile-views.service.js";
 import { cardExtras } from "./reliability.service.js";
 import { parseStats } from "./sport-stats.js";
 
@@ -80,6 +81,7 @@ export async function getPublicProfile(profileId: string, viewerId?: string) {
     include: profileInclude,
   });
   if (!profile) throw AppError.notFound(NOT_FOUND, "Player not found");
+  if (viewerId) await recordProfileView(viewerId, profile.id, profile.userId);
   const saved = viewerId ? await shortlistedAmong(viewerId, [profile.id]) : new Set<string>();
   return toPublicProfile(profile, saved.has(profile.id), await cardExtras([profile], { assets: true }));
 }

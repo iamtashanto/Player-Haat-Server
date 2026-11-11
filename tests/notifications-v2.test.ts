@@ -38,7 +38,7 @@ const ping = (userId: string, type: Parameters<typeof notify>[0]["type"] = "NEW_
 describe("preferences", () => {
   it("default to everything on, quiet hours 23:00–07:00 Dhaka, chat not exempt", async () => {
     const { auth } = await signedIn();
-    expect((await get(auth, "/notifications/preferences")).body.data).toEqual({ games: true, messages: true, recruitment: true, system: true, nearbyAvailable: true, quietHoursEnabled: true, quietStart: "23:00", quietEnd: "07:00", chatInQuietHours: false });
+    expect((await get(auth, "/notifications/preferences")).body.data).toEqual({ games: true, messages: true, recruitment: true, system: true, nearbyAvailable: true, profileViewed: true, quietHoursEnabled: true, quietStart: "23:00", quietEnd: "07:00", chatInQuietHours: false });
   });
 
   it("saves only what is sent, per user, and validates", async () => {

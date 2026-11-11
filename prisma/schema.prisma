@@ -198,6 +198,7 @@ enum NotificationType {
   REQUEST_FILLED // the game you applied to is now full
   GAME_MESSAGE // a message in a game's group chat
   ANNOUNCEMENT // from the admin dashboard
+  PROFILE_VIEWED // a recruiter opened your profile (once per recruiter per day)
 }
 
 enum PushStatus {
@@ -304,6 +305,7 @@ model User {
   pushJobs                 PushJob[]
   webPushSubscriptions     WebPushSubscription[]
   verificationFiles        VerificationFile[]      @relation("VerificationFileOwner")
+  profileViewsMade         ProfileView[]           @relation("ProfileViewer")
   teamsCaptained           Team[]                  @relation("TeamCaptain")
   teamMemberships          TeamMember[]
   requestsCreated          PlayerRequest[]
@@ -459,6 +461,7 @@ model Sport {
   positions    Position[]
   playerSports PlayerSport[]
   availability PlayerAvailability[]
+  profileViews ProfileView[]
   teams        Team[]
   requests     PlayerRequest[]
 }
@@ -515,6 +518,7 @@ model PlayerProfile {
   invites        Invite[]
   shortlisted    ShortlistEntry[]
   availability   PlayerAvailability[]
+  profileViews   ProfileView[]
 
   // Player search: filter by place, then walk the sort order — each index ends in `id`, the unique
   // tie-breaker the keyset cursor uses, so Postgres never has to sort. (Without the location-first
@@ -639,6 +643,9 @@ model RecruiterProfile {
   sportIds      Int[]
   // Set by an admin after checking who they are; players can see it on the recruiter's public card.
   verifiedBadge Boolean       @default(false)
+  // Club / academy / organisation logo, shown on the recruiter card and on their requests.
+  logoUrl       String?
+  logoPublicId  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -843,6 +850,23 @@ model Notification {
   @@index([createdAt]) // retention purge
 }
 
+/// A recruiter opening a player's profile: one row per recruiter per player per Dhaka day.
+model ProfileView {
+  id        String   @id @default(cuid())
+  profileId String
+  viewerId  String
+  day       DateTime @db.Date // Asia/Dhaka calendar day
+  createdAt DateTime @default(now())
+
+  profile PlayerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  viewer  User          @relation("ProfileViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  sport   Sport?        @relation(fields: [sportId], references: [id])
+  sportId Int?
+
+  @@unique([profileId, viewerId, day])
+  @@index([profileId, createdAt(sort: Desc)])
+}
+
 /// Facts about every uploaded image, keyed by its storage path: so layouts can reserve the space before it loads.
 model MediaAsset {
   path      String   @id // the media service path (= publicId everywhere else)
@@ -886,6 +910,7 @@ model NotificationPreference {
   recruitment       Boolean  @default(true) // invites, number viewed
   system            Boolean  @default(true) // payments, verification, announcements
   nearbyAvailable   Boolean  @default(true) // "someone near you is free today"
+  profileViewed     Boolean  @default(true) // "a recruiter viewed your profile"
   quietHoursEnabled Boolean  @default(true)
   quietStart        String   @default("23:00") // Asia/Dhaka, HH:MM
   quietEnd          String   @default("07:00")

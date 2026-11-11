@@ -11,6 +11,7 @@ const FOLDER: Record<ImageKind, string> = {
   "player-photo": "player-photos",
   "player-cover": "player-covers",
   "team-logo": "team-logos",
+  "recruiter-logo": "recruiter-logos",
   "verification-doc": "verification-docs",
 };
 

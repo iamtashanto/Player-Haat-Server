@@ -1,5 +1,5 @@
 /** What an image is for — decides folder, size and crop. */
-export type ImageKind = "avatar" | "player-photo" | "player-cover" | "team-logo" | "verification-doc";
+export type ImageKind = "avatar" | "player-photo" | "player-cover" | "team-logo" | "recruiter-logo" | "verification-doc";
 
 export interface StoredImage {
   /** The provider's own id for the file (media service), when it has one. */

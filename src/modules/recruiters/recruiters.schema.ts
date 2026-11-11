@@ -35,6 +35,7 @@ const RecruiterCard = z
     district: Ref,
     sportIds: z.array(z.number().int()),
     verifiedBadge: z.boolean(),
+    logoUrl: z.string().nullable().openapi({ description: "Organisation logo (original size; use the `/img/` renditions to display)." }),
   })
   .openapi("RecruiterProfile");
 
@@ -43,3 +44,5 @@ registerRoute({ method: "get", path: "/recruiters/me", tag: T, summary: "My recr
 registerRoute({ method: "post", path: "/recruiters/me", tag: T, summary: "Create my recruiter profile (onboarding)", auth: true, body: createRecruiterBody, response: RecruiterCard, status: 201, errors: [403, 409, 422] });
 registerRoute({ method: "patch", path: "/recruiters/me", tag: T, summary: "Update my recruiter profile", auth: true, body: updateRecruiterBody, response: RecruiterCard, errors: [403, 404, 422] });
 registerRoute({ method: "get", path: "/recruiters/{id}", tag: T, summary: "A recruiter's public card", description: "So players can see who is contacting them. Visible to players and recruiters.", auth: true, params: recruiterParams, response: RecruiterCard, errors: [404] });
+registerRoute({ method: "put", path: "/recruiters/me/logo", tag: T, summary: "Set my organisation logo", description: "multipart/form-data, field `file`. The previous logo is deleted.", auth: true, multipart: z.object({ file: z.string().openapi({ type: "string", format: "binary" }) }), response: RecruiterCard, errors: [403, 404, 413, 415, 422, 502, 503] });
+registerRoute({ method: "delete", path: "/recruiters/me/logo", tag: T, summary: "Remove my organisation logo", auth: true, response: RecruiterCard, errors: [403, 404] });

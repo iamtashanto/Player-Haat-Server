@@ -21,6 +21,7 @@ const BY_TYPE: Record<NotificationType, Category> = {
   INVITE_ACCEPTED: "recruitment",
   INVITE_DECLINED: "recruitment",
   CONTACT_VIEWED: "recruitment",
+  PROFILE_VIEWED: "recruitment",
   VERIFICATION_RESULT: "system",
   TEAM_JOINED: "system",
   SYSTEM: "system",
@@ -48,6 +49,7 @@ export function linkFor(type: NotificationType, d: Record<string, unknown>): str
     case "INVITE_DECLINED":
       return "/invites";
     case "CONTACT_VIEWED":
+    case "PROFILE_VIEWED":
       return "/me/viewers";
     case "NEARBY_AVAILABLE":
       return "/players?availableToday=true";

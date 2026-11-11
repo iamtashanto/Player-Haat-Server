@@ -16,7 +16,7 @@ const NotificationItem = z
     type: z.enum([
       "NEW_MATCHING_REQUEST", "NEW_APPLICANT", "APPLICATION_ACCEPTED", "APPLICATION_REJECTED", "APPLICATION_WITHDRAWN",
       "REQUEST_CANCELLED", "REQUEST_UPDATED", "REQUEST_FILLED", "GAME_REMINDER", "RATING_REMINDER", "NEARBY_AVAILABLE",
-      "NEW_MESSAGE", "GAME_MESSAGE", "INVITE_RECEIVED", "INVITE_ACCEPTED", "INVITE_DECLINED", "CONTACT_VIEWED",
+      "NEW_MESSAGE", "GAME_MESSAGE", "INVITE_RECEIVED", "INVITE_ACCEPTED", "INVITE_DECLINED", "CONTACT_VIEWED", "PROFILE_VIEWED",
       "VERIFICATION_RESULT", "TEAM_JOINED", "SYSTEM", "ANNOUNCEMENT",
     ]),
     category: z.enum(["games", "messages", "recruitment", "system"]).openapi({ description: "The group the user can switch off; also the Android channel." }),
@@ -36,6 +36,7 @@ export const prefsBody = z
     messages: z.boolean(),
     recruitment: z.boolean(),
     system: z.boolean(),
+    profileViewed: z.boolean().openapi({ description: "\"A recruiter viewed your profile\" (needs `recruitment` on)." }),
     nearbyAvailable: z.boolean().openapi({ description: "\"Someone near you is free to play today\"; also needs `games` on." }),
     quietHoursEnabled: z.boolean(),
     quietStart: HHMM.openapi({ description: "Asia/Dhaka. Default 23:00." }),
@@ -44,7 +45,7 @@ export const prefsBody = z
   })
   .partial()
   .refine((b) => Object.keys(b).length > 0, "Send at least one setting");
-const Prefs = z.object({ games: z.boolean(), messages: z.boolean(), recruitment: z.boolean(), system: z.boolean(), nearbyAvailable: z.boolean(), quietHoursEnabled: z.boolean(), quietStart: z.string(), quietEnd: z.string(), chatInQuietHours: z.boolean() }).openapi("NotificationPreferences");
+const Prefs = z.object({ games: z.boolean(), messages: z.boolean(), recruitment: z.boolean(), system: z.boolean(), nearbyAvailable: z.boolean(), profileViewed: z.boolean(), quietHoursEnabled: z.boolean(), quietStart: z.string(), quietEnd: z.string(), chatInQuietHours: z.boolean() }).openapi("NotificationPreferences");
 
 export const webSubBody = z.strictObject({
   endpoint: z.string().url().max(2048).refine((u) => u.startsWith("https://"), "endpoint must be https"),

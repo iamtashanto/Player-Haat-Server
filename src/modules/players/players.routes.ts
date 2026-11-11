@@ -15,6 +15,7 @@ import * as svc from "./players.service.js";
 import * as s from "./players.schema.js";
 import { requireOnboardedRecruiter } from "../recruiters/recruiters.service.js";
 import * as avail from "./availability.service.js";
+import { myProfileViews } from "./profile-views.service.js";
 import { searchPlayers } from "./search.service.js";
 
 type B<T extends z.ZodType> = z.infer<T>;
@@ -64,6 +65,11 @@ playersRoutes.delete("/me/sports/:sportId/achievements/:achievementId", validate
   ok(res, await svc.removeAchievement(me(req), params.sportId, params.achievementId));
 });
 
+playersRoutes.get("/me/profile-views", validate({ query: contactViewsQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, z.infer<typeof contactViewsQuery>>(req);
+  const { items, nextCursor } = await myProfileViews(me(req), query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
 playersRoutes.get("/me/contact-views", validate({ query: contactViewsQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, B<typeof contactViewsQuery>>(req);
   const { items, nextCursor } = await contact.myContactViews(me(req), query);

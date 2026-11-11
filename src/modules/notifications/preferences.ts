@@ -9,6 +9,7 @@ export const DEFAULT_PREFS = {
   recruitment: true,
   system: true,
   nearbyAvailable: true,
+  profileViewed: true,
   quietHoursEnabled: true,
   quietStart: "23:00",
   quietEnd: "07:00",
@@ -57,6 +58,7 @@ export type Decision = { kind: "send" } | { kind: "defer"; until: Date } | { kin
 export function decide(type: NotificationType, p: Prefs, now: Date): Decision {
   if (!p[categoryOf(type)]) return { kind: "skip", reason: "CATEGORY_OFF" };
   if (type === "NEARBY_AVAILABLE" && !p.nearbyAvailable) return { kind: "skip", reason: "CATEGORY_OFF" };
+  if (type === "PROFILE_VIEWED" && !p.profileViewed) return { kind: "skip", reason: "CATEGORY_OFF" };
   if (inQuietHours(now, p) && !(isChat(type) && p.chatInQuietHours)) return { kind: "defer", until: quietEnds(now, p) };
   return { kind: "send" };
 }
