@@ -1,3 +1,4 @@
+import { env } from "../../config/env.js";
 import { prisma } from "../../lib/prisma.js";
 import { z } from "../../lib/zod.js";
 
@@ -38,6 +39,8 @@ export interface Pricing {
 }
 
 export interface PublicConfig {
+  /** Which ways of signing in this server offers. Clients hide the rest. */
+  auth: { methods: { email: boolean; google: boolean; phone: boolean } };
   flags: { ads_enabled: boolean; boost_enabled: boolean; contact_credits_enabled: boolean };
   pricing: Pricing;
   minAppVersion: string;
@@ -77,6 +80,7 @@ export async function getPublicConfig(): Promise<PublicConfig> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
   const all = await readAll();
   const value: PublicConfig = {
+    auth: { methods: { email: true, google: env.GOOGLE_CLIENT_IDS.length > 0, phone: env.AUTH_PHONE_OTP_ENABLED } },
     flags: { ads_enabled: all.ads_enabled as boolean, boost_enabled: all.boost_enabled as boolean, contact_credits_enabled: all.contact_credits_enabled as boolean },
     pricing: pricingFrom(all),
     minAppVersion: all.min_app_version as string,

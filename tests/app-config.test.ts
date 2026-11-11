@@ -14,7 +14,7 @@ describe("GET /app-config (public)", () => {
   it("works without auth and falls back to safe defaults when nothing is stored", async () => {
     const res = await cfg();
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ flags: { ads_enabled: false, boost_enabled: false, contact_credits_enabled: false }, pricing: DEFAULT_PRICING, minAppVersion: "0.0.0" });
+    expect(res.body.data).toEqual({ auth: { methods: { email: true, google: true, phone: true } }, flags: { ads_enabled: false, boost_enabled: false, contact_credits_enabled: false }, pricing: DEFAULT_PRICING, minAppVersion: "0.0.0" });
     expect(res.headers["cache-control"]).toContain("max-age=300");
   });
 
@@ -26,12 +26,12 @@ describe("GET /app-config (public)", () => {
         { key: "min_app_version", value: "1.4.0" },
       ],
     });
-    expect((await cfg()).body.data).toEqual({ flags: { ads_enabled: true, boost_enabled: false, contact_credits_enabled: false }, pricing: DEFAULT_PRICING, minAppVersion: "1.4.0" });
+    expect((await cfg()).body.data).toEqual({ auth: { methods: { email: true, google: true, phone: true } }, flags: { ads_enabled: true, boost_enabled: false, contact_credits_enabled: false }, pricing: DEFAULT_PRICING, minAppVersion: "1.4.0" });
   });
 
   it("a corrupt stored value falls back to the default instead of breaking every app launch", async () => {
     await prisma.appConfig.createMany({ data: [{ key: "ads_enabled", value: "yes please" }, { key: "min_app_version", value: { nope: 1 } }] });
-    expect((await cfg()).body.data).toEqual({ flags: { ads_enabled: false, boost_enabled: false, contact_credits_enabled: false }, pricing: DEFAULT_PRICING, minAppVersion: "0.0.0" });
+    expect((await cfg()).body.data).toEqual({ auth: { methods: { email: true, google: true, phone: true } }, flags: { ads_enabled: false, boost_enabled: false, contact_credits_enabled: false }, pricing: DEFAULT_PRICING, minAppVersion: "0.0.0" });
   });
 
   it("tells an outdated app to update when it sends its version", async () => {

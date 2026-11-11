@@ -1,3 +1,6 @@
+import type { RequestHandler } from "express";
+import { env } from "../../config/env.js";
+import { AppError, ErrorCode } from "../../lib/errors.js";
 import { Router } from "express";
 import { requireAuth } from "../../middlewares/auth.js";
 import { createRateLimiter, ipAndEmailKey, ipAndPhoneKey, ipOnly } from "../../middlewares/rate-limit.js";
@@ -21,12 +24,18 @@ const limits = {
   sensitive: createRateLimiter({ windowMs: 15 * MIN, limit: 10 }), // password change, delete account, resend
 };
 
+/** Phone-OTP sign-in is switched off by config (`AUTH_PHONE_OTP_ENABLED`): the routes behave as if they don't exist. */
+const phoneOtpOnly: RequestHandler = (_req, _res, next) => {
+  if (!env.AUTH_PHONE_OTP_ENABLED) throw new AppError(ErrorCode.AUTH_METHOD_DISABLED, 404, "Phone sign-in is turned off");
+  next();
+};
+
 export const authRoutes = Router();
 
 authRoutes.post("/register", limits.register, validate({ body: s.registerBody }), c.register);
 authRoutes.post("/login", limits.login, validate({ body: s.loginBody }), c.login);
-authRoutes.post("/phone/request", limits.phoneRequestIp, limits.phoneRequest, validate({ body: s.phoneRequestBody }), c.phoneRequest);
-authRoutes.post("/phone/verify", limits.phoneVerify, validate({ body: s.phoneVerifyBody }), c.phoneVerify);
+authRoutes.post("/phone/request", phoneOtpOnly, limits.phoneRequestIp, limits.phoneRequest, validate({ body: s.phoneRequestBody }), c.phoneRequest);
+authRoutes.post("/phone/verify", phoneOtpOnly, limits.phoneVerify, validate({ body: s.phoneVerifyBody }), c.phoneVerify);
 authRoutes.post("/google", limits.social, validate({ body: s.googleBody }), c.google);
 authRoutes.post("/apple", limits.social, validate({ body: s.appleBody }), c.apple);
 
@@ -41,7 +50,7 @@ authRoutes.post("/reset-password", limits.reset, validate({ body: s.resetPasswor
 
 authRoutes.put("/password", requireAuth, limits.sensitive, validate({ body: s.setPasswordBody }), c.setPassword);
 authRoutes.get("/methods", requireAuth, c.listMethods);
-authRoutes.post("/methods/phone", requireAuth, limits.phoneVerify, validate({ body: s.linkPhoneBody }), c.linkPhone);
+authRoutes.post("/methods/phone", phoneOtpOnly, requireAuth, limits.phoneVerify, validate({ body: s.linkPhoneBody }), c.linkPhone);
 authRoutes.post("/methods/google", requireAuth, limits.social, validate({ body: s.linkGoogleBody }), c.linkGoogle);
 authRoutes.post("/methods/apple", requireAuth, limits.social, validate({ body: s.linkAppleBody }), c.linkApple);
 authRoutes.delete("/methods/:provider", requireAuth, limits.sensitive, validate({ params: s.providerParams }), c.unlinkMethod);

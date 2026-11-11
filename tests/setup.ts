@@ -9,6 +9,7 @@ process.env.JWT_ACCESS_SECRET = "test-secret-test-secret-test-secret-123";
 process.env.GOOGLE_CLIENT_IDS = "test-google-client";
 process.env.APPLE_CLIENT_IDS = "com.playerhaat.test";
 process.env.SMTP_HOST = "";
+process.env.AUTH_PHONE_OTP_ENABLED = "true"; // the phone code stays tested; its own test turns the flag off
 process.env.EVIDENCE_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 process.env.PAYMENT_BKASH_NUMBER = "01700000000"; // so the manual mobile-banking flow can be exercised
 

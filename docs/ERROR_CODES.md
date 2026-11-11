@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-160 codes. Messages are developer-facing English and may change; **codes are stable**.
+161 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -55,6 +55,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `AUTH_INVALID_SOCIAL_TOKEN` | 401 | Invalid Apple token | `lib/social/apple.ts`, `lib/social/google.ts` |
 | `AUTH_INVALID_TOTP` | 401 | That code isn't right | `modules/admin/admin-auth.service.ts` |
 | `AUTH_LAST_LOGIN_METHOD` | 409 | Cannot remove your only login method | `modules/auth/methods.service.ts` |
+| `AUTH_METHOD_DISABLED` | 404 | Phone sign-in is turned off | `modules/auth/auth.routes.ts` |
 | `AUTH_NO_EMAIL` | 409 | Account has no email address | `modules/auth/auth.service.ts` |
 | `AUTH_NO_REFRESH_TOKEN` | 401 | Refresh token missing | `modules/admin/admin.routes.ts` |
 | `AUTH_OTP_COOLDOWN` | 429 | Wait… | `modules/auth/otp.service.ts` |

@@ -71,8 +71,9 @@ const schema = z
 
     FIREBASE_SERVICE_ACCOUNT: optionalString,
 
-    // Phone-OTP sign-in. In production it needs a gateway; without one the endpoints answer 503.
-    PHONE_AUTH_ENABLED: bool.default(true),
+    // Phone-OTP sign-in is OFF for now (sign-in is email + password and Google). Turning it on later needs an SMS gateway
+    // (SMS_HTTP_URL_TEMPLATE); until then the phone routes answer 404 AUTH_METHOD_DISABLED and no SMS setting is required.
+    AUTH_PHONE_OTP_ENABLED: bool.default(false),
     SMS_HTTP_URL_TEMPLATE: optionalString,
     /** Hard ceiling on OTP texts per rolling 24h across all users: a cost cap against SMS-pumping fraud. */
     SMS_DAILY_LIMIT: z.coerce.number().int().positive().default(2000),

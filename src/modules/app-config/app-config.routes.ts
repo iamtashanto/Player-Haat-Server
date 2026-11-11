@@ -19,6 +19,7 @@ registerRoute({
   description: "Public, cached for 5 minutes. Send `?appVersion=1.2.3` to get `updateRequired` (true when below `minAppVersion`).",
   query,
   response: zz.object({
+    auth: zz.object({ methods: zz.object({ email: zz.boolean(), google: zz.boolean(), phone: zz.boolean() }) }).openapi({ description: "Sign-in methods this server offers (phone is off unless `AUTH_PHONE_OTP_ENABLED`)." }),
     flags: zz.object({ ads_enabled: zz.boolean(), boost_enabled: zz.boolean() }),
     minAppVersion: zz.string(),
     updateRequired: zz.boolean().optional(),

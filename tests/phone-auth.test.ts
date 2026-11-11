@@ -255,3 +255,38 @@ describe("phone as a linked login method", () => {
     expect((await login(DEFAULT_USER.email)).status).toBe(200);
   });
 });
+
+describe("phone sign-in switched off (AUTH_PHONE_OTP_ENABLED=false)", () => {
+  it("the phone routes answer 404 AUTH_METHOD_DISABLED, and /app-config says phone is off", async () => {
+    const { env } = await import("../src/config/env.js");
+    const { clearConfigCache } = await import("../src/modules/app-config/app-config.service.js");
+    const before = env.AUTH_PHONE_OTP_ENABLED;
+    (env as { AUTH_PHONE_OTP_ENABLED: boolean }).AUTH_PHONE_OTP_ENABLED = false;
+    clearConfigCache();
+    try {
+      for (const [path, body] of [["/auth/phone/request", { phone: "+8801712345678" }], ["/auth/phone/verify", { phone: "+8801712345678", code: "123456" }]] as const) {
+        const res = await api().post(`${V1}${path}`).send(body);
+        expect(res.status, path).toBe(404);
+        expect(res.body.error.code).toBe("AUTH_METHOD_DISABLED");
+      }
+      const u = await registerUser();
+      const link = await api().post(`${V1}/auth/methods/phone`).set({ Authorization: `Bearer ${u.accessToken}` }).send({ phone: "+8801712345678", code: "123456" });
+      expect(link.status).toBe(404);
+      expect(link.body.error.code).toBe("AUTH_METHOD_DISABLED");
+      const cfg = (await api().get(`${V1}/app-config`)).body.data;
+      expect(cfg.auth.methods).toMatchObject({ email: true, phone: false });
+      // email + password keeps working
+      expect((await api().post(`${V1}/auth/login`).send({ email: u.body.email, password: u.body.password })).status).toBe(200);
+    } finally {
+      (env as { AUTH_PHONE_OTP_ENABLED: boolean }).AUTH_PHONE_OTP_ENABLED = before;
+      clearConfigCache();
+    }
+  });
+
+  it("reports phone on when the flag is on, and google only when client ids are set", async () => {
+    const { clearConfigCache } = await import("../src/modules/app-config/app-config.service.js");
+    clearConfigCache();
+    const m = (await api().get(`${V1}/app-config`)).body.data.auth.methods;
+    expect(m).toMatchObject({ email: true, phone: true, google: true }); // tests set GOOGLE_CLIENT_IDS
+  });
+});

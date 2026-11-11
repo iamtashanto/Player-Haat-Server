@@ -64,7 +64,8 @@ npm run db:seed              # locations (full national dataset), sports, defaul
 | `JWT_ACCESS_SECRET` | `openssl rand -base64 48` (never the example value) |
 | `CORS_ORIGINS` | your web origin(s), comma-separated |
 | `SMTP_HOST` (+`SMTP_*`, `MAIL_FROM`) | your mail provider — required for verification and reset emails |
-| `SMS_HTTP_URL_TEMPLATE` | your SMS gateway, for phone sign-in (otherwise phone endpoints answer 503) |
+| `AUTH_PHONE_OTP_ENABLED` | `false` (default). Phone/SMS sign-in is off; the phone routes answer 404 `AUTH_METHOD_DISABLED`. Sign-in is email + password and Google. Not required: any SMS setting |
+| `SMS_HTTP_URL_TEMPLATE` | only if you turn phone sign-in on later |
 | `GOOGLE_CLIENT_IDS`, `APPLE_CLIENT_IDS` | OAuth client ids, or social sign-in answers 503 |
 | `MEDIA_BASE_URL`, `MEDIA_API_KEY` | image storage on our media service (`mk_xxxx`; secret, server only, never in a client, log or git) |
 | `STORAGE_PROVIDER` | optional: `tashanto` (default when the key is set) or `cloudinary` |

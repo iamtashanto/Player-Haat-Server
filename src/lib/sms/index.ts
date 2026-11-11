@@ -38,7 +38,7 @@ const disabled: SmsProvider = {
   },
 };
 
-export const sms: SmsProvider = !env.PHONE_AUTH_ENABLED
+export const sms: SmsProvider = !env.AUTH_PHONE_OTP_ENABLED
   ? disabled
   : env.SMS_HTTP_URL_TEMPLATE
     ? httpSms(env.SMS_HTTP_URL_TEMPLATE)
