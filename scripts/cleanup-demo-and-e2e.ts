@@ -1,9 +1,9 @@
 /**
- * Delete the accounts created by automated test runs (e-mail ending in @e2e.test) with everything they own, including
+ * Delete demo (@demo.playerhaat.test) and e2e (@e2e.test) accounts with everything they own, including
  * their files in the media service. Real users are never touched.
  *
- *   npx tsx scripts/cleanup-e2e-data.ts --dry-run   # count what would go
- *   npx tsx scripts/cleanup-e2e-data.ts             # do it
+ *   npx tsx scripts/cleanup-demo-and-e2e.ts --dry-run   # count what would go
+ *   npx tsx scripts/cleanup-demo-and-e2e.ts             # do it
  *
  * Refuses to run when NODE_ENV=production unless --allow-production is given (production should not hold test users).
  */

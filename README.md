@@ -14,7 +14,7 @@ npm install
 npm run db:up                  # Postgres 17 in Docker on :5442  (or point DATABASE_URL at any Postgres)
 npx prisma migrate deploy
 npm run db:seed                # 8 divisions, 64 districts, 494 upazilas, 4,537 unions, sports, config
-npm run db:seed:demo           # optional: demo users/requests around Kuakata (password: Demo1234)
+npm run db:seed:dev           # optional: demo users/requests around Kuakata (password: Demo1234)
 npm run dev                    # http://localhost:4000   ·   Swagger UI at /docs
 ```
 
@@ -27,7 +27,7 @@ and image upload answers `503 STORAGE_NOT_CONFIGURED` until you add Cloudinary k
 | `npm run build` / `npm start` | compile to `dist/` / run it |
 | `npm test` | 467 tests against a real Postgres (see below) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run db:seed` / `db:seed:demo` | reference data / demo data (demo refuses to run in production) |
+| `npm run db:seed` / `db:seed:dev` | reference data / demo data (demo refuses to run in production) |
 | `npm run admin:grant -- you@x.com` | make a user an admin (`--revoke` to undo) |
 | `npm run docs:errors` | regenerate `docs/ERROR_CODES.md` |
 | `npm run loadtest:seed` / `loadtest:explain` | bulk data + query-plan review (see `docs/PERFORMANCE.md`) |

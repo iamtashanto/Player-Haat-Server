@@ -8,7 +8,7 @@
 2. **Sports + positions** (football, cricket).
 3. **App config** defaults (`ads_enabled`, `boost_enabled`, `min_app_version`) — existing values are never overwritten.
 
-Demo users/players/requests (Kuakata / Kalapara) are added only with `npm run db:seed:demo`
+Demo users/players/requests (Kuakata / Kalapara) are added only with `npm run db:seed:dev`
 and are refused when `NODE_ENV=production`.
 
 ## Loading the full upazila/union dataset
@@ -40,5 +40,5 @@ Regenerate after upgrading the package: `pnpm tsx scripts/build-locations.ts && 
 
 ## Demo logins
 
-After `npm run db:seed:demo` every demo user (`rakib@`, `sohel@`, `imran@`, `tuhin@`, `mahin@` + `demo.playerhaat.test`)
+After `npm run db:seed:dev` every demo user (`rakib@`, `sohel@`, `imran@`, `tuhin@`, `mahin@` + `demo.playerhaat.test`)
 can log in with the password `Demo1234`. Local development only — demo seeding refuses to run in production.

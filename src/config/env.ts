@@ -105,6 +105,9 @@ const schema = z
     if (!env.RATE_LIMIT_ENABLED) {
       ctx.addIssue({ code: "custom", path: ["RATE_LIMIT_ENABLED"], message: "Rate limiting can't be disabled in production" });
     }
+    if (/localhost|127\.0\.0\.1|10\.0\.2\.2/.test(env.PUBLIC_API_URL)) {
+      ctx.addIssue({ code: "custom", path: ["PUBLIC_API_URL"], message: "PUBLIC_API_URL must be the real public API address in production, not localhost" });
+    }
     if (!env.SMTP_HOST) {
       ctx.addIssue({
         code: "custom",

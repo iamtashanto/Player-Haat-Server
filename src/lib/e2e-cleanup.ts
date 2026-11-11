@@ -2,6 +2,8 @@ import { prisma } from "./prisma.js";
 
 /** Every account made by an automated test run uses this reserved e-mail domain. Nothing else is ever touched. */
 export const E2E_EMAIL_SUFFIX = "@e2e.test";
+/** Demo users made by `pnpm db:seed:dev` use this reserved domain. */
+export const DEMO_EMAIL_SUFFIX = "@demo.playerhaat.test";
 
 export interface CleanupDeps {
   /** Removes one stored file (image or private document). Failures are counted, never thrown. */
@@ -19,7 +21,7 @@ export interface CleanupReport {
 }
 
 /** The users a run would remove: e-mail on the e2e domain, nothing else. */
-export const e2eUsers = () => prisma.user.findMany({ where: { email: { endsWith: E2E_EMAIL_SUFFIX, mode: "insensitive" } }, select: { id: true } });
+export const e2eUsers = () => prisma.user.findMany({ where: { OR: [E2E_EMAIL_SUFFIX, DEMO_EMAIL_SUFFIX].map((x) => ({ email: { endsWith: x, mode: "insensitive" as const } })) }, select: { id: true } });
 
 /**
  * Deletes the accounts created by e2e runs together with everything they own, including their files in the media

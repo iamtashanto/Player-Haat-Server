@@ -17,6 +17,7 @@ const prod = {
   JWT_ACCESS_SECRET: "a-real-secret-that-is-long-enough-1234567890",
   SMTP_HOST: "smtp.example.com",
   CORS_ORIGINS: "https://playerhaat.com",
+  PUBLIC_API_URL: "https://api.playerhaat.com",
 };
 
 describe("production config is validated at boot (fail fast)", () => {
@@ -31,6 +32,7 @@ describe("production config is validated at boot (fail fast)", () => {
     ["no CORS origins", { CORS_ORIGINS: "" }, "CORS_ORIGINS"],
     ["rate limiting switched off", { RATE_LIMIT_ENABLED: "false" }, "RATE_LIMIT_ENABLED"],
     ["admin two-factor switched off", { ADMIN_REQUIRE_2FA: "false" }, "ADMIN_REQUIRE_2FA"],
+    ["a localhost public API url", { PUBLIC_API_URL: "http://localhost:4000" }, "PUBLIC_API_URL"],
     ["a malformed database url", { DATABASE_URL: "not-a-url" }, "DATABASE_URL"],
   ])("refuses to start with %s and names the variable", (_label, override, variable) => {
     const res = boot({ ...prod, ...override });
