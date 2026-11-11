@@ -68,7 +68,10 @@ adminRoutes.put("/me/password", validate({ body: s.changePasswordBody }), async 
   const { body } = valid<B<typeof s.changePasswordBody>>(req);
   ok(res, await svc.changeAdminPassword(adminId(req), body.currentPassword, body.newPassword));
 });
-adminRoutes.get("/stats", async (_req, res) => ok(res, await svc.stats()));
+adminRoutes.get("/stats", async (req, res) => {
+  const days = Number(req.query.days);
+  ok(res, await svc.stats(days === 7 || days === 90 ? days : 30));
+});
 
 // ───────────────────────── Users ─────────────────────────
 

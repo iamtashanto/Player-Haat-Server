@@ -1309,8 +1309,9 @@ export async function pushStats() {
 
 const DAY = 86_400_000;
 
-export async function stats() {
+export async function stats(rangeDays: 7 | 30 | 90 = 30) {
   const now = Date.now();
+  const rangeStart = new Date(now - rangeDays * DAY);
   const thirtyDaysAgo = new Date(now - 30 * DAY);
   const sevenDaysAgo = new Date(now - 7 * DAY);
   const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
@@ -1362,15 +1363,15 @@ export async function stats() {
     prisma.report.count({ where: { status: "DISMISSED" } }),
     prisma.adminAction.count({ where: { createdAt: { gte: new Date(now - DAY) } } }),
     prisma.user.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
+      where: { createdAt: { gte: rangeStart } },
       select: { createdAt: true, role: true },
     }),
     prisma.playerRequest.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
+      where: { createdAt: { gte: rangeStart } },
       select: { createdAt: true },
     }),
     prisma.application.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
+      where: { createdAt: { gte: rangeStart } },
       select: { createdAt: true },
     }),
     prisma.district.findMany({
@@ -1399,9 +1400,9 @@ export async function stats() {
   const count = <K extends string>(rows: Array<Record<K, string> & { _count: { _all: number } }>, key: K) =>
     Object.fromEntries(rows.map((r) => [r[key], r._count._all]));
 
-  // Build daily 30-day time series
+  // Build the daily time series for the chosen range
   const daysMap = new Map<string, { date: string; total: number; players: number; recruiters: number; requests: number; applications: number }>();
-  for (let i = 29; i >= 0; i--) {
+  for (let i = rangeDays - 1; i >= 0; i--) {
     const d = new Date(now - i * DAY);
     const key = d.toISOString().split("T")[0]!;
     daysMap.set(key, { date: key, total: 0, players: 0, recruiters: 0, requests: 0, applications: 0 });
