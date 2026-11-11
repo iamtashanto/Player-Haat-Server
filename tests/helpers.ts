@@ -181,7 +181,6 @@ async function makePlayerProfileFor(
       upazilaId: o.upazilaId ?? w.kalapara.id,
       unionId: o.unionId ?? null,
       avgRating: o.avgRating ?? 0,
-      ...(o.bayesRating !== undefined && { bayesRating: o.bayesRating }),
       isVisible: o.isVisible ?? true,
       sports: {
         create: sports.map((s) => ({
