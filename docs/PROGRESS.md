@@ -25,3 +25,11 @@ media profile-cover/media-manager, play attendance/available-today, notification
 Next: `cd web && pnpm exec playwright test e2e/journey.spec.ts --project=desktop` to iterate; fix specs/UI; add admin Playwright (1440x900);
 Android emulator run with screenshots to app/test/screens/; then prompts/web-desktop-premium-and-gaps.md.
 Dev servers: API `cd server && npm run dev` (log /tmp/api.log), web `cd web && pnpm exec next start -p 3000`.
+
+## e2e diagnosis (this session)
+The earlier "10 failed" were the harness, not the app or the specs: (1) `E2E_DATABASE_URL` was unset so `sql()` hit the wrong database
+(`ph_web`), (2) a second run tripped the API's in-memory sign-up rate limiter (103 × 429, 18 on /auth/register). Fixes: helpers now
+refuse to run without `E2E_DATABASE_URL`; teardown points at the renamed cleanup script; README says to start the API with
+`RATE_LIMIT_ENABLED=false` for e2e; `pnpm test:e2e:local` reads the DB URL from server/.env.
+New: web/e2e/ratings.spec.ts; admin/e2e (Playwright, 2FA enrolment with on-screen secret, every page, disputes queue).
+Empty reference-only DB prepared: playerhaat_empty (0 users) for the from-empty walkthrough.
