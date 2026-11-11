@@ -33,3 +33,6 @@ refuse to run without `E2E_DATABASE_URL`; teardown points at the renamed cleanup
 `RATE_LIMIT_ENABLED=false` for e2e; `pnpm test:e2e:local` reads the DB URL from server/.env.
 New: web/e2e/ratings.spec.ts; admin/e2e (Playwright, 2FA enrolment with on-screen secret, every page, disputes queue).
 Empty reference-only DB prepared: playerhaat_empty (0 users) for the from-empty walkthrough.
+Gotcha: `pkill -f "tsx watch"` kills only the watcher; its child keeps port 4000 with the OLD env. Restart with
+`lsof -nP -iTCP:4000 -sTCP:LISTEN -t | xargs kill` first, then `RATE_LIMIT_ENABLED=false npm run dev`, and verify with a burst of
+POST /auth/register (expect 201s, not 429). Same for `next start` on :3000 (process name is `next-server`).
