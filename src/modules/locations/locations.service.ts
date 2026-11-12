@@ -1,4 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
+import { AppError } from "../../lib/errors.js";
+import { locate } from "./boundaries.js";
 
 const base = { id: true, nameBn: true, nameEn: true, slug: true } as const;
 
@@ -15,60 +17,84 @@ export const listUnions = (upazilaId: number) =>
 
 export type LocationLevel = "district" | "upazila" | "union";
 
+type NameFilter = { OR: Array<{ nameEn: { contains: string; mode: "insensitive" } } | { nameBn: { contains: string } }> };
+const nameHas = (tok: string): NameFilter => ({ OR: [{ nameEn: { contains: tok, mode: "insensitive" } }, { nameBn: { contains: tok } }] });
+const ref = { select: { id: true, nameBn: true, nameEn: true } } as const;
+
 /**
- * Name search across Bangla and English. Case-insensitive substring match (Postgres ILIKE).
- * Ranking: names that START with the query come first, then shorter names.
- * (Phase 6: add a pg_trgm index if this shows up in load tests.)
+ * "Type any part of the address": Bangla or English, one or several words, in any order. Every word must match the
+ * place itself or one of its parents, so "latachapli kalapara", "kalapara patuakhali" and "পটুয়াখালী কলাপাড়া" all work.
+ * Ranking: places whose OWN name matches every word come first (prefix matches before substring), then places that
+ * match only through their parents (e.g. the unions of a searched upazila); ties go district, upazila, union, then shorter names.
+ * Each result carries the full chain (division, district, upazila) so choosing it fills the whole address.
  */
 export async function searchLocations(q: string, levels: LocationLevel[], limit: number) {
-  const name = { OR: [{ nameEn: { contains: q, mode: "insensitive" as const } }, { nameBn: { contains: q } }] };
+  const tokens = q.split(/[\s,،;]+/).filter(Boolean).slice(0, 4);
+  if (tokens.length === 0) return [];
+  const per = limit * 3; // over-fetch a little so ranking has something to choose from
+  const each = (...chain: string[]) => ({
+    AND: tokens.map((tok) => ({ OR: [...nameHas(tok).OR, ...chain.map((rel) => relFilter(rel, nameHas(tok)))] })),
+  });
+
   const [districts, upazilas, unions] = await Promise.all([
     levels.includes("district")
-      ? prisma.district.findMany({ where: name, take: limit, select: { id: true, nameBn: true, nameEn: true } })
+      ? prisma.district.findMany({ where: each("division"), take: per, select: { id: true, nameBn: true, nameEn: true, division: ref } })
       : [],
     levels.includes("upazila")
       ? prisma.upazila.findMany({
-          where: name,
-          take: limit,
-          select: { id: true, nameBn: true, nameEn: true, district: { select: { id: true, nameBn: true, nameEn: true } } },
+          where: each("district", "district.division"),
+          take: per,
+          select: { id: true, nameBn: true, nameEn: true, district: { select: { id: true, nameBn: true, nameEn: true, division: ref } } },
         })
       : [],
     levels.includes("union")
       ? prisma.union.findMany({
-          where: name,
-          take: limit,
+          where: each("upazila", "upazila.district", "upazila.district.division"),
+          take: per,
           select: {
             id: true,
             nameBn: true,
             nameEn: true,
-            upazila: { select: { id: true, nameBn: true, nameEn: true, district: { select: { id: true, nameBn: true, nameEn: true } } } },
+            upazila: { select: { id: true, nameBn: true, nameEn: true, district: { select: { id: true, nameBn: true, nameEn: true, division: ref } } } },
           },
         })
       : [],
   ]);
 
-  const needle = q.toLowerCase();
-  const rank = (r: { nameEn: string; nameBn: string }) =>
-    (r.nameEn.toLowerCase().startsWith(needle) || r.nameBn.startsWith(q) ? 0 : 1) * 1000 + r.nameEn.length;
+  const lower = tokens.map((t) => t.toLowerCase());
+  const has = (r: { nameEn: string; nameBn: string }, tok: string, i: number) => r.nameEn.toLowerCase().includes(lower[i]!) || r.nameBn.includes(tok);
+  const score = (r: { nameEn: string; nameBn: string }, order: number) => {
+    const own = tokens.every((tok, i) => has(r, tok, i));
+    const prefix = r.nameEn.toLowerCase().startsWith(lower[0]!) || r.nameBn.startsWith(tokens[0]!);
+    return (own ? (prefix ? 0 : 1) : 2) * 100_000 + order * 10_000 + r.nameEn.length;
+  };
 
-  return [
-    ...districts.map((d) => ({ level: "district" as const, id: d.id, nameBn: d.nameBn, nameEn: d.nameEn, district: null, upazila: null })),
-    ...upazilas.map((u) => ({ level: "upazila" as const, id: u.id, nameBn: u.nameBn, nameEn: u.nameEn, district: u.district, upazila: null })),
+  const all = [
+    ...districts.map((d) => ({ level: "district" as const, id: d.id, nameBn: d.nameBn, nameEn: d.nameEn, division: d.division, district: null, upazila: null, _s: score(d, 0) })),
+    ...upazilas.map((u) => ({ level: "upazila" as const, id: u.id, nameBn: u.nameBn, nameEn: u.nameEn, division: u.district.division, district: { id: u.district.id, nameBn: u.district.nameBn, nameEn: u.district.nameEn }, upazila: null, _s: score(u, 1) })),
     ...unions.map((u) => ({
       level: "union" as const,
       id: u.id,
       nameBn: u.nameBn,
       nameEn: u.nameEn,
-      district: u.upazila.district,
+      division: u.upazila.district.division,
+      district: { id: u.upazila.district.id, nameBn: u.upazila.district.nameBn, nameEn: u.upazila.district.nameEn },
       upazila: { id: u.upazila.id, nameBn: u.upazila.nameBn, nameEn: u.upazila.nameEn },
+      _s: score(u, 2),
     })),
-  ]
-    .sort((a, b) => rank(a) - rank(b))
-    .slice(0, limit);
+  ];
+  return all
+    .sort((a, b) => a._s - b._s)
+    .slice(0, limit)
+    .map(({ _s, ...r }) => r);
 }
 
-import { AppError } from "../../lib/errors.js";
-import { locate } from "./boundaries.js";
+/** `relFilter("upazila.district", f)` => { upazila: { district: f } } */
+function relFilter(path: string, f: NameFilter): Record<string, unknown> {
+  return path.split(".").reduceRight<Record<string, unknown>>((inner, key) => ({ [key]: inner }), f as unknown as Record<string, unknown>);
+}
+
+
 
 /**
  * The district and upazila that CONTAIN a point (polygons from OCHA/HDX COD-AB, in memory), with parents and ids.

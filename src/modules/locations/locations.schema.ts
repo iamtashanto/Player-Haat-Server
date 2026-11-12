@@ -6,7 +6,7 @@ export const districtsQuery = z.object({ divisionId: id });
 export const upazilasQuery = z.object({ districtId: id });
 export const unionsQuery = z.object({ upazilaId: id });
 export const searchQuery = z.object({
-  q: z.string().trim().min(2).max(60).openapi({ example: "kalap" }),
+  q: z.string().trim().min(2).max(60).openapi({ example: "latachapli kalapara", description: "Any part of an address, one or more words, Bangla or English." }),
   level: z
     .enum(["district", "upazila", "union"])
     .optional()
@@ -35,7 +35,7 @@ registerRoute({
   summary: "Search places by Bangla or English name",
   query: searchQuery,
   response: z.array(
-    z.object({ level: z.enum(["district", "upazila", "union"]), id: z.number(), nameBn: z.string(), nameEn: z.string(), district: Ref.nullable(), upazila: Ref.nullable() }),
+    z.object({ level: z.enum(["district", "upazila", "union"]), id: z.number(), nameBn: z.string(), nameEn: z.string(), division: Ref.nullable(), district: Ref.nullable(), upazila: Ref.nullable() }),
   ),
   errors: [422],
 });
