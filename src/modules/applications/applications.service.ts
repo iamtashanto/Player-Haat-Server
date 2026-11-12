@@ -212,6 +212,16 @@ export async function accept(userId: string, applicationId: string) {
   return loadApplicant(applicationId);
 }
 
+/** The organiser's own tick-list of who has sent their share of the ground fee. */
+export async function setFeePaid(userId: string, applicationId: string, paid: boolean) {
+  await withLockedApplication(userId, applicationId, async ({ tx, request, app }) => {
+    if (request.groundFee == null) throw AppError.conflict("FEE_NOT_SET", "This match has no ground fee");
+    if (app.status !== "ACCEPTED") throw AppError.conflict("APPLICATION_NOT_ACCEPTED", "Only accepted players have a share to pay");
+    await tx.application.update({ where: { id: app.id }, data: { feePaidAt: paid ? new Date() : null } });
+  });
+  return loadApplicant(applicationId);
+}
+
 export async function reject(userId: string, applicationId: string) {
   const out = await withLockedApplication(userId, applicationId, async ({ tx, request, app }) => {
     if (app.status === "REJECTED") return { request, app, changed: false };

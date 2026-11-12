@@ -12,6 +12,7 @@ const status = z.enum(["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN", "WAITLIST
 export const applicantsQuery = pageQuery.extend({ status: status.optional() });
 export const myApplicationsQuery = pageQuery.extend({ status: status.optional() });
 export const requestIdParams = z.object({ requestId: z.string().min(1).max(40) });
+export const feePaidBody = z.strictObject({ paid: z.boolean() });
 export const applicationParams = z.object({ id: z.string().min(1).max(40) });
 
 const Contact = z.object({ phone: z.string().nullable() }).openapi({ description: "Only present once the application is ACCEPTED; each side sees the other's number." });
@@ -23,6 +24,7 @@ const Base = {
   createdAt: z.string().datetime(),
   respondedAt: z.string().datetime().nullable(),
   contact: Contact.optional(),
+  feePaidAt: z.string().datetime().nullable().optional().openapi({ description: "Ground-fee share: when the organiser ticked it as received. Shown to the organiser and the player." }),
 };
 const ApplicantItem = z
   .object({ ...Base, player: z.object({ id: z.string(), name: z.string(), avatarUrl: z.string().nullable(), rating: z.object({ average: z.number(), count: z.number() }), noShowCount: z.number(), verifiedBadge: z.boolean(), sports: z.array(z.unknown()), reliability: z.record(z.string(), z.unknown()).openapi({ description: "Same shape as PlayerCard.reliability." }), availableToday: z.boolean() }).nullable(), attendance: z.enum(["ATTENDED", "NO_SHOW"]).nullable().openapi({ description: "Marked by the organiser after the game." }) })
@@ -35,4 +37,5 @@ registerRoute({ method: "get", path: "/requests/{requestId}/applications", tag: 
 registerRoute({ method: "get", path: "/applications/mine", tag: T, summary: "My applications", auth: true, query: myApplicationsQuery, response: z.array(MyApplicationItem), errors: [422] });
 registerRoute({ method: "post", path: "/applications/{id}/accept", tag: T, summary: "Accept an applicant (poster only)", description: "Atomic: the request becomes FILLED when `playersNeeded` is reached. Notifies the player. Accepting twice is a no-op.", auth: true, params: applicationParams, response: ApplicantItem, errors: [403, 404, 409] });
 registerRoute({ method: "post", path: "/applications/{id}/reject", tag: T, summary: "Reject an applicant (poster only)", auth: true, params: applicationParams, response: ApplicantItem, errors: [403, 404, 409] });
+registerRoute({ method: "put", path: "/applications/{id}/fee-paid", tag: T, summary: "Tick or untick a player's ground-fee share (poster only)", description: "Only for an accepted player of a match that has a ground fee. The app never moves money: this is the organiser's own record.", auth: true, params: applicationParams, body: feePaidBody, response: ApplicantItem, errors: [403, 404, 409] });
 registerRoute({ method: "post", path: "/applications/{id}/withdraw", tag: T, summary: "Withdraw my application", description: "Pending or accepted. Withdrawing after acceptance frees the spot (a FILLED request re-opens) and notifies the poster.", auth: true, params: applicationParams, response: ApplicantItem, errors: [404, 409] });

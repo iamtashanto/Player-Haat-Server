@@ -13,13 +13,14 @@ export const myApplicationInclude = {
 } satisfies Prisma.ApplicationInclude;
 export type MyApplicationRow = Prisma.ApplicationGetPayload<{ include: typeof myApplicationInclude }>;
 
-const base = (a: { id: string; status: string; proposedRate: number | null; message: string | null; createdAt: Date; respondedAt: Date | null }) => ({
+const base = (a: { id: string; status: string; proposedRate: number | null; message: string | null; createdAt: Date; respondedAt: Date | null; feePaidAt?: Date | null }) => ({
   id: a.id,
   status: a.status,
   proposedRate: a.proposedRate,
   message: a.message,
   createdAt: a.createdAt.toISOString(),
   respondedAt: a.respondedAt?.toISOString() ?? null,
+  feePaidAt: a.feePaidAt?.toISOString() ?? null,
 });
 
 /** The poster's view of an applicant. The player's phone appears only after they've been accepted. */
@@ -38,7 +39,7 @@ export function toMyApplication(a: MyApplicationRow) {
   const { phone, ...creator } = a.request.createdBy;
   return {
     ...base(a),
-    request: toRequest({ ...a.request, createdBy: creator }, { viewerId: a.playerId }),
+    request: toRequest({ ...a.request, createdBy: creator }, { viewerId: a.playerId, myApplications: new Map([[a.requestId, { id: a.id, status: a.status as "ACCEPTED", feePaid: !!a.feePaidAt }]]) }),
     ...(a.status === "ACCEPTED" && { contact: { phone } }),
   };
 }

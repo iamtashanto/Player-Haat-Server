@@ -29,10 +29,10 @@ const display = (r: RequestRow) => ({
 async function viewerContext(viewerId: string, rows: RequestRow[], withPending = false): Promise<ViewerContext> {
   const ids = rows.map((r) => r.id);
   const eventIds = rows.filter((r) => r.kind === "EVENT").map((r) => r.id);
-  const [mine, pending, waiting, interestCounts, previewRows] = await Promise.all([
+  const [mine, pending, waiting, interestCounts, previewRows, paid] = await Promise.all([
     prisma.application.findMany({
       where: { playerId: viewerId, requestId: { in: ids } },
-      select: { id: true, requestId: true, status: true, waitlistedAt: true, createdAt: true },
+      select: { id: true, requestId: true, status: true, waitlistedAt: true, createdAt: true, feePaidAt: true },
     }),
     withPending
       ? prisma.application.groupBy({
@@ -52,6 +52,9 @@ async function viewerContext(viewerId: string, rows: RequestRow[], withPending =
           take: eventIds.length * 6,
           select: { requestId: true, player: { select: { name: true, avatarUrl: true, playerProfile: { select: { id: true } } } } },
         }),
+    withPending
+      ? prisma.application.groupBy({ by: ["requestId"], where: { requestId: { in: ids }, status: "ACCEPTED", feePaidAt: { not: null } }, _count: { _all: true } })
+      : [],
   ]);
   const previews = new Map<string, { profileId: string; name: string; avatarUrl: string | null }[]>();
   for (const a of previewRows) {
@@ -71,8 +74,9 @@ async function viewerContext(viewerId: string, rows: RequestRow[], withPending =
     waitlistCounts: new Map(waiting.map((w) => [w.requestId, w._count._all])),
     interest: new Map(interestCounts.map((c) => [c.requestId, { count: c._count._all, preview: previews.get(c.requestId) ?? [] }])),
     viewerId,
-    myApplications: new Map(mine.map((a) => [a.requestId, { id: a.id, status: a.status, ...(a.status === "WAITLISTED" && { waitlistPosition: position.get(a.requestId) ?? 1 }) }])),
+    myApplications: new Map(mine.map((a) => [a.requestId, { id: a.id, feePaid: !!a.feePaidAt, status: a.status, ...(a.status === "WAITLISTED" && { waitlistPosition: position.get(a.requestId) ?? 1 }) }])),
     pendingCounts: withPending ? new Map(pending.map((p) => [p.requestId, p._count._all])) : undefined,
+    paidCounts: withPending ? new Map(paid.map((p) => [p.requestId, p._count._all])) : undefined,
   };
 }
 
@@ -166,6 +170,8 @@ export async function createRequest(userId: string, input: z.infer<typeof create
       joinMode: kind === "MATCH" ? (input.joinMode ?? "APPROVAL") : "APPROVAL",
       title: kind === "EVENT" ? (input.title ?? null) : null,
       seriesId: extra.seriesId ?? null,
+      groundFee: kind === "MATCH" ? (input.groundFee ?? null) : null,
+      feePayTo: kind === "MATCH" && input.groundFee != null ? (input.feePayTo || null) : null,
     },
     include: requestInclude,
   });
@@ -276,6 +282,15 @@ export async function updateRequest(userId: string, id: string, patch: z.infer<t
     // Raising the number re-opens a filled request; lowering it to the accepted count fills it.
     const status = playersNeeded <= r.playersAccepted ? "FILLED" : "OPEN";
 
+    // Ground fee: matches only; clearing the fee clears where to pay.
+    if (r.kind === "EVENT" && (patch.groundFee != null || patch.feePayTo)) throw AppError.invalid("groundFee", "Events have no ground fee");
+    const feeTotal = patch.groundFee !== undefined ? patch.groundFee : r.groundFee;
+    if (patch.feePayTo && feeTotal == null) throw AppError.invalid("feePayTo", "Set the ground fee first");
+    const feeData = {
+      ...(patch.groundFee !== undefined && { groundFee: patch.groundFee }),
+      ...(patch.groundFee === null ? { feePayTo: null } : patch.feePayTo !== undefined ? { feePayTo: patch.feePayTo || null } : {}),
+    };
+
     const notifyAccepted =
       (patch.matchAt !== undefined && state.matchAt.getTime() !== r.matchAt.getTime()) ||
       (patch.venueText !== undefined && patch.venueText !== r.venueText);
@@ -293,6 +308,7 @@ export async function updateRequest(userId: string, id: string, patch: z.infer<t
         budgetMin: state.budgetMin,
         budgetMax: state.budgetMax,
         status,
+        ...feeData,
       },
       include: requestInclude,
     });

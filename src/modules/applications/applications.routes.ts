@@ -37,4 +37,5 @@ applicationsRoutes.get("/mine", validate({ query: s.myApplicationsQuery }), asyn
 });
 applicationsRoutes.post("/:id/accept", actLimiter, validate({ params: s.applicationParams }), async (req, res) => ok(res, await svc.accept(me(req), appId(req))));
 applicationsRoutes.post("/:id/reject", actLimiter, validate({ params: s.applicationParams }), async (req, res) => ok(res, await svc.reject(me(req), appId(req))));
+applicationsRoutes.put("/:id/fee-paid", actLimiter, validate({ params: s.applicationParams, body: s.feePaidBody }), async (req, res) => ok(res, await svc.setFeePaid(me(req), appId(req), valid<z.infer<typeof s.feePaidBody>>(req).body.paid)));
 applicationsRoutes.post("/:id/withdraw", actLimiter, validate({ params: s.applicationParams }), async (req, res) => ok(res, await svc.withdraw(me(req), appId(req))));

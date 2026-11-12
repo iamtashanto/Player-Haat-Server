@@ -27,9 +27,13 @@ export const createRequestBody = z.strictObject({
   kind: z.enum(["MATCH", "EVENT"]).optional().openapi({ description: "MATCH (default): players apply. EVENT: a recruiter's trial or camp — players tap 'interested'. Events are for recruiters and need a `title`." }),
   joinMode: z.enum(["APPROVAL", "OPEN_JOIN"]).optional().openapi({ description: "APPROVAL (default): you accept each applicant. OPEN_JOIN: players are in as soon as they join, until the game is full (matches only)." }),
   title: z.string().trim().min(3).max(80).nullable().optional().openapi({ description: "Required for events, e.g. 'Under-17 trial, Barishal'." }),
+  groundFee: money.nullable().optional().openapi({ description: "Matches only. Total ground rent in BDT; each player's share is this divided by `playersNeeded`. Payment itself happens outside the app." }),
+  feePayTo: z.string().trim().max(80).nullable().optional().openapi({ description: 'Where to send the share, e.g. "bKash 01XXXXXXXXX". Accepted players see it; nobody else.' }),
 })
   .refine((b) => b.kind !== "EVENT" || !!b.title, { message: "An event needs a title", path: ["title"] })
-  .refine((b) => b.kind !== "EVENT" || b.joinMode !== "OPEN_JOIN", { message: "Events can't use open join", path: ["joinMode"] });
+  .refine((b) => b.kind !== "EVENT" || b.joinMode !== "OPEN_JOIN", { message: "Events can't use open join", path: ["joinMode"] })
+  .refine((b) => b.kind !== "EVENT" || (b.groundFee == null && !b.feePayTo), { message: "Events have no ground fee", path: ["groundFee"] })
+  .refine((b) => !b.feePayTo || b.groundFee != null, { message: "Set the ground fee first", path: ["feePayTo"] });
 
 // Sport and location are fixed once posted: players were matched and notified on them.
 export const updateRequestBody = z
@@ -43,6 +47,8 @@ export const updateRequestBody = z
     budgetMax: money.nullable(),
     notes: z.string().trim().max(500).nullable(),
     title: z.string().trim().min(3).max(80),
+    groundFee: money.nullable(),
+    feePayTo: z.string().trim().max(80).nullable(),
   })
   .partial()
   .refine((b) => Object.keys(b).length > 0, "Send at least one field");
@@ -103,6 +109,7 @@ const RequestItem = z
     interested: z.object({ count: z.number().int(), preview: z.array(z.object({ profileId: z.string(), name: z.string(), avatarUrl: z.string().nullable() })) }).openapi({ description: "People who applied / tapped 'interested' (pending or accepted). `preview` lists a few visible players, newest first, for events." }),
     isOwner: z.boolean(),
     myApplication: z.object({ id: z.string(), status: z.enum(["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN", "WAITLISTED"]), waitlistPosition: z.number().int().optional().openapi({ description: "1 = next in line. Only while WAITLISTED." }) }).nullable(),
+    fee: z.object({ total: z.number().int(), share: z.number().int().openapi({ description: "BDT per player: total ÷ playersNeeded, rounded up." }), payTo: z.string().nullable().openapi({ description: "Only the organiser and accepted players see it." }), paidCount: z.number().int().optional().openapi({ description: "Owner only: accepted players ticked as paid." }), iPaid: z.boolean().optional().openapi({ description: "Accepted player only: the organiser has ticked my share." }) }).nullable().openapi({ description: "The ground-fee split, when the organiser set a fee." }),
     result: z.object({ ourScore: z.number().int(), theirScore: z.number().int(), opponentName: z.string().nullable(), summary: z.string().nullable(), outcome: z.enum(["WIN", "DRAW", "LOSS"]), recordedAt: z.string().datetime() }).nullable().openapi({ description: "The score, once the organiser has recorded it. Our side is the organiser's." }),
     series: z.object({ id: z.string(), title: z.string() }).nullable().openapi({ description: "The weekly game this match belongs to." }),
     waitlistCount: z.number().int().openapi({ description: "How many people are waiting for a spot." }),

@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-180 codes. Messages are developer-facing English and may change; **codes are stable**.
+182 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -30,6 +30,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `APPLICATION_EXISTS` | 409 | You already applied (… | `modules/applications/applications.service.ts` |
+| `APPLICATION_NOT_ACCEPTED` | 409 | Only accepted players have a share to pay | `modules/applications/applications.service.ts` |
 | `APPLICATION_NOT_FOUND` | 404 | Application not found | `modules/applications/applications.service.ts` |
 | `APPLICATION_NOT_PENDING` | 409 | Application is… | `modules/applications/applications.service.ts` |
 
@@ -167,6 +168,12 @@ Every error response has this shape — the app should translate `error.code`, n
 |---|---|---|---|
 | `EVIDENCE_CORRUPT` | 500 | Document can't be read | `lib/evidence-crypto.ts` |
 | `EVIDENCE_NOT_CONFIGURED` | 503 | Document uploads aren't set up on this server | `lib/evidence-crypto.ts` |
+
+## FEE
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `FEE_NOT_SET` | 409 | This match has no ground fee | `modules/applications/applications.service.ts` |
 
 ## GAME
 

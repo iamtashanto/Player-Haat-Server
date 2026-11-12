@@ -761,6 +761,8 @@ model PlayerRequest {
   ratings      Rating[]
   invites      Invite[]
   chatMessages GameMessage[]
+  groundFee       Int? // total ground rent in BDT, split between the players
+  feePayTo        String? // where players send their share, e.g. "bKash 01XXXXXXXXX"; shown to accepted players only
   seriesId     String?
   series       GameSeries?   @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
@@ -848,6 +850,7 @@ model Application {
   status             ApplicationStatus @default(PENDING)
   respondedAt        DateTime?
   waitlistedAt       DateTime? // when the player joined the waitlist: the queue order
+  feePaidAt          DateTime? // the organiser ticked this player's ground-fee share as received
   // Marked by the organiser after the game; drives the player's reliability score.
   attendance         Attendance?
   attendanceMarkedAt DateTime?

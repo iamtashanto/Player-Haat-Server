@@ -1,0 +1,2 @@
+ALTER TABLE "PlayerRequest" ADD COLUMN "groundFee" INTEGER, ADD COLUMN "feePayTo" TEXT;
+ALTER TABLE "Application" ADD COLUMN "feePaidAt" TIMESTAMP(3);
