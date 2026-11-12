@@ -28,7 +28,7 @@ const PlayerDashboard = z
 const RecruiterDashboard = z
   .object({
     role: z.literal("RECRUITER"),
-    profile: z.object({ exists: z.boolean(), verified: z.boolean(), completeness: Completeness }),
+    profile: z.object({ exists: z.boolean(), id: z.string().nullable().openapi({ description: "The organiser profile id (for linking to the public card, where the logo is set)." }), verified: z.boolean(), completeness: Completeness }),
     games: z.object({
       open: z.number().int(),
       upcoming: z.array(Game.extend({ playersNeeded: z.number().int(), playersAccepted: z.number().int(), pendingApplicants: z.number().int() })),

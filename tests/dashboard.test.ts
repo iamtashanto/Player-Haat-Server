@@ -99,6 +99,7 @@ describe("organiser dashboard", () => {
 
     const d = (await dash(cap.auth)).body.data;
     expect(d.role).toBe("RECRUITER");
+    expect(d.profile.id).toBe(cap.recruiterId);
     expect(d.games.open).toBe(2); // the cancelled game is not open
     expect(d.applicants.pending).toBe(2);
     expect(d.games.upcoming).toHaveLength(2);

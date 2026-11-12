@@ -111,7 +111,7 @@ async function recruiterDashboard(userId: string) {
   const now = new Date();
   const profile = await prisma.recruiterProfile.findUnique({
     where: { userId },
-    select: { organization: true, bio: true, sportIds: true, verifiedBadge: true, logoUrl: true, user: { select: { avatarUrl: true, creditBalance: true, captainAvgRating: true, captainRatingCount: true } } },
+    select: { id: true, organization: true, bio: true, sportIds: true, verifiedBadge: true, logoUrl: true, user: { select: { avatarUrl: true, creditBalance: true, captainAvgRating: true, captainRatingCount: true } } },
   });
   const user = profile?.user ?? (await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { avatarUrl: true, creditBalance: true, captainAvgRating: true, captainRatingCount: true } }));
 
@@ -154,6 +154,7 @@ async function recruiterDashboard(userId: string) {
     role: "RECRUITER" as const,
     profile: {
       exists: profile !== null,
+      id: profile?.id ?? null,
       verified: profile?.verifiedBadge ?? false,
       completeness: profile
         ? completeness({
