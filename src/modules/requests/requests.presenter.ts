@@ -8,7 +8,7 @@ export const requestInclude = {
   ...locationInclude,
   team: { select: { id: true, name: true, logoUrl: true } },
   series: { select: { id: true, title: true } },
-  result: { select: { ourScore: true, theirScore: true, opponentName: true, summary: true, updatedAt: true } },
+  result: { select: { ourScore: true, theirScore: true, opponentName: true, summary: true, updatedAt: true, opponentConfirmedAt: true, opponentTeam: { select: { id: true, name: true, captainId: true } } } },
   createdBy: { select: { name: true, avatarUrl: true, captainAvgRating: true, captainRatingCount: true, recruiterProfile: { select: { id: true, verifiedBadge: true, logoUrl: true, logoPublicId: true } } } },
 } satisfies Prisma.PlayerRequestInclude;
 
@@ -77,7 +77,7 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
         })()
       : null,
     result: r.result
-      ? { ourScore: r.result.ourScore, theirScore: r.result.theirScore, opponentName: r.result.opponentName, summary: r.result.summary, outcome: (r.result.ourScore > r.result.theirScore ? "WIN" : r.result.ourScore < r.result.theirScore ? "LOSS" : "DRAW") as "WIN" | "DRAW" | "LOSS", recordedAt: r.result.updatedAt.toISOString() }
+      ? { ourScore: r.result.ourScore, theirScore: r.result.theirScore, opponentName: r.result.opponentName, summary: r.result.summary, outcome: (r.result.ourScore > r.result.theirScore ? "WIN" : r.result.ourScore < r.result.theirScore ? "LOSS" : "DRAW") as "WIN" | "DRAW" | "LOSS", recordedAt: r.result.updatedAt.toISOString(), opponentTeam: r.result.opponentTeam ? { id: r.result.opponentTeam.id, name: r.result.opponentTeam.name } : null, confirmed: !!r.result.opponentConfirmedAt, canConfirm: !!r.result.opponentTeam && !r.result.opponentConfirmedAt && r.result.opponentTeam.captainId === ctx.viewerId }
       : null,
     series: r.series ? { id: r.series.id, title: r.series.title } : null,
     waitlistCount: ctx.waitlistCounts?.get(r.id) ?? 0,

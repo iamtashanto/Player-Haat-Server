@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-182 codes. Messages are developer-facing English and may change; **codes are stable**.
+186 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -348,7 +348,11 @@ Every error response has this shape — the app should translate `error.code`, n
 
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
+| `RESULT_CONFIRMED` | 409 | This score is already confirmed | `modules/requests/requests.service.ts` |
 | `RESULT_MATCH_ONLY` | 409 | Scores are recorded for matches, not events | `modules/requests/requests.service.ts` |
+| `RESULT_NOT_FOUND` | 404 | There is no score to confirm | `modules/requests/requests.service.ts` |
+| `RESULT_NOT_OPPONENT` | 403 | Only the opponent team's captain can answer | `modules/requests/requests.service.ts` |
+| `RESULT_TEAM_REQUIRED` | 409 | Post the match for your own team to link an opponent team | `modules/requests/requests.service.ts` |
 
 ## ROUTE
 
@@ -420,7 +424,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `TEAM_LIMIT` | 409 | You can captain up to… | `modules/teams/teams.service.ts` |
 | `TEAM_MEMBER_NOT_FOUND` | 404 | Member not found | `modules/teams/teams.service.ts` |
 | `TEAM_NOT_CAPTAIN` | 403 | Only the captain can do that | `modules/teams/teams.service.ts` |
-| `TEAM_NOT_FOUND` | 404 | Team not found | `modules/teams/teams.service.ts` |
+| `TEAM_NOT_FOUND` | 404 | Team not found | `modules/competition/standings.service.ts`, `modules/teams/teams.service.ts` |
 
 ## UNION
 

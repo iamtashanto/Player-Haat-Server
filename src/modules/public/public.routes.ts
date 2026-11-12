@@ -14,6 +14,8 @@ import { feed, getRequest } from "../requests/requests.service.js";
 import { publicPlayerReviews } from "../ratings/ratings.service.js";
 import { playerRatingsQuery } from "../ratings/ratings.schema.js";
 import { RATING_RULES } from "../ratings/ratings.config.js";
+import { leaderboard, publicTeam } from "../competition/standings.service.js";
+import { leaderboardQuery, publicTeamParams, publicTeamQuery } from "../competition/competition.schema.js";
 
 /**
  * Read-only, signed-out views of what the public website shows for search engines and shared links: the same data
@@ -42,6 +44,13 @@ publicRoutes.get("/players/:id/reviews", limiter, validate({ params: profilePara
   const { params, query } = valid<unknown, z.infer<typeof profileParams>, z.infer<typeof playerRatingsQuery>>(req);
   const { items, nextCursor } = await publicPlayerReviews(params.id, query);
   ok(res, items, { nextCursor, limit: query.limit });
+});
+publicRoutes.get("/leaderboard", limiter, validate({ query: leaderboardQuery }), async (req, res) => {
+  ok(res, await leaderboard(valid<unknown, unknown, z.infer<typeof leaderboardQuery>>(req).query));
+});
+publicRoutes.get("/teams/:id", limiter, validate({ params: publicTeamParams, query: publicTeamQuery }), async (req, res) => {
+  const { params, query } = valid<unknown, z.infer<typeof publicTeamParams>, z.infer<typeof publicTeamQuery>>(req);
+  ok(res, await publicTeam(params.id, query.period));
 });
 publicRoutes.get("/requests", limiter, validate({ query: feedQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof feedQuery>>(req);

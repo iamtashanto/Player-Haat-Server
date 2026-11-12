@@ -329,18 +329,39 @@ export async function updateRequest(userId: string, id: string, patch: z.infer<t
 
 /** The organiser records the score of a match that has started. First entry tells the accepted players; later ones correct it. */
 export async function recordResult(userId: string, id: string, input: z.infer<typeof resultBody>) {
-  const { updated, first, audience } = await prisma.$transaction(async (tx) => {
+  const { updated, first, audience, ask } = await prisma.$transaction(async (tx) => {
     const r = await lockRequest(tx, id);
     assertOwner(r, userId);
     if (r.kind !== "MATCH") throw AppError.conflict("RESULT_MATCH_ONLY", "Scores are recorded for matches, not events");
     if (r.status === "CANCELLED") throw AppError.conflict("REQUEST_NOT_OPEN", "This request was cancelled");
     if (r.matchAt.getTime() > Date.now()) throw AppError.conflict("REQUEST_NOT_STARTED", "The match has not started yet");
-    const data = { ourScore: input.ourScore, theirScore: input.theirScore, opponentName: input.opponentName || null, summary: input.summary || null };
-    const first = !r.result;
+
+    // The opponent team: given now, else the one from the challenge this game came from, else kept as it was.
+    const requested = input.opponentTeamId === undefined ? (r.result?.opponentTeam?.id ?? r.opponentTeamId ?? null) : input.opponentTeamId;
+    let opponent: { id: string; captainId: string; name: string } | null = null;
+    if (requested) {
+      if (!r.teamId) throw AppError.conflict("RESULT_TEAM_REQUIRED", "Post the match for your own team to link an opponent team");
+      if (requested === r.teamId) throw AppError.invalid("opponentTeamId", "A team can't play itself");
+      opponent = await tx.team.findFirst({ where: { id: requested, sportId: r.sportId }, select: { id: true, captainId: true, name: true } });
+      if (!opponent) throw AppError.invalid("opponentTeamId", "Unknown team, or it plays a different sport");
+    }
+    const previous = r.result;
+    const sameScore = previous && previous.ourScore === input.ourScore && previous.theirScore === input.theirScore && (previous.opponentTeam?.id ?? null) === (opponent?.id ?? null);
+    const data = {
+      ourScore: input.ourScore,
+      theirScore: input.theirScore,
+      opponentName: input.opponentName || opponent?.name || null,
+      summary: input.summary || null,
+      opponentTeamId: opponent?.id ?? null,
+      // a changed score or opponent needs a fresh confirmation
+      ...(sameScore ? {} : { opponentConfirmedAt: null }),
+    };
+    const first = !previous;
     await tx.matchResult.upsert({ where: { requestId: id }, create: { requestId: id, recordedById: userId, ...data }, update: data });
     const updated = await tx.playerRequest.findUniqueOrThrow({ where: { id }, include: requestInclude });
     const audience = first ? await tx.application.findMany({ where: { requestId: id, status: "ACCEPTED" }, select: { playerId: true } }) : [];
-    return { updated, first, audience };
+    const ask = opponent && !sameScore ? { captainId: opponent.captainId, teamName: r.team?.name ?? "" } : null;
+    return { updated, first, audience, ask };
   });
   if (first && audience.length) {
     notify({
@@ -348,6 +369,39 @@ export async function recordResult(userId: string, id: string, input: z.infer<ty
       type: "RESULT_POSTED",
       data: { requestId: id },
       params: { ...display(updated), text: `${input.ourScore}–${input.theirScore}` },
+    });
+  }
+  if (ask) {
+    notify({
+      userIds: [ask.captainId],
+      type: "RESULT_CONFIRM_ASKED",
+      data: { requestId: id },
+      params: { ...display(updated), actor: ask.teamName, text: `${input.ourScore}–${input.theirScore}` },
+    });
+  }
+  return presentOne(userId, updated);
+}
+
+/** The opponent team's captain answers: confirm makes the score count in standings; reject unlinks it. */
+export async function answerResult(userId: string, id: string, confirm: boolean) {
+  const { updated, owner } = await prisma.$transaction(async (tx) => {
+    const r = await lockRequest(tx, id);
+    const res = r.result;
+    if (!res?.opponentTeam) throw AppError.notFound("RESULT_NOT_FOUND", "There is no score to confirm");
+    if (res.opponentTeam.captainId !== userId) throw AppError.forbidden("RESULT_NOT_OPPONENT", "Only the opponent team's captain can answer");
+    if (res.opponentConfirmedAt) {
+      if (confirm) return { updated: r, owner: null }; // already confirmed: nothing to do
+      throw AppError.conflict("RESULT_CONFIRMED", "This score is already confirmed");
+    }
+    await tx.matchResult.update({ where: { requestId: id }, data: confirm ? { opponentConfirmedAt: new Date() } : { opponentTeamId: null, opponentConfirmedAt: null } });
+    return { updated: await tx.playerRequest.findUniqueOrThrow({ where: { id }, include: requestInclude }), owner: r.createdById };
+  });
+  if (owner) {
+    notify({
+      userIds: [owner],
+      type: "SYSTEM",
+      data: { requestId: id, code: confirm ? "RESULT_CONFIRMED" : "RESULT_REJECTED" },
+      params: { ...display(updated), code: confirm ? "RESULT_CONFIRMED" : "RESULT_REJECTED" },
     });
   }
   return presentOne(userId, updated);

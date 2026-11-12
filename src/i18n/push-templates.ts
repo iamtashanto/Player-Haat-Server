@@ -19,7 +19,7 @@ export interface PushParams {
   /** How many messages a collapsed chat push stands for. */
   count?: number;
   /** Which outcome a SYSTEM notification reports; the copy lives here so it can be localized. */
-  code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED" | "REVIEW_REVEALED" | "DISPUTE_UPHELD" | "DISPUTE_REMOVED" | "DISPUTE_OPENED" | "PENDING" | "ACCEPTED";
+  code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED" | "REVIEW_REVEALED" | "DISPUTE_UPHELD" | "DISPUTE_REMOVED" | "DISPUTE_OPENED" | "PENDING" | "ACCEPTED" | "RESULT_CONFIRMED" | "RESULT_REJECTED" | "CHALLENGE_ACCEPTED";
 }
 
 const fmt = (when: Date, locale: Locale) =>
@@ -118,6 +118,10 @@ const templates: Record<NotificationType, Template> = {
     title: l === "bn" ? "ম্যাচে আর জায়গা নেই" : "The match is full",
     body: line(p, l),
   }),
+  RESULT_CONFIRM_ASKED: (p, l) => ({
+    title: l === "bn" ? "স্কোর নিশ্চিত করুন" : "Please confirm the score",
+    body: [p.actor, p.text].filter(Boolean).join(" · "),
+  }),
   RAIN_ALERT: (p, l) => ({
     title: l === "bn" ? "ম্যাচের সময় বৃষ্টির সম্ভাবনা" : "Rain is likely at match time",
     body: [p.text ? (l === "bn" ? `বৃষ্টির সম্ভাবনা ${p.text}` : `${p.text} chance of rain`) : "", line(p, l)].filter(Boolean).join(" · "),
@@ -153,6 +157,12 @@ const templates: Record<NotificationType, Template> = {
             ? l === "bn" ? "আপত্তি গৃহীত হয়েছে: রিভিউ/স্ট্রাইক সরানো হয়েছে" : "Dispute accepted: the review/strike was removed"
             : p.code === "DISPUTE_OPENED"
               ? l === "bn" ? "আপনার দেওয়া রিভিউ/স্ট্রাইকে আপত্তি এসেছে, পর্যালোচনা চলছে" : "A review/strike you gave was disputed and is under review"
+      : p.code === "RESULT_CONFIRMED"
+        ? l === "bn" ? "প্রতিপক্ষ দল স্কোর নিশ্চিত করেছে, এটি পয়েন্ট টেবিলে গোনা হবে" : "The other team confirmed the score; it counts in the standings"
+        : p.code === "RESULT_REJECTED"
+          ? l === "bn" ? "প্রতিপক্ষ দল স্কোর মানেনি, এটি পয়েন্ট টেবিলে গোনা হবে না" : "The other team rejected the score; it won't count in the standings"
+          : p.code === "CHALLENGE_ACCEPTED"
+            ? l === "bn" ? "আপনার চ্যালেঞ্জ গৃহীত হয়েছে, ম্যাচ তৈরি হয়েছে" : "Your challenge was accepted and the match is set"
       : p.code === "PAYMENT_APPROVED"
         ? l === "bn" ? "আপনার পেমেন্ট নিশ্চিত হয়েছে, ক্রেডিট যোগ হয়েছে ✓" : "Payment confirmed — credits added ✓"
         : p.code === "PAYMENT_REJECTED"

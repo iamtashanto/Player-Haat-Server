@@ -204,6 +204,7 @@ enum NotificationType {
   SERIES_GAME_POSTED // this week's game of a series you are a regular in is up
   RESULT_POSTED // the organiser recorded the score of a game you played
   RAIN_ALERT // rain is likely at the time of a game you are in
+  RESULT_CONFIRM_ASKED // a team asks its opponent's captain to confirm the score
 }
 
 enum PushStatus {
@@ -704,6 +705,8 @@ model Team {
 
   @@index([captainId])
   @@index([sportId, upazilaId])
+  resultsAsOpponent MatchResult[]   @relation("ResultOpponent")
+  requestsAsOpponent PlayerRequest[] @relation("RequestOpponent")
 }
 
 model TeamMember {
@@ -776,6 +779,8 @@ model PlayerRequest {
   @@index([status, completedAt]) // rating-reminder job and rating windows
   @@index([positionsNeeded], type: Gin)
   result MatchResult?
+  opponentTeamId String? // set when the game came from an accepted team challenge
+  opponentTeam   Team?    @relation("RequestOpponent", fields: [opponentTeamId], references: [id], onDelete: SetNull)
 }
 
 /// A weekly game ("Friday football"): the same ground, day and time every week. A job posts the next game once the
@@ -837,10 +842,15 @@ model MatchResult {
   theirScore     Int
   opponentName   String?
   summary        String? // free text for sports where a number is not enough: "won by 3 wickets"
+  opponentTeamId String? // a registered team; the score counts in standings only once its captain confirms
+  opponentConfirmedAt DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  request PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  request      PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  opponentTeam Team?         @relation("ResultOpponent", fields: [opponentTeamId], references: [id], onDelete: SetNull)
+
+  @@index([opponentTeamId])
 }
 
 model Application {

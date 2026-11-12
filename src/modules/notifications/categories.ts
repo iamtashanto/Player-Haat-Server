@@ -16,6 +16,7 @@ const BY_TYPE: Record<NotificationType, Category> = {
   SERIES_GAME_POSTED: "games",
   RESULT_POSTED: "games",
   RAIN_ALERT: "games",
+  RESULT_CONFIRM_ASKED: "games",
   GAME_REMINDER: "games",
   RATING_REMINDER: "games",
   NEARBY_AVAILABLE: "games",
