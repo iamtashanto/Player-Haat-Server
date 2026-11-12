@@ -19,7 +19,7 @@ export interface PushParams {
   /** How many messages a collapsed chat push stands for. */
   count?: number;
   /** Which outcome a SYSTEM notification reports; the copy lives here so it can be localized. */
-  code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED" | "REVIEW_REVEALED" | "DISPUTE_UPHELD" | "DISPUTE_REMOVED" | "DISPUTE_OPENED" | "PENDING" | "ACCEPTED" | "RESULT_CONFIRMED" | "RESULT_REJECTED" | "CHALLENGE_ACCEPTED";
+  code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED" | "REVIEW_REVEALED" | "DISPUTE_UPHELD" | "DISPUTE_REMOVED" | "DISPUTE_OPENED" | "PENDING" | "ACCEPTED" | "RESULT_CONFIRMED" | "RESULT_REJECTED" | "CHALLENGE_ACCEPTED" | "TOURNAMENT_STARTED";
 }
 
 const fmt = (when: Date, locale: Locale) =>
@@ -161,6 +161,8 @@ const templates: Record<NotificationType, Template> = {
         ? l === "bn" ? "প্রতিপক্ষ দল স্কোর নিশ্চিত করেছে, এটি পয়েন্ট টেবিলে গোনা হবে" : "The other team confirmed the score; it counts in the standings"
         : p.code === "RESULT_REJECTED"
           ? l === "bn" ? "প্রতিপক্ষ দল স্কোর মানেনি, এটি পয়েন্ট টেবিলে গোনা হবে না" : "The other team rejected the score; it won't count in the standings"
+          : p.code === "TOURNAMENT_STARTED"
+            ? l === "bn" ? `টুর্নামেন্ট শুরু হয়েছে: ${p.heading ?? ""}`.trim() : `The tournament has started: ${p.heading ?? ""}`.trim()
           : p.code === "CHALLENGE_ACCEPTED"
             ? l === "bn" ? "আপনার চ্যালেঞ্জ গৃহীত হয়েছে, ম্যাচ তৈরি হয়েছে" : "Your challenge was accepted and the match is set"
       : p.code === "PAYMENT_APPROVED"

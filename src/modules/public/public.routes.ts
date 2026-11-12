@@ -14,6 +14,8 @@ import { feed, getRequest } from "../requests/requests.service.js";
 import { publicPlayerReviews } from "../ratings/ratings.service.js";
 import { playerRatingsQuery } from "../ratings/ratings.schema.js";
 import { RATING_RULES } from "../ratings/ratings.config.js";
+import * as tournaments from "../tournaments/tournaments.service.js";
+import { tournamentParams, tournamentsQuery } from "../tournaments/tournaments.schema.js";
 import { leaderboard, publicTeam } from "../competition/standings.service.js";
 import { leaderboardQuery, publicTeamParams, publicTeamQuery } from "../competition/competition.schema.js";
 
@@ -52,6 +54,12 @@ publicRoutes.get("/teams/:id", limiter, validate({ params: publicTeamParams, que
   const { params, query } = valid<unknown, z.infer<typeof publicTeamParams>, z.infer<typeof publicTeamQuery>>(req);
   ok(res, await publicTeam(params.id, query.period));
 });
+publicRoutes.get("/tournaments", limiter, validate({ query: tournamentsQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, z.infer<typeof tournamentsQuery>>(req);
+  const { items, nextCursor } = await tournaments.list(null, query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
+publicRoutes.get("/tournaments/:id", limiter, validate({ params: tournamentParams }), async (req, res) => ok(res, await tournaments.get(null, valid<unknown, z.infer<typeof tournamentParams>>(req).params.id)));
 publicRoutes.get("/requests", limiter, validate({ query: feedQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof feedQuery>>(req);
   const { items, nextCursor } = await feed("", query);

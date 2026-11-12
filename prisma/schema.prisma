@@ -330,6 +330,7 @@ model User {
   adminActions             AdminAction[]
   gameSeries               GameSeries[]
   seriesMemberships        SeriesMember[]
+  tournaments              Tournament[]
 
   @@index([status])
   @@index([role, status])
@@ -412,13 +413,14 @@ model District {
   lat        Float?
   lng        Float?
 
-  division   Division           @relation(fields: [divisionId], references: [id])
-  upazilas   Upazila[]
-  profiles   PlayerProfile[]
-  requests   PlayerRequest[]
-  teams      Team[]
-  recruiters RecruiterProfile[]
-  gameSeries GameSeries[]
+  division    Division           @relation(fields: [divisionId], references: [id])
+  upazilas    Upazila[]
+  profiles    PlayerProfile[]
+  requests    PlayerRequest[]
+  teams       Team[]
+  recruiters  RecruiterProfile[]
+  gameSeries  GameSeries[]
+  tournaments Tournament[]
 
   @@unique([divisionId, slug])
   @@index([nameEn])
@@ -434,12 +436,13 @@ model Upazila {
   lat        Float?
   lng        Float?
 
-  district   District        @relation(fields: [districtId], references: [id])
-  unions     Union[]
-  profiles   PlayerProfile[]
-  requests   PlayerRequest[]
-  teams      Team[]
-  gameSeries GameSeries[]
+  district    District        @relation(fields: [districtId], references: [id])
+  unions      Union[]
+  profiles    PlayerProfile[]
+  requests    PlayerRequest[]
+  teams       Team[]
+  gameSeries  GameSeries[]
+  tournaments Tournament[]
 
   @@unique([districtId, slug])
   @@index([nameEn])
@@ -481,6 +484,7 @@ model Sport {
   teams        Team[]
   requests     PlayerRequest[]
   gameSeries   GameSeries[]
+  tournaments  Tournament[]
 }
 
 model Position {
@@ -695,20 +699,21 @@ model Team {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  sport    Sport           @relation(fields: [sportId], references: [id])
-  district District        @relation(fields: [districtId], references: [id])
-  upazila  Upazila         @relation(fields: [upazilaId], references: [id])
-  union    Union?          @relation(fields: [unionId], references: [id])
-  captain  User            @relation("TeamCaptain", fields: [captainId], references: [id])
-  members  TeamMember[]
-  requests PlayerRequest[]
+  sport              Sport            @relation(fields: [sportId], references: [id])
+  district           District         @relation(fields: [districtId], references: [id])
+  upazila            Upazila          @relation(fields: [upazilaId], references: [id])
+  union              Union?           @relation(fields: [unionId], references: [id])
+  captain            User             @relation("TeamCaptain", fields: [captainId], references: [id])
+  members            TeamMember[]
+  requests           PlayerRequest[]
+  resultsAsOpponent  MatchResult[]    @relation("ResultOpponent")
+  requestsAsOpponent PlayerRequest[]  @relation("RequestOpponent")
+  challengesMade     TeamChallenge[]  @relation("ChallengeFrom")
+  challengesAccepted TeamChallenge[]  @relation("ChallengeBy")
+  tournamentEntries  TournamentTeam[]
 
   @@index([captainId])
   @@index([sportId, upazilaId])
-  resultsAsOpponent MatchResult[]   @relation("ResultOpponent")
-  requestsAsOpponent PlayerRequest[] @relation("RequestOpponent")
-  challengesMade     TeamChallenge[] @relation("ChallengeFrom")
-  challengesAccepted TeamChallenge[] @relation("ChallengeBy")
 }
 
 model TeamMember {
@@ -757,21 +762,24 @@ model PlayerRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  createdBy    User          @relation(fields: [createdById], references: [id])
-  team         Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  sport        Sport         @relation(fields: [sportId], references: [id])
-  district     District      @relation(fields: [districtId], references: [id])
-  upazila      Upazila       @relation(fields: [upazilaId], references: [id])
-  union        Union?        @relation(fields: [unionId], references: [id])
-  applications Application[]
-  ratings      Rating[]
-  invites      Invite[]
-  chatMessages GameMessage[]
-  rainAlertedAt   DateTime? // the one rain warning for this game has been sent
-  groundFee       Int? // total ground rent in BDT, split between the players
-  feePayTo        String? // where players send their share, e.g. "bKash 01XXXXXXXXX"; shown to accepted players only
-  seriesId     String?
-  series       GameSeries?   @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  createdBy      User          @relation(fields: [createdById], references: [id])
+  team           Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  sport          Sport         @relation(fields: [sportId], references: [id])
+  district       District      @relation(fields: [districtId], references: [id])
+  upazila        Upazila       @relation(fields: [upazilaId], references: [id])
+  union          Union?        @relation(fields: [unionId], references: [id])
+  applications   Application[]
+  ratings        Rating[]
+  invites        Invite[]
+  chatMessages   GameMessage[]
+  rainAlertedAt  DateTime? // the one rain warning for this game has been sent
+  groundFee      Int? // total ground rent in BDT, split between the players
+  feePayTo       String? // where players send their share, e.g. "bKash 01XXXXXXXXX"; shown to accepted players only
+  seriesId       String?
+  series         GameSeries?   @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  result         MatchResult?
+  opponentTeamId String? // set when the game came from an accepted team challenge
+  opponentTeam   Team?         @relation("RequestOpponent", fields: [opponentTeamId], references: [id], onDelete: SetNull)
 
   @@index([status, matchAt])
   @@index([upazilaId, status, matchAt])
@@ -780,9 +788,6 @@ model PlayerRequest {
   @@index([createdById, createdAt(sort: Desc)])
   @@index([status, completedAt]) // rating-reminder job and rating windows
   @@index([positionsNeeded], type: Gin)
-  result MatchResult?
-  opponentTeamId String? // set when the game came from an accepted team challenge
-  opponentTeam   Team?    @relation("RequestOpponent", fields: [opponentTeamId], references: [id], onDelete: SetNull)
 }
 
 /// A weekly game ("Friday football"): the same ground, day and time every week. A job posts the next game once the
@@ -837,17 +842,17 @@ model SeriesMember {
 
 /// The score of a played match, entered by its organiser: our side first.
 model MatchResult {
-  id             String   @id @default(cuid())
-  requestId      String   @unique
-  recordedById   String
-  ourScore       Int
-  theirScore     Int
-  opponentName   String?
-  summary        String? // free text for sports where a number is not enough: "won by 3 wickets"
-  opponentTeamId String? // a registered team; the score counts in standings only once its captain confirms
+  id                  String    @id @default(cuid())
+  requestId           String    @unique
+  recordedById        String
+  ourScore            Int
+  theirScore          Int
+  opponentName        String?
+  summary             String? // free text for sports where a number is not enough: "won by 3 wickets"
+  opponentTeamId      String? // a registered team; the score counts in standings only once its captain confirms
   opponentConfirmedAt DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   request      PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   opponentTeam Team?         @relation("ResultOpponent", fields: [opponentTeamId], references: [id], onDelete: SetNull)
@@ -883,6 +888,72 @@ model TeamChallenge {
   @@index([status, proposedAt])
   @@index([upazilaId, status, proposedAt])
   @@index([teamId])
+}
+
+enum TournamentStatus {
+  REGISTRATION
+  RUNNING
+  FINISHED
+  CANCELLED
+}
+
+/// A knockout tournament: team captains register, the organiser starts it (the bracket is drawn), then enters scores
+/// and winners move on until there is a champion.
+model Tournament {
+  id             String           @id @default(cuid())
+  createdById    String
+  name           String
+  sportId        Int
+  districtId     Int
+  upazilaId      Int
+  venueText      String?
+  startsAt       DateTime
+  maxTeams       Int
+  status         TournamentStatus @default(REGISTRATION)
+  championTeamId String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  createdBy User              @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  sport     Sport             @relation(fields: [sportId], references: [id])
+  district  District          @relation(fields: [districtId], references: [id])
+  upazila   Upazila           @relation(fields: [upazilaId], references: [id])
+  teams     TournamentTeam[]
+  matches   TournamentMatch[]
+
+  @@index([status, startsAt])
+  @@index([upazilaId, status])
+  @@index([createdById])
+}
+
+model TournamentTeam {
+  id           String   @id @default(cuid())
+  tournamentId String
+  teamId       String
+  registeredAt DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  team       Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, teamId])
+  @@index([teamId])
+}
+
+model TournamentMatch {
+  id           String    @id @default(cuid())
+  tournamentId String
+  round        Int // 1 = first round; the highest round is the final
+  slot         Int // position in the round, from 0
+  homeTeamId   String?
+  awayTeamId   String?
+  homeScore    Int?
+  awayScore    Int?
+  winnerTeamId String?
+  playedAt     DateTime?
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, round, slot])
 }
 
 model Application {
