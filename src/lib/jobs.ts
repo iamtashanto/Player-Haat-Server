@@ -6,6 +6,7 @@ import { purgeExpiredData } from "../modules/maintenance/purge-expired-data.js";
 import { sweepOrphanUploads, sweepUnattachedEvidence } from "../modules/maintenance/sweep-orphan-uploads.js";
 import { sendFollowupRatingReminders } from "../modules/ratings/rating-reminders.js";
 import { postDueSeriesGames } from "../modules/series/series.service.js";
+import { sendRainAlerts } from "../modules/weather/weather.service.js";
 import { revealExpired } from "../modules/ratings/ratings.service.js";
 import { logger } from "./logger.js";
 
@@ -23,6 +24,7 @@ const jobs: Job[] = [
   { name: "push-queue", everyMs: 20_000, firstRunMs: 10_000, run: () => runQueue() },
   { name: "game-reminders", everyMs: 5 * MINUTE, firstRunMs: 45_000, run: () => sendGameReminders() },
   { name: "weekly-games", everyMs: 30 * MINUTE, firstRunMs: 3 * MINUTE, run: () => postDueSeriesGames() },
+  { name: "rain-alerts", everyMs: HOUR, firstRunMs: 6 * MINUTE, run: () => sendRainAlerts() },
   { name: "rating-reveal", everyMs: 15 * MINUTE, firstRunMs: 2 * MINUTE, run: () => revealExpired() },
   { name: "rating-reminders", everyMs: 15 * MINUTE, firstRunMs: MINUTE, run: () => sendFollowupRatingReminders() },
   { name: "expire-stale-requests", everyMs: HOUR, firstRunMs: 5 * MINUTE, run: () => expireStaleRequests() },

@@ -6,6 +6,7 @@ import { createRateLimiter } from "../../middlewares/rate-limit.js";
 import { validate } from "../../middlewares/validate.js";
 import * as s from "./requests.schema.js";
 import * as svc from "./requests.service.js";
+import { outlookForRequest } from "../weather/weather.service.js";
 
 
 const me = (req: Parameters<typeof authUser>[0]) => authUser(req).userId;
@@ -40,6 +41,10 @@ requestsRoutes.get("/:id", validate({ params: s.requestParams }), async (req, re
 
 requestsRoutes.patch("/:id", mutateLimiter, validate({ params: s.requestParams, body: s.updateRequestBody }), async (req, res) => {
   ok(res, await svc.updateRequest(me(req), idOf(req), valid<z.infer<typeof s.updateRequestBody>>(req).body));
+});
+requestsRoutes.get("/:id/weather", mutateLimiter, validate({ params: s.requestParams }), async (req, res) => {
+  await svc.getRequest(me(req), idOf(req)); // same visibility rules as the game itself
+  ok(res, await outlookForRequest(idOf(req)));
 });
 requestsRoutes.put("/:id/result", mutateLimiter, validate({ params: s.requestParams, body: s.resultBody }), async (req, res) => {
   ok(res, await svc.recordResult(me(req), idOf(req), valid<z.infer<typeof s.resultBody>>(req).body));

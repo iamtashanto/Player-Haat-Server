@@ -1,0 +1,2 @@
+ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'RAIN_ALERT';
+ALTER TABLE "PlayerRequest" ADD COLUMN "rainAlertedAt" TIMESTAMP(3);

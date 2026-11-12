@@ -118,6 +118,10 @@ const templates: Record<NotificationType, Template> = {
     title: l === "bn" ? "ম্যাচে আর জায়গা নেই" : "The match is full",
     body: line(p, l),
   }),
+  RAIN_ALERT: (p, l) => ({
+    title: l === "bn" ? "ম্যাচের সময় বৃষ্টির সম্ভাবনা" : "Rain is likely at match time",
+    body: [p.text ? (l === "bn" ? `বৃষ্টির সম্ভাবনা ${p.text}` : `${p.text} chance of rain`) : "", line(p, l)].filter(Boolean).join(" · "),
+  }),
   RESULT_POSTED: (p, l) => ({
     title: l === "bn" ? "ম্যাচের ফল তোলা হয়েছে" : "Match result is in",
     body: [p.text, line(p, l)].filter(Boolean).join(" · "),

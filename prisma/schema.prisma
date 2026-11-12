@@ -203,6 +203,7 @@ enum NotificationType {
   WAITLIST_PROMOTED // a spot opened in a full game you were waiting for
   SERIES_GAME_POSTED // this week's game of a series you are a regular in is up
   RESULT_POSTED // the organiser recorded the score of a game you played
+  RAIN_ALERT // rain is likely at the time of a game you are in
 }
 
 enum PushStatus {
@@ -761,6 +762,7 @@ model PlayerRequest {
   ratings      Rating[]
   invites      Invite[]
   chatMessages GameMessage[]
+  rainAlertedAt   DateTime? // the one rain warning for this game has been sent
   groundFee       Int? // total ground rent in BDT, split between the players
   feePayTo        String? // where players send their share, e.g. "bKash 01XXXXXXXXX"; shown to accepted players only
   seriesId     String?
