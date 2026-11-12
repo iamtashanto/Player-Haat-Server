@@ -118,3 +118,17 @@ const Received = z
 registerRoute({ method: "get", path: "/ratings/received", tag: T, summary: "Reviews and no-show strikes I received", description: "Revealed ones only, with reply/dispute state and whether I can still reply or dispute.", auth: true, query: playerRatingsQuery, response: z.array(Received) });
 registerRoute({ method: "post", path: "/ratings/{id}/reply", tag: T, summary: "Answer a review in public", description: "One reply of at most 300 characters, editable for 24 hours after it is first posted.", auth: true, params: ratingParams, body: replyBody, response: Any, errors: [404, 409, 422] });
 registerRoute({ method: "post", path: "/ratings/{id}/dispute", tag: T, summary: "Dispute a review or a no-show", description: "Within 7 days of it being revealed; a reason (10+ characters) and an optional photo. While open, a no-show strike is not counted.", auth: true, params: ratingParams, body: disputeBody, response: Any, status: 201, errors: [403, 404, 409, 422] });
+
+const PublicPlayerReview = z
+  .object({
+    id: z.string(),
+    overall: z.number(),
+    comment: z.string().nullable(),
+    reply: z.object({ text: z.string(), at: z.string().datetime().nullable() }).nullable(),
+    createdAt: z.string().datetime(),
+    rater: z.object({ firstName: z.string() }),
+    request: z.object({ sport: z.object({ id: z.number(), code: z.string(), nameBn: z.string(), nameEn: z.string() }), matchAt: z.string().datetime() }),
+  })
+  .openapi("PublicPlayerReview");
+registerRoute({ method: "get", path: "/public/players/{id}/reviews", tag: T, summary: "A player's reviews, signed out", description: "Revealed, visible reviews only (never no-shows). The reviewer is shown by first name only.", params: profileParams, query: playerRatingsQuery, response: z.array(PublicPlayerReview), errors: [404, 422] });
+registerRoute({ method: "get", path: "/recruiters/{id}/ratings", tag: T, summary: "Reviews of an organiser", description: "What players said after games this organiser hosted. Revealed, visible reviews only.", auth: true, params: profileParams, query: playerRatingsQuery, response: z.array(PublicReview), errors: [404, 422] });

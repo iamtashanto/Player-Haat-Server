@@ -3,6 +3,7 @@ import type { RequestHandler } from "express";
 import type { z } from "zod";
 import { AppError } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { publicRating } from "../ratings/ratings.config.js";
 import { deleteImagesQuietly } from "../../lib/storage/safe-delete.js";
 import { uploadOwnedImage } from "../media/media.service.js";
 import { imageUrl } from "../players/players.presenter.js";
@@ -12,7 +13,7 @@ import type { createRecruiterBody, updateRecruiterBody } from "./recruiters.sche
 const NOT_FOUND = "RECRUITER_PROFILE_NOT_FOUND";
 
 const include = {
-  user: { select: { name: true, avatarUrl: true } },
+  user: { select: { name: true, avatarUrl: true, captainAvgRating: true, captainRatingCount: true } },
   district: { select: { id: true, nameBn: true, nameEn: true } },
 } satisfies Prisma.RecruiterProfileInclude;
 type Full = Prisma.RecruiterProfileGetPayload<{ include: typeof include }>;
@@ -20,6 +21,7 @@ type Full = Prisma.RecruiterProfileGetPayload<{ include: typeof include }>;
 /** Public card: no email, phone or user id. */
 const toCard = (r: Full) => ({
   id: r.id,
+  rating: publicRating(r.user.captainAvgRating, r.user.captainRatingCount),
   name: r.user.name,
   avatarUrl: r.user.avatarUrl,
   type: r.type,

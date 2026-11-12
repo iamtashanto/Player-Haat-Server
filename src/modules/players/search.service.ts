@@ -74,10 +74,13 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
   // With a sport chosen, "rated 4+" means rated 4+ *in that sport*; otherwise the overall rating decides.
   if (q.minRating !== undefined && q.sportId === undefined) where.push(Prisma.sql`p."avgRating" >= ${q.minRating} AND p."ratingCount" > 0`);
 
+  if (q.minReviews !== undefined && q.sportId === undefined) where.push(Prisma.sql`p."ratingCount" >= ${q.minReviews}`);
+
   // All sport-level conditions must hold on the SAME PlayerSport row.
   const sport: Prisma.Sql[] = [];
   if (q.sportId !== undefined) sport.push(Prisma.sql`ps."sportId" = ${q.sportId}`);
   if (q.minRating !== undefined && q.sportId !== undefined) sport.push(Prisma.sql`ps."avgRating" >= ${q.minRating} AND ps."ratingCount" > 0`);
+  if (q.minReviews !== undefined && q.sportId !== undefined) sport.push(Prisma.sql`ps."ratingCount" >= ${q.minReviews}`);
   if (q.minExperienceYears !== undefined) sport.push(Prisma.sql`ps."experienceYears" >= ${q.minExperienceYears}`);
   if (q.minSkillLevel !== undefined) sport.push(Prisma.sql`ps."skillLevel" >= ${q.minSkillLevel}`);
   if (q.statsVerified === true) sport.push(Prisma.sql`ps."statsVerifiedAt" IS NOT NULL`);

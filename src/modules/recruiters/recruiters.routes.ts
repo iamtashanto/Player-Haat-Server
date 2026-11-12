@@ -9,6 +9,8 @@ import * as s from "./recruiters.schema.js";
 import * as verification from "../verification/verification.service.js";
 import * as vs from "../verification/verification.schema.js";
 import * as svc from "./recruiters.service.js";
+import { captainReviews } from "../ratings/ratings.service.js";
+import { playerRatingsQuery } from "../ratings/ratings.schema.js";
 
 type B<T extends z.ZodType> = z.infer<T>;
 const me = (req: Parameters<typeof authUser>[0]) => authUser(req).userId;
@@ -34,6 +36,11 @@ recruitersRoutes.post("/me/verification", validate({ body: vs.submitRecruiterBod
 });
 recruitersRoutes.get("/me/verification", async (req, res) => ok(res, await verification.latestRecruiter(me(req))));
 
+recruitersRoutes.get("/:id/ratings", validate({ params: s.recruiterParams, query: playerRatingsQuery }), async (req, res) => {
+  const { params, query } = valid<unknown, B<typeof s.recruiterParams>, z.infer<typeof playerRatingsQuery>>(req);
+  const { items, nextCursor } = await captainReviews(params.id, query);
+  ok(res, items, { nextCursor, limit: query.limit });
+});
 recruitersRoutes.get("/:id", validate({ params: s.recruiterParams }), async (req, res) => {
   ok(res, await svc.getPublicRecruiter(valid<unknown, B<typeof s.recruiterParams>>(req).params.id));
 });

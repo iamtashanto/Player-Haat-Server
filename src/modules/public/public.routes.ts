@@ -11,6 +11,9 @@ import { searchPlayers } from "../players/search.service.js";
 import { getPublicProfile } from "../players/players.service.js";
 import { feedQuery, requestParams } from "../requests/requests.schema.js";
 import { feed, getRequest } from "../requests/requests.service.js";
+import { publicPlayerReviews } from "../ratings/ratings.service.js";
+import { playerRatingsQuery } from "../ratings/ratings.schema.js";
+import { RATING_RULES } from "../ratings/ratings.config.js";
 
 /**
  * Read-only, signed-out views of what the public website shows for search engines and shared links: the same data
@@ -26,8 +29,19 @@ publicRoutes.get("/players", limiter, validate({ query: searchQuery }), async (r
   const { items, nextCursor } = await searchPlayers("", query);
   ok(res, items, { nextCursor, limit: query.limit });
 });
+/** "Top rated": only people with enough revealed reviews, best damped rating first. */
+publicRoutes.get("/top-players", limiter, validate({ query: searchQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, z.infer<typeof searchQuery>>(req);
+  const { items, nextCursor } = await searchPlayers("", { ...query, sort: "rating", minReviews: RATING_RULES.minRevealedForAverage });
+  ok(res, items, { nextCursor, limit: query.limit });
+});
 publicRoutes.get("/players/:id", limiter, validate({ params: profileParams }), async (req, res) => {
   ok(res, await getPublicProfile(valid<unknown, z.infer<typeof profileParams>>(req).params.id));
+});
+publicRoutes.get("/players/:id/reviews", limiter, validate({ params: profileParams, query: playerRatingsQuery }), async (req, res) => {
+  const { params, query } = valid<unknown, z.infer<typeof profileParams>, z.infer<typeof playerRatingsQuery>>(req);
+  const { items, nextCursor } = await publicPlayerReviews(params.id, query);
+  ok(res, items, { nextCursor, limit: query.limit });
 });
 publicRoutes.get("/requests", limiter, validate({ query: feedQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof feedQuery>>(req);
@@ -42,6 +56,7 @@ publicRoutes.get("/requests/:id", limiter, validate({ params: requestParams }), 
 });
 
 const T = "Public";
+registerRoute({ method: "get", path: "/public/top-players", tag: T, summary: "Top rated players (signed out)", description: "Only players with at least 3 revealed reviews, ordered by the damped rating. Same filters and shape as `/public/players`.", query: searchQuery as unknown as zod.ZodObject, response: zod.array(zod.unknown()), errors: [422] });
 registerRoute({ method: "get", path: "/public/players", tag: T, summary: "Search players (signed out)", description: "Same filters and result shape as `GET /players`, without sign-in. For the website's SEO pages.", query: searchQuery as unknown as zod.ZodObject, response: zod.array(zod.unknown()), errors: [422] });
 registerRoute({ method: "get", path: "/public/players/{id}", tag: T, summary: "A player's public profile (signed out)", description: "Same as `GET /players/{id}` without sign-in.", params: profileParams, response: zod.unknown(), errors: [404] });
 registerRoute({ method: "get", path: "/public/requests", tag: T, summary: "Open requests (signed out)", description: "Same as `GET /requests` without sign-in.", query: feedQuery as unknown as zod.ZodObject, response: zod.array(zod.unknown()), errors: [422] });

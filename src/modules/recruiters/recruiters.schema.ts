@@ -35,6 +35,7 @@ const RecruiterCard = z
     district: Ref,
     sportIds: z.array(z.number().int()),
     verifiedBadge: z.boolean(),
+    rating: z.object({ average: z.number(), count: z.number().int(), isNew: z.boolean() }).openapi({ description: "Reviews from players this organiser has hosted. `isNew` until 3 are revealed (then `average` is 0)." }),
     logoUrl: z.string().nullable().openapi({ description: "Organisation logo (original size; use the `/img/` renditions to display)." }),
   })
   .openapi("RecruiterProfile");

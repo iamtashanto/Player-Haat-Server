@@ -119,6 +119,7 @@ export const searchQuery = z
     khepAvailable: z.stringbool().optional(),
     rateMin: z.coerce.number().int().min(0).optional().openapi({ description: "Your budget floor (BDT). Implies khepAvailable; khep players with no stated rate count as negotiable and match." }),
     rateMax: z.coerce.number().int().min(0).optional().openapi({ description: "Your budget ceiling (BDT)." }),
+    minReviews: z.coerce.number().int().min(0).max(100).optional().openapi({ description: "Only players with at least this many revealed reviews (with `sportId`: in that sport). Used for \"top rated\" lists so they never rank people nobody has rated." }),
     minRating: z.coerce.number().min(0).max(5).optional().openapi({ description: "Excludes unrated players. With `sportId` it applies to that sport's own rating, otherwise to the overall one." }),
     minExperienceYears: z.coerce.number().int().min(0).max(60).optional().openapi({ description: "Matched against the same sport profile as the other sport-level filters." }),
     minSkillLevel: z.coerce.number().int().min(1).max(5).optional(),

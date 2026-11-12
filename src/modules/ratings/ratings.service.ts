@@ -345,3 +345,49 @@ export async function receivedRatings(userId: string, q: { cursor?: string; limi
     nextCursor,
   };
 }
+
+/** Signed-out view of a player's reviews: first name only, no avatar, no scores of the rater, replies included. */
+export async function publicPlayerReviews(profileId: string, q: { cursor?: string; limit: number }) {
+  const { items, nextCursor } = await playerReviews(profileId, q);
+  return {
+    items: items.map((r) => ({
+      id: r.id,
+      overall: r.overall,
+      comment: r.comment,
+      reply: r.reply,
+      createdAt: r.createdAt,
+      rater: { firstName: r.rater.name.trim().split(/\s+/)[0] ?? "" },
+      request: r.request,
+    })),
+    nextCursor,
+  };
+}
+
+/** What players said about an organiser: revealed, visible reviews of the "player rates the captain" kind. */
+export async function captainReviews(recruiterProfileId: string, q: { cursor?: string; limit: number }) {
+  const recruiter = await prisma.recruiterProfile.findFirst({ where: { id: recruiterProfileId, user: { status: "ACTIVE" } }, select: { userId: true } });
+  if (!recruiter) throw AppError.notFound("RECRUITER_PROFILE_NOT_FOUND", "Recruiter not found");
+  const rows = await prisma.rating.findMany({
+    where: { rateeId: recruiter.userId, direction: "PLAYER_TO_CAPTAIN", ...countable },
+    include: {
+      rater: { select: { name: true, avatarUrl: true } },
+      request: { select: { matchAt: true, sport: { select: { id: true, code: true, nameBn: true, nameEn: true } } } },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    ...cursorArgs(q.cursor, q.limit),
+  });
+  const { items, nextCursor } = toPage(rows, q.limit);
+  return {
+    items: items.map((r) => ({
+      id: r.id,
+      overall: Math.round(r.overall * 100) / 100,
+      scores: r.scores as Scores,
+      comment: r.comment,
+      reply: r.replyText ? { text: r.replyText, at: r.repliedAt?.toISOString() ?? null } : null,
+      createdAt: r.createdAt.toISOString(),
+      rater: r.rater,
+      request: { sport: r.request.sport, matchAt: r.request.matchAt.toISOString() },
+    })),
+    nextCursor,
+  };
+}
