@@ -707,6 +707,8 @@ model Team {
   @@index([sportId, upazilaId])
   resultsAsOpponent MatchResult[]   @relation("ResultOpponent")
   requestsAsOpponent PlayerRequest[] @relation("RequestOpponent")
+  challengesMade     TeamChallenge[] @relation("ChallengeFrom")
+  challengesAccepted TeamChallenge[] @relation("ChallengeBy")
 }
 
 model TeamMember {
@@ -851,6 +853,36 @@ model MatchResult {
   opponentTeam Team?         @relation("ResultOpponent", fields: [opponentTeamId], references: [id], onDelete: SetNull)
 
   @@index([opponentTeamId])
+}
+
+enum ChallengeStatus {
+  OPEN
+  ACCEPTED
+  CANCELLED
+}
+
+/// "ম্যাচ চাই": a team captain offers a match; another team's captain accepts and a match is created for both.
+model TeamChallenge {
+  id               String          @id @default(cuid())
+  teamId           String
+  createdById      String
+  sportId          Int
+  districtId       Int
+  upazilaId        Int
+  venueText        String
+  proposedAt       DateTime
+  notes            String?
+  status           ChallengeStatus @default(OPEN)
+  acceptedByTeamId String?
+  requestId        String? // the match created on acceptance
+  createdAt        DateTime        @default(now())
+
+  team       Team  @relation("ChallengeFrom", fields: [teamId], references: [id], onDelete: Cascade)
+  acceptedBy Team? @relation("ChallengeBy", fields: [acceptedByTeamId], references: [id], onDelete: SetNull)
+
+  @@index([status, proposedAt])
+  @@index([upazilaId, status, proposedAt])
+  @@index([teamId])
 }
 
 model Application {

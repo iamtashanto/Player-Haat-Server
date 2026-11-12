@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-186 codes. Messages are developer-facing English and may change; **codes are stable**.
+192 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -90,6 +90,17 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `BOOST_UNAVAILABLE` | 409 | Boosting isn't available right now | `modules/requests/requests.service.ts` |
+
+## CHALLENGE
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `CHALLENGE_EXPIRED` | 409 | The proposed time has passed | `modules/competition/challenges.service.ts` |
+| `CHALLENGE_LIMIT` | 409 | A team can have at most… | `modules/competition/challenges.service.ts` |
+| `CHALLENGE_NOT_FOUND` | 404 | Challenge not found | `modules/competition/challenges.service.ts` |
+| `CHALLENGE_NOT_OPEN` | 409 | This challenge is… | `modules/competition/challenges.service.ts` |
+| `CHALLENGE_NOT_OWNER` | 403 | Only the challenging captain can cancel | `modules/competition/challenges.service.ts` |
+| `CHALLENGE_OWN` | 403 | You can't accept your own challenge | `modules/competition/challenges.service.ts` |
 
 ## CHAT
 

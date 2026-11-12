@@ -12,6 +12,7 @@ import { invitesRoutes } from "./modules/invites/invites.routes.js";
 import { dashboardRoutes } from "./modules/dashboard/dashboard.routes.js";
 import { telemetryRoutes } from "./modules/telemetry/telemetry.routes.js";
 import { shortlistRoutes } from "./modules/shortlist/shortlist.routes.js";
+import { challengesRoutes } from "./modules/competition/challenges.routes.js";
 import { seriesRoutes } from "./modules/series/series.routes.js";
 import { teamsRoutes } from "./modules/teams/teams.routes.js";
 import { appConfigRoutes } from "./modules/app-config/app-config.routes.js";
@@ -69,6 +70,7 @@ apiRouter.use("/games", requireAppUser, gamesRoutes);
 apiRouter.use("/verification", requireAppUser, verificationRoutes);
 apiRouter.use("/teams", requireAppUser, teamsRoutes);
 apiRouter.use("/series", requireAppUser, seriesRoutes);
+apiRouter.use("/challenges", requireAppUser, challengesRoutes);
 
 // The dashboard's API: ADMIN only (its own login lives inside this router).
 apiRouter.use("/admin", adminAuthRoutes); // two-factor steps of the admin sign-in (the challenge token is the credential)
