@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { purgeTelemetry } from "../telemetry/telemetry.service.js";
 
 const DAY = 86_400_000;
 
@@ -7,6 +8,7 @@ export interface PurgeResult {
   verificationCodes: number;
   notifications: number;
   pushLog: number;
+  telemetry: number;
 }
 
 /** `timestamp` columns hold UTC; bind UTC text so a non-UTC DB session can't skew the cutoff. */
@@ -55,5 +57,6 @@ export async function purgeExpiredData(now = new Date(), opts: { chunk?: number;
     (n) => prisma.$executeRaw`DELETE FROM "PushJob" WHERE id IN (SELECT id FROM "PushJob" WHERE status IN ('SENT','FAILED','SKIPPED') AND "createdAt" < ${utc(t - 30 * DAY)}::timestamp LIMIT ${n})`,
     chunk,
   );
-  return { refreshTokens, verificationCodes, notifications, pushLog };
+  const telemetry = await purgeTelemetry(new Date(t - 90 * DAY));
+  return { refreshTokens, verificationCodes, notifications, pushLog, telemetry };
 }

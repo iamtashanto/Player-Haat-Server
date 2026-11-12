@@ -29,6 +29,8 @@ export const e2eUsers = () => prisma.user.findMany({ where: { OR: [E2E_EMAIL_SUF
  */
 export async function cleanupE2eData(deps: CleanupDeps): Promise<CleanupReport> {
   const log = deps.log ?? (() => undefined);
+  // telemetry from automated browsers is tagged appVersion = 'e2e' and is not tied to any user
+  if (!deps.dryRun) await prisma.telemetryEvent.deleteMany({ where: { appVersion: "e2e" } });
   const ids = (await e2eUsers()).map((u) => u.id);
   const report: CleanupReport = { users: ids.length, files: 0, filesDeleted: 0, filesFailed: 0, requests: 0, teams: 0 };
   if (ids.length === 0) return report;

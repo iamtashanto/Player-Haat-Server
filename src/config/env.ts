@@ -39,6 +39,8 @@ const schema = z
     PUBLIC_API_URL: z.string().url().default("http://localhost:4000"),
     DOCS_ENABLED: bool.optional(),
     JOBS_ENABLED: bool.optional(),
+    /** First-party crash and usage events from the web and the app. On by default; false drops them at the door. */
+    TELEMETRY_ENABLED: bool.default(true),
     // Only for load tests / debugging. Refused in production.
     RATE_LIMIT_ENABLED: bool.default(true),
 

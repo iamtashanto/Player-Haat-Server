@@ -1245,3 +1245,34 @@ model Message {
 
   @@index([conversationId, createdAt(sort: Desc)])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// First-party crash and usage telemetry (no third-party SDK, no IP address, no account id)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TelemetryKind {
+  ERROR
+  EVENT
+}
+
+/// One crash/error or one funnel step sent by the web or the app. `sessionId` is random per tab/install and is
+/// never linked to an account. Rows are deleted after 90 days (see the purge job).
+model TelemetryEvent {
+  id          String        @id @default(cuid())
+  at          DateTime      @default(now())
+  kind        TelemetryKind
+  name        String // event name ("signup_completed") or error source ("window.onerror", "react", "api_5xx", "flutter")
+  platform    String // WEB | ANDROID | IOS
+  appVersion  String?
+  sessionId   String
+  route       String? // path or screen name, no query string
+  message     String?
+  stack       String?
+  fingerprint String? // groups the same error together
+  props       Json? // small, string/number/boolean values only
+  locale      String?
+
+  @@index([kind, at])
+  @@index([kind, name, at])
+  @@index([fingerprint, at])
+}

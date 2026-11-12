@@ -9,6 +9,8 @@ import * as adminAuth from "./admin-auth.service.js";
 import * as chat from "../chat/chat.service.js";
 import * as ratingMod from "../ratings/ratings.moderation.js";
 import * as rs from "../ratings/ratings.schema.js";
+import * as telemetrySchema from "../telemetry/telemetry.schema.js";
+import * as telemetry from "../telemetry/telemetry.service.js";
 import * as verification from "../verification/verification.service.js";
 import * as vs from "../verification/verification.schema.js";
 import { sendDocument } from "../verification/verification.routes.js";
@@ -59,6 +61,12 @@ adminExtraRoutes.delete("/ratings/:id/reply", validate({ params: rs.ratingParams
 });
 adminExtraRoutes.get("/ratings/flagged-organisers", async (_req, res) => ok(res, await ratingMod.flaggedOrganisers()));
 adminExtraRoutes.get("/users/:id/ratings", validate({ params: rs.ratingParams }), async (req, res) => ok(res, await ratingMod.adminUserRatings(idOf(req))));
+
+// health: grouped errors and the funnel (first-party telemetry)
+adminExtraRoutes.get("/telemetry/summary", validate({ query: telemetrySchema.summaryQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, B<typeof telemetrySchema.summaryQuery>>(req);
+  ok(res, await telemetry.summary(query.days));
+});
 
 // payments
 adminExtraRoutes.get("/payments", validate({ query: billing.paymentsQuery }), async (req, res) => {

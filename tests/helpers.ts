@@ -28,7 +28,7 @@ export async function resetDb() {
   fakeSms.reset();
   clearConfigCache();
   await prisma.$executeRawUnsafe(
-    `TRUNCATE "User","Division","Sport","AppConfig","VerificationCode","CreditPack","MediaAsset" RESTART IDENTITY CASCADE`,
+    `TRUNCATE "User","Division","Sport","AppConfig","VerificationCode","CreditPack","MediaAsset","TelemetryEvent" RESTART IDENTITY CASCADE`,
   );
   // The migration seeds the starter credit packs; restore them so every test begins from the same catalogue.
   await prisma.$executeRawUnsafe(

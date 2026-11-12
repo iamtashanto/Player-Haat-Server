@@ -10,6 +10,7 @@ import { gamesRoutes } from "./modules/games/games.routes.js";
 import { chatRoutes } from "./modules/chat/chat.routes.js";
 import { invitesRoutes } from "./modules/invites/invites.routes.js";
 import { dashboardRoutes } from "./modules/dashboard/dashboard.routes.js";
+import { telemetryRoutes } from "./modules/telemetry/telemetry.routes.js";
 import { shortlistRoutes } from "./modules/shortlist/shortlist.routes.js";
 import { teamsRoutes } from "./modules/teams/teams.routes.js";
 import { appConfigRoutes } from "./modules/app-config/app-config.routes.js";
@@ -42,6 +43,7 @@ apiRouter.use("/sports", sportsRoutes);
 apiRouter.use("/recruiter-types", recruiterTypesRoutes);
 apiRouter.use("/app-config", appConfigRoutes);
 apiRouter.use("/public", publicRoutes);
+apiRouter.use("/telemetry", telemetryRoutes);
 
 // The mobile app's API. Mounted behind the role guard so a new router can't be exposed to admins by
 // forgetting it; routers add stricter guards (player-only, recruiter-only) where a feature needs one.
