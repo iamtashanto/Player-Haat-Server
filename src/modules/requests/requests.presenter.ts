@@ -7,6 +7,7 @@ export const requestInclude = {
   sport: { select: { id: true, code: true, nameBn: true, nameEn: true } },
   ...locationInclude,
   team: { select: { id: true, name: true, logoUrl: true } },
+  series: { select: { id: true, title: true } },
   createdBy: { select: { name: true, avatarUrl: true, captainAvgRating: true, captainRatingCount: true, recruiterProfile: { select: { id: true, verifiedBadge: true, logoUrl: true, logoPublicId: true } } } },
 } satisfies Prisma.PlayerRequestInclude;
 
@@ -59,6 +60,7 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
       recruiterVerified: r.createdBy.recruiterProfile?.verifiedBadge ?? false,
       logoUrl: r.createdBy.recruiterProfile ? imageUrl(r.createdBy.recruiterProfile.logoPublicId, r.createdBy.recruiterProfile.logoUrl) : null,
     },
+    series: r.series ? { id: r.series.id, title: r.series.title } : null,
     waitlistCount: ctx.waitlistCounts?.get(r.id) ?? 0,
     isOwner,
     myApplication: isOwner ? null : (ctx.myApplications?.get(r.id) ?? null),

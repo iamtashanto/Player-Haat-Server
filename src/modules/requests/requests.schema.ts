@@ -103,6 +103,7 @@ const RequestItem = z
     interested: z.object({ count: z.number().int(), preview: z.array(z.object({ profileId: z.string(), name: z.string(), avatarUrl: z.string().nullable() })) }).openapi({ description: "People who applied / tapped 'interested' (pending or accepted). `preview` lists a few visible players, newest first, for events." }),
     isOwner: z.boolean(),
     myApplication: z.object({ id: z.string(), status: z.enum(["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN", "WAITLISTED"]), waitlistPosition: z.number().int().optional().openapi({ description: "1 = next in line. Only while WAITLISTED." }) }).nullable(),
+    series: z.object({ id: z.string(), title: z.string() }).nullable().openapi({ description: "The weekly game this match belongs to." }),
     waitlistCount: z.number().int().openapi({ description: "How many people are waiting for a spot." }),
     pendingApplicants: z.number().int().optional().openapi({ description: "Owner only." }),
     createdAt: z.string().datetime(),

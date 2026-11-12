@@ -114,7 +114,7 @@ async function assertPositionsFor(sportId: number, positions: string[]) {
 
 // ───────────────────────── create ─────────────────────────
 
-export async function createRequest(userId: string, input: z.infer<typeof createRequestBody>) {
+export async function createRequest(userId: string, input: z.infer<typeof createRequestBody>, extra: { seriesId?: string } = {}) {
   const sport = await prisma.sport.findFirst({ where: { id: input.sportId, isActive: true }, select: { id: true } });
   if (!sport) throw AppError.invalid("sportId", "Unknown or inactive sport");
 
@@ -165,6 +165,7 @@ export async function createRequest(userId: string, input: z.infer<typeof create
       kind,
       joinMode: kind === "MATCH" ? (input.joinMode ?? "APPROVAL") : "APPROVAL",
       title: kind === "EVENT" ? (input.title ?? null) : null,
+      seriesId: extra.seriesId ?? null,
     },
     include: requestInclude,
   });

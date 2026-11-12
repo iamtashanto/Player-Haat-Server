@@ -118,6 +118,10 @@ const templates: Record<NotificationType, Template> = {
     title: l === "bn" ? "ম্যাচে আর জায়গা নেই" : "The match is full",
     body: line(p, l),
   }),
+  SERIES_GAME_POSTED: (p, l) => ({
+    title: p.heading ?? (l === "bn" ? "এই সপ্তাহের খেলা" : "This week's game"),
+    body: line(p, l),
+  }),
   WAITLIST_PROMOTED: (p, l) => ({
     title:
       p.code === "PENDING"

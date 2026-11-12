@@ -201,6 +201,7 @@ enum NotificationType {
   ANNOUNCEMENT // from the admin dashboard
   PROFILE_VIEWED // a recruiter opened your profile (once per recruiter per day)
   WAITLIST_PROMOTED // a spot opened in a full game you were waiting for
+  SERIES_GAME_POSTED // this week's game of a series you are a regular in is up
 }
 
 enum PushStatus {
@@ -324,6 +325,8 @@ model User {
   reportsFiled             Report[]                @relation("ReportReporter")
   reportsResolved          Report[]                @relation("ReportResolver")
   adminActions             AdminAction[]
+  gameSeries               GameSeries[]
+  seriesMemberships        SeriesMember[]
 
   @@index([status])
   @@index([role, status])
@@ -412,6 +415,7 @@ model District {
   requests   PlayerRequest[]
   teams      Team[]
   recruiters RecruiterProfile[]
+  gameSeries GameSeries[]
 
   @@unique([divisionId, slug])
   @@index([nameEn])
@@ -427,11 +431,12 @@ model Upazila {
   lat        Float?
   lng        Float?
 
-  district District        @relation(fields: [districtId], references: [id])
-  unions   Union[]
-  profiles PlayerProfile[]
-  requests PlayerRequest[]
-  teams    Team[]
+  district   District        @relation(fields: [districtId], references: [id])
+  unions     Union[]
+  profiles   PlayerProfile[]
+  requests   PlayerRequest[]
+  teams      Team[]
+  gameSeries GameSeries[]
 
   @@unique([districtId, slug])
   @@index([nameEn])
@@ -445,10 +450,11 @@ model Union {
   nameEn    String
   slug      String
 
-  upazila  Upazila         @relation(fields: [upazilaId], references: [id])
-  profiles PlayerProfile[]
-  requests PlayerRequest[]
-  teams    Team[]
+  upazila    Upazila         @relation(fields: [upazilaId], references: [id])
+  profiles   PlayerProfile[]
+  requests   PlayerRequest[]
+  teams      Team[]
+  gameSeries GameSeries[]
 
   @@unique([upazilaId, slug])
   @@index([nameEn])
@@ -471,6 +477,7 @@ model Sport {
   profileViews ProfileView[]
   teams        Team[]
   requests     PlayerRequest[]
+  gameSeries   GameSeries[]
 }
 
 model Position {
@@ -753,6 +760,8 @@ model PlayerRequest {
   ratings      Rating[]
   invites      Invite[]
   chatMessages GameMessage[]
+  seriesId     String?
+  series       GameSeries?   @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
   @@index([status, matchAt])
   @@index([upazilaId, status, matchAt])
@@ -761,6 +770,56 @@ model PlayerRequest {
   @@index([createdById, createdAt(sort: Desc)])
   @@index([status, completedAt]) // rating-reminder job and rating windows
   @@index([positionsNeeded], type: Gin)
+}
+
+/// A weekly game ("Friday football"): the same ground, day and time every week. A job posts the next game once the
+/// last one has started; regulars are told when it is up.
+model GameSeries {
+  id              String   @id @default(cuid())
+  createdById     String
+  title           String
+  sportId         Int
+  districtId      Int
+  upazilaId       Int
+  unionId         Int?
+  venueText       String
+  weekday         Int // 0 = Sunday … 6 = Saturday, Asia/Dhaka
+  startTime       String // "HH:MM", Asia/Dhaka
+  positionsNeeded String[]
+  playersNeeded   Int      @default(1)
+  isPaid          Boolean  @default(false)
+  budgetMin       Int?
+  budgetMax       Int?
+  notes           String?
+  joinMode        JoinMode @default(APPROVAL)
+  teamId          String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  createdBy User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  sport     Sport           @relation(fields: [sportId], references: [id])
+  district  District        @relation(fields: [districtId], references: [id])
+  upazila   Upazila         @relation(fields: [upazilaId], references: [id])
+  union     Union?          @relation(fields: [unionId], references: [id])
+  members   SeriesMember[]
+  games     PlayerRequest[]
+
+  @@index([createdById])
+  @@index([isActive])
+}
+
+model SeriesMember {
+  id       String   @id @default(cuid())
+  seriesId String
+  userId   String
+  joinedAt DateTime @default(now())
+
+  series GameSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([seriesId, userId])
+  @@index([userId])
 }
 
 model Application {

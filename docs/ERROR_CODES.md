@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-172 codes. Messages are developer-facing English and may change; **codes are stable**.
+179 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -262,7 +262,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | `PLAYER_NO_PHONE` | 409 | This player hasn't added a phone number | `modules/contact/contact.service.ts` |
 | `PLAYER_PROFILE_EXISTS` | 409 | You already have a player profile | `modules/players/players.service.ts` |
 | `PLAYER_PROFILE_NOT_FOUND` | 404 | Player profile not found | `modules/admin/admin.service.ts`, `modules/chat/chat.service.ts`, `modules/contact/contact.service.ts`, `modules/invites/invites.service.ts`, `modules/players/availability.service.ts`, `modules/players/player-media.service.ts`, `modules/ratings/ratings.service.ts`, `modules/shortlist/shortlist.service.ts` |
-| `PLAYER_PROFILE_REQUIRED` | 409 | Create your player profile before applying | `modules/applications/applications.service.ts` |
+| `PLAYER_PROFILE_REQUIRED` | 409 | Create your player profile before applying | `modules/applications/applications.service.ts`, `modules/series/series.service.ts` |
 | `PLAYER_SPORT_EXISTS` | 409 | You already added that sport; update it instead | `modules/players/players.service.ts` |
 | `PLAYER_SPORT_NOT_FOUND` | 404 | Sport profile not found | `modules/admin/admin.service.ts`, `modules/players/player-media.service.ts`, `modules/players/players.service.ts`, `modules/verification/verification.service.ts` |
 | `PLAYER_SPORT_REQUIRED` | 409 | Add… | `modules/applications/applications.service.ts` |
@@ -330,10 +330,10 @@ Every error response has this shape — the app should translate `error.code`, n
 | `REQUEST_LIMIT` | 409 | You can have at most… | `modules/requests/requests.service.ts` |
 | `REQUEST_NO_ACCEPTED_PLAYERS` | 409 | No players were accepted — cancel the request instead | `modules/requests/requests.service.ts` |
 | `REQUEST_NOT_COMPLETED` | 409 | You can rate once the poster marks the match completed | `modules/ratings/ratings.service.ts` |
-| `REQUEST_NOT_FOUND` | 404 | Request not found | `modules/admin/admin.service.ts`, `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/public/public.routes.ts`, `modules/ratings/ratings.service.ts`, `modules/requests/request-lock.ts`, `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_FOUND` | 404 | Request not found | `modules/admin/admin.service.ts`, `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/public/public.routes.ts`, `modules/ratings/ratings.service.ts`, `modules/requests/request-lock.ts`, `modules/requests/requests.service.ts`, `modules/series/series.service.ts` |
 | `REQUEST_NOT_HIDDEN` | 409 | Not hidden | `modules/admin/admin.service.ts` |
 | `REQUEST_NOT_OPEN` | 409 | This request is… | `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
-| `REQUEST_NOT_OWNER` | 403 | Only the poster can see applicants | `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
+| `REQUEST_NOT_OWNER` | 403 | Only the poster can see applicants | `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/requests/requests.service.ts`, `modules/series/series.service.ts` |
 | `REQUEST_NOT_STARTED` | 409 | The game hasn't started yet | `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
 | `REQUEST_OWN` | 403 | You can't apply to your own request | `modules/applications/applications.service.ts` |
 
@@ -342,6 +342,18 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `ROUTE_NOT_FOUND` | 404 | Cannot… | `(shared middleware)`, `middlewares/not-found.ts` |
+
+## SERIES
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `SERIES_EXISTS` | 409 | This game is already part of a weekly series | `modules/series/series.service.ts` |
+| `SERIES_LIMIT` | 409 | You can run at most… | `modules/series/series.service.ts` |
+| `SERIES_MATCH_ONLY` | 409 | Only matches can repeat weekly, not events | `modules/series/series.service.ts` |
+| `SERIES_NOT_FOUND` | 404 | Weekly game not found | `modules/series/series.service.ts` |
+| `SERIES_NOT_OWNER` | 403 | Only the organiser can change this weekly game | `modules/series/series.service.ts` |
+| `SERIES_OWN` | 409 | You run this weekly game | `modules/series/series.service.ts` |
+| `SERIES_PAUSED` | 409 | This weekly game is paused | `modules/series/series.service.ts` |
 
 ## SERVICE
 
