@@ -9,6 +9,7 @@ import { verificationRoutes } from "./modules/verification/verification.routes.j
 import { gamesRoutes } from "./modules/games/games.routes.js";
 import { chatRoutes } from "./modules/chat/chat.routes.js";
 import { invitesRoutes } from "./modules/invites/invites.routes.js";
+import { dashboardRoutes } from "./modules/dashboard/dashboard.routes.js";
 import { shortlistRoutes } from "./modules/shortlist/shortlist.routes.js";
 import { teamsRoutes } from "./modules/teams/teams.routes.js";
 import { appConfigRoutes } from "./modules/app-config/app-config.routes.js";
@@ -59,6 +60,7 @@ apiRouter.use("/reports", requireAppUser, reportsRoutes);
 apiRouter.use("/billing", requireAppUser, billingRoutes);
 apiRouter.use("/invites", requireAppUser, invitesRoutes);
 apiRouter.use("/shortlist", requireAppUser, shortlistRoutes);
+apiRouter.use("/dashboard", requireAppUser, dashboardRoutes);
 apiRouter.use("/conversations", requireAppUser, chatRoutes);
 apiRouter.use("/games", requireAppUser, gamesRoutes);
 apiRouter.use("/verification", requireAppUser, verificationRoutes);
