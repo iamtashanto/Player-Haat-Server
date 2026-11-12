@@ -36,3 +36,11 @@ Empty reference-only DB prepared: playerhaat_empty (0 users) for the from-empty 
 Gotcha: `pkill -f "tsx watch"` kills only the watcher; its child keeps port 4000 with the OLD env. Restart with
 `lsof -nP -iTCP:4000 -sTCP:LISTEN -t | xargs kill` first, then `RATE_LIMIT_ENABLED=false npm run dev`, and verify with a burst of
 POST /auth/register (expect 201s, not 429). Same for `next start` on :3000 (process name is `next-server`).
+
+## Feature batch (user request: address search, logic checks, media, reviews, dashboards, then roadmap items)
+DONE + committed (server+web, with tests/e2e): address type-to-search (server `/locations/search` multi-word + parents; web picker; app already had a search box and now gets the better results);
+public reviews (anonymous, first name only), organiser reviews + rating on organiser card, `/public/top-players` (3+ revealed reviews) + web `/top`, honest "top" headings;
+dashboards (`GET /dashboard`, web Home panel for player and organiser); profile photo e2e + desktop "Remove photo" bug fixed; achievements on public profile (web already had edit/show; roadmap H8 was a false positive).
+QUEUE (in order): H1 first-party errors+analytics, H2 game share card, H3 PWA, H4 waitlist, H5 recurring games, H7 results/scores, cheap wins (ground-fee split, rain alert, .ics, data saver), competition set (team pages, challenges, leaderboards, tournaments).
+APP PARITY still to do for: dashboard, reviews on organiser card, /top, share, waitlist, recurring, results, .ics (Flutter). App already has type-to-search address.
+Servers: API `RATE_LIMIT_ENABLED=false ADMIN_REQUIRE_2FA=true npm run dev` (log /tmp/api.log), web `next start -p 3000` after `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1 pnpm build`.
