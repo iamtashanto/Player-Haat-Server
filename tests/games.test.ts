@@ -33,19 +33,22 @@ describe("join without approval", () => {
     expect(full).toMatchObject({ status: "FILLED", playersAccepted: 2 });
 
     const late = await join(c.auth, game.id);
-    expect(late.status).toBe(409);
-    expect(late.body.error.code).toBe("REQUEST_FILLED");
+    expect(late.status).toBe(201);
+    expect(late.body.data.status).toBe("WAITLISTED"); // a full match takes a waitlist place instead of a refusal
 
     await api().post(`${V1}/applications/${ja.body.data.id}/withdraw`).set(a.auth);
-    expect(await prisma.playerRequest.findUniqueOrThrow({ where: { id: game.id } })).toMatchObject({ status: "OPEN", playersAccepted: 1 });
-    expect((await join(c.auth, game.id)).body.data.status).toBe("ACCEPTED");
+    // the waiting player (c) is promoted automatically and the game is full again
+    expect(await prisma.playerRequest.findUniqueOrThrow({ where: { id: game.id } })).toMatchObject({ status: "FILLED", playersAccepted: 2 });
+    expect(await prisma.application.findFirstOrThrow({ where: { requestId: game.id, playerId: c.user.id } })).toMatchObject({ status: "ACCEPTED" });
   });
 
   it("never over-fills when players join at the same moment", async () => {
     const game = (await post(org.auth, { joinMode: "OPEN_JOIN", playersNeeded: 2 })).body.data;
     const ps = await Promise.all(["p1", "p2", "p3", "p4"].map((n) => playerUser(w, `${n}@example.com`, FB())));
     const results = await Promise.all(ps.map((p) => join(p.auth, game.id)));
-    expect(results.filter((r) => r.status === 201)).toHaveLength(2);
+    expect(results.filter((r) => r.status === 201)).toHaveLength(4);
+    expect(results.filter((r) => r.body.data.status === "ACCEPTED")).toHaveLength(2); // the other two wait
+    expect(results.filter((r) => r.body.data.status === "WAITLISTED")).toHaveLength(2);
     expect((await prisma.playerRequest.findUniqueOrThrow({ where: { id: game.id } })).playersAccepted).toBe(2);
   });
 

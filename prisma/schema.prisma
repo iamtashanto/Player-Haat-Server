@@ -163,6 +163,7 @@ enum ApplicationStatus {
   ACCEPTED
   REJECTED
   WITHDRAWN
+  WAITLISTED // applied to a full match; promoted automatically when a spot opens
 }
 
 enum RatingDirection {
@@ -199,6 +200,7 @@ enum NotificationType {
   GAME_MESSAGE // a message in a game's group chat
   ANNOUNCEMENT // from the admin dashboard
   PROFILE_VIEWED // a recruiter opened your profile (once per recruiter per day)
+  WAITLIST_PROMOTED // a spot opened in a full game you were waiting for
 }
 
 enum PushStatus {
@@ -769,6 +771,7 @@ model Application {
   message            String?
   status             ApplicationStatus @default(PENDING)
   respondedAt        DateTime?
+  waitlistedAt       DateTime? // when the player joined the waitlist: the queue order
   // Marked by the organiser after the game; drives the player's reliability score.
   attendance         Attendance?
   attendanceMarkedAt DateTime?
@@ -779,6 +782,7 @@ model Application {
   player  User          @relation(fields: [playerId], references: [id])
 
   @@unique([requestId, playerId])
+  @@index([requestId, status, waitlistedAt])
   @@index([playerId, attendance])
   @@index([playerId, status])
   @@index([requestId, status])

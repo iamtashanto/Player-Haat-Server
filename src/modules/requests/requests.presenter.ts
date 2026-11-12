@@ -17,7 +17,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export interface ViewerContext {
   viewerId: string;
   /** requestId → the viewer's own application, when they have one. */
-  myApplications?: Map<string, { id: string; status: "PENDING" | "ACCEPTED" | "REJECTED" | "WITHDRAWN" }>;
+  myApplications?: Map<string, { id: string; status: "PENDING" | "ACCEPTED" | "REJECTED" | "WITHDRAWN" | "WAITLISTED"; waitlistPosition?: number }>;
+  /** requestId → people waiting for a spot. */
+  waitlistCounts?: Map<string, number>;
   /** requestId → pending applicant count (owner views). */
   pendingCounts?: Map<string, number>;
   /** requestId → how many are interested/applied, plus a few visible players (events). */
@@ -57,6 +59,7 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
       recruiterVerified: r.createdBy.recruiterProfile?.verifiedBadge ?? false,
       logoUrl: r.createdBy.recruiterProfile ? imageUrl(r.createdBy.recruiterProfile.logoPublicId, r.createdBy.recruiterProfile.logoUrl) : null,
     },
+    waitlistCount: ctx.waitlistCounts?.get(r.id) ?? 0,
     isOwner,
     myApplication: isOwner ? null : (ctx.myApplications?.get(r.id) ?? null),
     ...(isOwner && ctx.pendingCounts && { pendingApplicants: ctx.pendingCounts.get(r.id) ?? 0 }),

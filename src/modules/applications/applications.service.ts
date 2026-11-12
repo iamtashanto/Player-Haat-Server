@@ -30,18 +30,79 @@ function assertAcceptingPeople(r: RequestRow) {
   if (r.matchAt.getTime() <= Date.now()) throw AppError.conflict("REQUEST_EXPIRED", "This match has already started");
 }
 
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+export interface Promotion { playerId: string; applicationId: string; instant: boolean; filled: boolean }
+
+/**
+ * A spot opened in a MATCH: the people who waited longest move up. Open-join games take them in straight away
+ * (and refill the game); approval games move them to the organiser's pending list, one per free spot, because the
+ * organiser still chooses. Runs under the request lock the caller already holds. Returns who moved, so the caller
+ * notifies after commit.
+ */
+export async function promoteWaitlist(tx: Tx, request: RequestRow): Promise<Promotion[]> {
+  if (request.kind !== "MATCH" || request.matchAt.getTime() <= Date.now() || (request.status !== "OPEN" && request.status !== "FILLED")) return [];
+  let accepted = request.playersAccepted;
+  let free = request.playersNeeded - accepted;
+  if (free <= 0) return [];
+  const instant = request.joinMode === "OPEN_JOIN";
+  if (!instant) free -= await tx.application.count({ where: { requestId: request.id, status: "PENDING" } });
+  if (free <= 0) return [];
+
+  const waiting = await tx.application.findMany({
+    where: { requestId: request.id, status: "WAITLISTED", player: { status: "ACTIVE" } },
+    orderBy: [{ waitlistedAt: "asc" }, { createdAt: "asc" }],
+    take: free,
+    select: { id: true, playerId: true },
+  });
+  const moved: Promotion[] = [];
+  for (const w of waiting) {
+    await tx.application.update({
+      where: { id: w.id },
+      data: instant ? { status: "ACCEPTED", respondedAt: new Date() } : { status: "PENDING" },
+    });
+    if (instant) accepted += 1;
+    moved.push({ playerId: w.playerId, applicationId: w.id, instant, filled: false });
+  }
+  if (instant && moved.length > 0) {
+    const full = accepted >= request.playersNeeded;
+    await tx.playerRequest.update({ where: { id: request.id }, data: { playersAccepted: accepted, status: full ? "FILLED" : "OPEN" } });
+    const last = moved[moved.length - 1];
+    if (last) last.filled = full;
+  } else if (moved.length > 0 && request.status === "FILLED" && accepted < request.playersNeeded) {
+    await tx.playerRequest.update({ where: { id: request.id }, data: { status: "OPEN" } });
+  }
+  return moved;
+}
+
+/** After commit: tell each promoted player, and the organiser when approval is still theirs to give. */
+export function notifyPromotions(request: RequestRow, moved: Promotion[]) {
+  for (const m of moved) {
+    notify({
+      userIds: [m.playerId],
+      type: "WAITLIST_PROMOTED",
+      data: { requestId: request.id, applicationId: m.applicationId },
+      params: { ...display(request), code: m.instant ? "ACCEPTED" : "PENDING" },
+    });
+  }
+  if (moved.length > 0 && !moved[0]!.instant) {
+    notify({ userIds: [request.createdById], type: "NEW_APPLICANT", data: { requestId: request.id, fromWaitlist: "true" }, params: display(request) });
+  }
+}
+
 // ───────────────────────── apply ─────────────────────────
 
 export async function apply(userId: string, requestId: string, input: z.infer<typeof applyBody>) {
   const profile = await prisma.playerProfile.findUnique({ where: { userId }, select: { id: true, user: { select: { name: true } } } });
   if (!profile) throw AppError.conflict("PLAYER_PROFILE_REQUIRED", "Create your player profile before applying");
 
-  const { application, request, instant } = await prisma.$transaction(async (tx) => {
+  const { application, request, instant, waitlist } = await prisma.$transaction(async (tx) => {
     const request = await lockRequest(tx, requestId);
     const posterActive = (await tx.user.findUnique({ where: { id: request.createdById }, select: { status: true } }))?.status === "ACTIVE";
     if (request.isHidden || !posterActive) throw AppError.notFound("REQUEST_NOT_FOUND", "Request not found");
     if (request.createdById === userId) throw AppError.forbidden("REQUEST_OWN", "You can't apply to your own request");
-    assertAcceptingPeople(request);
+    // A full MATCH takes a waitlist place instead of turning the player away (events keep the old rule).
+    const waitlist = request.status === "FILLED" && request.kind === "MATCH" && request.matchAt.getTime() > Date.now();
+    if (!waitlist) assertAcceptingPeople(request);
 
     const plays = await tx.playerSport.findUnique({
       where: { profileId_sportId: { profileId: profile.id, sportId: request.sportId } },
@@ -59,12 +120,13 @@ export async function apply(userId: string, requestId: string, input: z.infer<ty
     }
     // Re-applying after a withdrawal revives the same row (unique per request + player).
     // Open-join games skip the approval: the spot is taken here, under the same row lock accept() uses.
-    const instant = request.joinMode === "OPEN_JOIN" && request.kind === "MATCH";
-    const status = instant ? ("ACCEPTED" as const) : ("PENDING" as const);
+    const instant = !waitlist && request.joinMode === "OPEN_JOIN" && request.kind === "MATCH";
+    const status = waitlist ? ("WAITLISTED" as const) : instant ? ("ACCEPTED" as const) : ("PENDING" as const);
     const respondedAt = instant ? new Date() : null;
+    const waitlistedAt = waitlist ? new Date() : null;
     const application = existing
-      ? await tx.application.update({ where: { id: existing.id }, data: { status, proposedRate, message, respondedAt, attendance: null, attendanceMarkedAt: null } })
-      : await tx.application.create({ data: { requestId, playerId: userId, proposedRate, message, status, respondedAt } });
+      ? await tx.application.update({ where: { id: existing.id }, data: { status, proposedRate, message, respondedAt, waitlistedAt, attendance: null, attendanceMarkedAt: null } })
+      : await tx.application.create({ data: { requestId, playerId: userId, proposedRate, message, status, respondedAt, waitlistedAt } });
     if (instant) {
       const accepted = request.playersAccepted + 1;
       await tx.playerRequest.update({
@@ -72,10 +134,11 @@ export async function apply(userId: string, requestId: string, input: z.infer<ty
         data: { playersAccepted: accepted, ...(accepted >= request.playersNeeded && { status: "FILLED" }) },
       });
     }
-    return { application, request, instant };
+    return { application, request, instant, waitlist };
   });
 
   if (instant && request.playersAccepted + 1 >= request.playersNeeded) runInBackground("filled", () => notifyFilled(request.id));
+  if (waitlist) return loadApplicant(application.id); // the organiser hears about them when a spot opens
   notify({
     userIds: [request.createdById],
     type: "NEW_APPLICANT",
@@ -180,7 +243,7 @@ export async function withdraw(userId: string, applicationId: string) {
   const out = await prisma.$transaction(async (tx) => {
     const request = await lockRequest(tx, found.requestId);
     const app = await tx.application.findUniqueOrThrow({ where: { id: applicationId } });
-    if (app.status === "WITHDRAWN") return { request, wasAccepted: false, changed: false };
+    if (app.status === "WITHDRAWN") return { request, wasAccepted: false, changed: false, promoted: [] as Promotion[] };
     if (app.status === "REJECTED") throw AppError.conflict("APPLICATION_NOT_PENDING", "Application was rejected");
     if (request.status !== "OPEN" && request.status !== "FILLED") {
       throw AppError.conflict("REQUEST_CLOSED", `This request is ${request.status.toLowerCase()}`);
@@ -196,8 +259,13 @@ export async function withdraw(userId: string, applicationId: string) {
         data: { playersAccepted: accepted, ...(request.status === "FILLED" && accepted < request.playersNeeded && { status: "OPEN" }) },
       });
     }
-    return { request, wasAccepted, changed: true };
+    const promoted = wasAccepted ? await promoteWaitlist(tx, { ...request, playersAccepted: Math.max(0, request.playersAccepted - 1) }) : [];
+    return { request, wasAccepted, changed: true, promoted };
   });
+  if (out.promoted?.length) {
+    notifyPromotions(out.request, out.promoted);
+    if (out.promoted.some((m) => m.filled)) runInBackground("filled", () => notifyFilled(out.request.id));
+  }
 
   if (out.changed && out.wasAccepted) {
     notify({

@@ -62,7 +62,7 @@ describe("apply", () => {
   });
 
   it.each([
-    ["filled", { status: "FILLED" as const }, "REQUEST_FILLED"],
+    ["filled event", { status: "FILLED" as const, kind: "EVENT" as const }, "REQUEST_FILLED"],
     ["cancelled", { status: "CANCELLED" as const }, "REQUEST_NOT_OPEN"],
     ["completed", { status: "COMPLETED" as const }, "REQUEST_NOT_OPEN"],
     ["already started", { matchAt: hoursFromNow(-1) }, "REQUEST_EXPIRED"],
@@ -376,5 +376,76 @@ describe("GET /applications/mine", () => {
     expect((await get(player.auth, "/applications/mine", { status: "PENDING" })).body.data).toHaveLength(1);
     expect((await get(player.auth, "/applications/mine", { status: "NOPE" })).status).toBe(422);
     expect((await api().get(`${V1}/applications/mine`)).status).toBe(401);
+  });
+});
+
+describe("waitlist", () => {
+  const filled = async (over: Parameters<typeof makeRequest>[2] = {}) => {
+    const cap = await signedIn("wcap@example.com");
+    const request = await makeRequest(w, cap.user.id, { playersNeeded: 1, ...over });
+    const first = await playerUser(w, "w1@example.com", football());
+    const second = await playerUser(w, "w2@example.com", football());
+    const third = await playerUser(w, "w3@example.com", football());
+    const a1 = await apply(first.auth, request.id);
+    await post(cap.auth, `/applications/${a1.body.data.id}/accept`);
+    return { cap, request, first, second, third, a1: a1.body.data.id as string };
+  };
+
+  it("a full approval match takes a waitlist place; the queue order and position are reported", async () => {
+    const { cap, request, second, third } = await filled();
+    const r2 = await apply(second.auth, request.id);
+    const r3 = await apply(third.auth, request.id);
+    expect(r2.body.data.status).toBe("WAITLISTED");
+    expect(r3.body.data.status).toBe("WAITLISTED");
+    const seen = await get(third.auth, `/requests/${request.id}`);
+    expect(seen.body.data.myApplication).toMatchObject({ status: "WAITLISTED", waitlistPosition: 2 });
+    expect(seen.body.data.waitlistCount).toBe(2);
+    await settle();
+    // the organiser is not pinged for waiting people: they hear when a spot opens
+    expect(await prisma.notification.count({ where: { userId: cap.user.id, type: "NEW_APPLICANT" } })).toBe(1);
+  });
+
+  it("when an accepted player withdraws, the longest-waiting player moves to pending (approval) and the organiser is told", async () => {
+    const { cap, request, first, second, third, a1 } = await filled();
+    const r2 = await apply(second.auth, request.id);
+    await apply(third.auth, request.id);
+    await post(first.auth, `/applications/${a1}/withdraw`);
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: r2.body.data.id } })).status).toBe("PENDING");
+    expect(await prisma.application.count({ where: { requestId: request.id, status: "WAITLISTED" } })).toBe(1);
+    await settle();
+    const n = await prisma.notification.findFirstOrThrow({ where: { userId: second.user.id, type: "WAITLIST_PROMOTED" } });
+    expect(n.data).toMatchObject({ requestId: request.id });
+    expect(await prisma.notification.count({ where: { userId: cap.user.id, type: "NEW_APPLICANT" } })).toBe(2);
+  });
+
+  it("open-join: the next waiting player is accepted automatically and the game stays full", async () => {
+    const { request, first, second, third, a1 } = await filled({ joinMode: "OPEN_JOIN" });
+    // first was accepted instantly via apply; the call to accept above is idempotent
+    await apply(second.auth, request.id);
+    const r3 = await apply(third.auth, request.id);
+    expect(r3.body.data.status).toBe("WAITLISTED");
+    await post(first.auth, `/applications/${a1}/withdraw`);
+    const game = await prisma.playerRequest.findUniqueOrThrow({ where: { id: request.id } });
+    expect(game).toMatchObject({ status: "FILLED", playersAccepted: 1 });
+    expect(await prisma.application.findFirstOrThrow({ where: { requestId: request.id, playerId: second.user.id } })).toMatchObject({ status: "ACCEPTED" });
+    expect(await prisma.application.findFirstOrThrow({ where: { requestId: request.id, playerId: third.user.id } })).toMatchObject({ status: "WAITLISTED" });
+  });
+
+  it("raising the number of players moves the waitlist up; a waiting player can leave the queue", async () => {
+    const { cap, request, second, third } = await filled({ joinMode: "OPEN_JOIN" });
+    const r2 = await apply(second.auth, request.id);
+    const r3 = await apply(third.auth, request.id);
+    await api().patch(`${V1}/requests/${request.id}`).set(cap.auth).send({ playersNeeded: 2 });
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: r2.body.data.id } })).status).toBe("ACCEPTED");
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: r3.body.data.id } })).status).toBe("WAITLISTED");
+    const out = await post(third.auth, `/applications/${r3.body.data.id}/withdraw`);
+    expect(out.body.data.status).toBe("WITHDRAWN");
+  });
+
+  it("cancelling the game rejects people still waiting", async () => {
+    const { cap, request, second } = await filled();
+    const r2 = await apply(second.auth, request.id);
+    await post(cap.auth, `/requests/${request.id}/cancel`);
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: r2.body.data.id } })).status).toBe("REJECTED");
   });
 });

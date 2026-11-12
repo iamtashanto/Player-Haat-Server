@@ -19,7 +19,7 @@ export interface PushParams {
   /** How many messages a collapsed chat push stands for. */
   count?: number;
   /** Which outcome a SYSTEM notification reports; the copy lives here so it can be localized. */
-  code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED" | "REVIEW_REVEALED" | "DISPUTE_UPHELD" | "DISPUTE_REMOVED" | "DISPUTE_OPENED";
+  code?: "PAYMENT_APPROVED" | "PAYMENT_REJECTED" | "VERIFICATION_APPROVED" | "VERIFICATION_REJECTED" | "REVIEW_REVEALED" | "DISPUTE_UPHELD" | "DISPUTE_REMOVED" | "DISPUTE_OPENED" | "PENDING" | "ACCEPTED";
 }
 
 const fmt = (when: Date, locale: Locale) =>
@@ -116,6 +116,13 @@ const templates: Record<NotificationType, Template> = {
   }),
   REQUEST_FILLED: (p, l) => ({
     title: l === "bn" ? "ম্যাচে আর জায়গা নেই" : "The match is full",
+    body: line(p, l),
+  }),
+  WAITLIST_PROMOTED: (p, l) => ({
+    title:
+      p.code === "PENDING"
+        ? l === "bn" ? "একটি জায়গা খালি হয়েছে" : "A spot opened up"
+        : l === "bn" ? "আপনি ম্যাচে আছেন!" : "You're in!",
     body: line(p, l),
   }),
   GAME_MESSAGE: (p, l) => ({

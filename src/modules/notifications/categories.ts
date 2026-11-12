@@ -12,6 +12,7 @@ const BY_TYPE: Record<NotificationType, Category> = {
   REQUEST_CANCELLED: "games",
   REQUEST_UPDATED: "games",
   REQUEST_FILLED: "games",
+  WAITLIST_PROMOTED: "games",
   GAME_REMINDER: "games",
   RATING_REMINDER: "games",
   NEARBY_AVAILABLE: "games",

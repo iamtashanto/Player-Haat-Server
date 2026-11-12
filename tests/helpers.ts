@@ -217,6 +217,8 @@ export async function makeRequest(
     districtId: number;
     unionId: number | null;
     venueText: string;
+    kind: "MATCH" | "EVENT";
+    joinMode: "APPROVAL" | "OPEN_JOIN";
   }> = {},
 ) {
   return prisma.playerRequest.create({
@@ -236,6 +238,8 @@ export async function makeRequest(
       budgetMin: o.budgetMin ?? null,
       budgetMax: o.budgetMax ?? null,
       isHidden: o.isHidden ?? false,
+      ...(o.kind && { kind: o.kind }),
+      ...(o.joinMode && { joinMode: o.joinMode }),
     },
   });
 }

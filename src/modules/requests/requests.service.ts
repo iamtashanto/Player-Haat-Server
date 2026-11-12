@@ -9,6 +9,7 @@ import { notifyFilled } from "../notifications/triggers.js";
 import { getPricing, getPublicConfig } from "../app-config/app-config.service.js";
 import { spendCredits } from "../billing/credits.service.js";
 import { announceNewRequest } from "./matching.service.js";
+import { notifyPromotions, promoteWaitlist } from "../applications/applications.service.js";
 import { lockRequest } from "./request-lock.js";
 import { toRequest, requestInclude, type RequestRow, type ViewerContext } from "./requests.presenter.js";
 import { MAX_DAYS_AHEAD, MAX_OPEN_REQUESTS, type createRequestBody, type featuredQuery, type feedQuery, type mineQuery, type updateRequestBody } from "./requests.schema.js";
@@ -28,10 +29,10 @@ const display = (r: RequestRow) => ({
 async function viewerContext(viewerId: string, rows: RequestRow[], withPending = false): Promise<ViewerContext> {
   const ids = rows.map((r) => r.id);
   const eventIds = rows.filter((r) => r.kind === "EVENT").map((r) => r.id);
-  const [mine, pending, interestCounts, previewRows] = await Promise.all([
+  const [mine, pending, waiting, interestCounts, previewRows] = await Promise.all([
     prisma.application.findMany({
       where: { playerId: viewerId, requestId: { in: ids } },
-      select: { id: true, requestId: true, status: true },
+      select: { id: true, requestId: true, status: true, waitlistedAt: true, createdAt: true },
     }),
     withPending
       ? prisma.application.groupBy({
@@ -40,6 +41,7 @@ async function viewerContext(viewerId: string, rows: RequestRow[], withPending =
           _count: { _all: true },
         })
       : [],
+    prisma.application.groupBy({ by: ["requestId"], where: { requestId: { in: ids }, status: "WAITLISTED" }, _count: { _all: true } }),
     prisma.application.groupBy({ by: ["requestId"], where: { requestId: { in: ids }, status: { in: ["PENDING", "ACCEPTED"] } }, _count: { _all: true } }),
     // A few faces for events, so a player sees who else is going. Only players who are publicly visible.
     eventIds.length === 0
@@ -57,10 +59,19 @@ async function viewerContext(viewerId: string, rows: RequestRow[], withPending =
     if (list.length < 5 && a.player.playerProfile) list.push({ profileId: a.player.playerProfile.id, name: a.player.name, avatarUrl: a.player.avatarUrl });
     previews.set(a.requestId, list);
   }
+  // Where the viewer stands in the queue: 1 = next in.
+  const position = new Map<string, number>();
+  for (const a of mine.filter((m) => m.status === "WAITLISTED")) {
+    const ahead = await prisma.application.count({
+      where: { requestId: a.requestId, status: "WAITLISTED", OR: [{ waitlistedAt: { lt: a.waitlistedAt ?? a.createdAt } }, { waitlistedAt: null, createdAt: { lt: a.createdAt } }] },
+    });
+    position.set(a.requestId, ahead + 1);
+  }
   return {
+    waitlistCounts: new Map(waiting.map((w) => [w.requestId, w._count._all])),
     interest: new Map(interestCounts.map((c) => [c.requestId, { count: c._count._all, preview: previews.get(c.requestId) ?? [] }])),
     viewerId,
-    myApplications: new Map(mine.map((a) => [a.requestId, { id: a.id, status: a.status }])),
+    myApplications: new Map(mine.map((a) => [a.requestId, { id: a.id, status: a.status, ...(a.status === "WAITLISTED" && { waitlistPosition: position.get(a.requestId) ?? 1 }) }])),
     pendingCounts: withPending ? new Map(pending.map((p) => [p.requestId, p._count._all])) : undefined,
   };
 }
@@ -239,7 +250,7 @@ export async function myRequests(userId: string, q: z.infer<typeof mineQuery>) {
 // ───────────────────────── update ─────────────────────────
 
 export async function updateRequest(userId: string, id: string, patch: z.infer<typeof updateRequestBody>) {
-  const { updated, notifyAccepted } = await prisma.$transaction(async (tx) => {
+  const { updated, notifyAccepted, promoted } = await prisma.$transaction(async (tx) => {
     const r = await lockRequest(tx, id);
     assertOwner(r, userId);
     assertStillActive(r);
@@ -284,8 +295,11 @@ export async function updateRequest(userId: string, id: string, patch: z.infer<t
       },
       include: requestInclude,
     });
-    return { updated, notifyAccepted };
+    // A higher headcount makes room: the waitlist moves up.
+    const promoted = playersNeeded > r.playersNeeded ? await promoteWaitlist(tx, updated) : [];
+    return { updated, notifyAccepted, promoted };
   });
+  if (promoted.length) notifyPromotions(updated, promoted);
 
   if (notifyAccepted) {
     const accepted = await prisma.application.findMany({ where: { requestId: id, status: "ACCEPTED" }, select: { playerId: true } });
@@ -298,7 +312,7 @@ export async function updateRequest(userId: string, id: string, patch: z.infer<t
 
 /** Ends the application phase: anything still pending can no longer be accepted. */
 const closePending = (tx: Tx, requestId: string) =>
-  tx.application.updateMany({ where: { requestId, status: "PENDING" }, data: { status: "REJECTED", respondedAt: new Date() } });
+  tx.application.updateMany({ where: { requestId, status: { in: ["PENDING", "WAITLISTED"] } }, data: { status: "REJECTED", respondedAt: new Date() } });
 
 export async function cancelRequest(userId: string, id: string) {
   const { updated, audience } = await prisma.$transaction(async (tx) => {

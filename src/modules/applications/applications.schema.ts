@@ -8,7 +8,7 @@ export const applyBody = z
     message: z.string().trim().max(300).nullable().optional(),
   })
   .default({}); // a bare POST with no body is a valid "just apply"
-const status = z.enum(["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN"]);
+const status = z.enum(["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN", "WAITLISTED"]);
 export const applicantsQuery = pageQuery.extend({ status: status.optional() });
 export const myApplicationsQuery = pageQuery.extend({ status: status.optional() });
 export const requestIdParams = z.object({ requestId: z.string().min(1).max(40) });

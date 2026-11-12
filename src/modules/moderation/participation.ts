@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { NotifyInput } from "../notifications/notifier.js";
+import { promoteWaitlist } from "../applications/applications.service.js";
 import { lockRequest } from "../requests/request-lock.js";
 import type { RequestRow } from "../requests/requests.presenter.js";
 
@@ -30,14 +31,14 @@ export async function retireParticipation(tx: Tx, userId: string): Promise<Notif
       where: { requestId: id, status: { in: ["ACCEPTED", "PENDING"] } },
       select: { playerId: true },
     });
-    await tx.application.updateMany({ where: { requestId: id, status: "PENDING" }, data: { status: "REJECTED", respondedAt: now } });
+    await tx.application.updateMany({ where: { requestId: id, status: { in: ["PENDING", "WAITLISTED"] } }, data: { status: "REJECTED", respondedAt: now } });
     await tx.playerRequest.update({ where: { id }, data: { status: "CANCELLED" } });
     effects.push({ userIds: audience.map((a) => a.playerId), type: "REQUEST_CANCELLED", data: { requestId: id }, params: display(request) });
   }
 
   // 2) applications they made to upcoming matches
   const applied = await tx.application.findMany({
-    where: { playerId: userId, status: { in: ["PENDING", "ACCEPTED"] }, request: { status: { in: ["OPEN", "FILLED"] }, matchAt: { gt: now } } },
+    where: { playerId: userId, status: { in: ["PENDING", "ACCEPTED", "WAITLISTED"] }, request: { status: { in: ["OPEN", "FILLED"] }, matchAt: { gt: now } } },
     select: { id: true, status: true, requestId: true, player: { select: { name: true } } },
   });
   for (const a of applied) {
@@ -55,6 +56,9 @@ export async function retireParticipation(tx: Tx, userId: string): Promise<Notif
         data: { requestId: request.id, applicationId: a.id },
         params: { ...display(request), actor: a.player.name },
       });
+      for (const m of await promoteWaitlist(tx, { ...request, playersAccepted: accepted })) {
+        effects.push({ userIds: [m.playerId], type: "WAITLIST_PROMOTED", data: { requestId: request.id, applicationId: m.applicationId }, params: { ...display(request), code: m.instant ? "ACCEPTED" : "PENDING" } });
+      }
     }
   }
   return effects;

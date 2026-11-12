@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-171 codes. Messages are developer-facing English and may change; **codes are stable**.
+172 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -127,6 +127,12 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `CREDITS_REQUIRED` | 402 | Not enough credits | `modules/billing/credits.service.ts` |
+
+## DASHBOARD
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `DASHBOARD_NOT_AVAILABLE` | 403 | Admins use the admin dashboard | `modules/dashboard/dashboard.service.ts` |
 
 ## DISPUTE
 
@@ -300,7 +306,7 @@ Every error response has this shape — the app should translate `error.code`, n
 | Code | HTTP | Developer message | Raised in |
 |---|---|---|---|
 | `RECRUITER_PROFILE_EXISTS` | 409 | You already have a recruiter profile | `modules/recruiters/recruiters.service.ts` |
-| `RECRUITER_PROFILE_NOT_FOUND` | 404 | Recruiter not found | `modules/admin/admin.service.ts`, `modules/chat/chat.service.ts`, `modules/verification/verification.service.ts` |
+| `RECRUITER_PROFILE_NOT_FOUND` | 404 | Recruiter not found | `modules/admin/admin.service.ts`, `modules/chat/chat.service.ts`, `modules/ratings/ratings.service.ts`, `modules/verification/verification.service.ts` |
 | `RECRUITER_PROFILE_REQUIRED` | 403 | Complete your recruiter profile to discover players | `modules/recruiters/recruiters.service.ts` |
 
 ## REPORT
