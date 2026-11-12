@@ -118,6 +118,10 @@ const templates: Record<NotificationType, Template> = {
     title: l === "bn" ? "ম্যাচে আর জায়গা নেই" : "The match is full",
     body: line(p, l),
   }),
+  RESULT_POSTED: (p, l) => ({
+    title: l === "bn" ? "ম্যাচের ফল তোলা হয়েছে" : "Match result is in",
+    body: [p.text, line(p, l)].filter(Boolean).join(" · "),
+  }),
   SERIES_GAME_POSTED: (p, l) => ({
     title: p.heading ?? (l === "bn" ? "এই সপ্তাহের খেলা" : "This week's game"),
     body: line(p, l),

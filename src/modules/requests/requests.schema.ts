@@ -103,12 +103,20 @@ const RequestItem = z
     interested: z.object({ count: z.number().int(), preview: z.array(z.object({ profileId: z.string(), name: z.string(), avatarUrl: z.string().nullable() })) }).openapi({ description: "People who applied / tapped 'interested' (pending or accepted). `preview` lists a few visible players, newest first, for events." }),
     isOwner: z.boolean(),
     myApplication: z.object({ id: z.string(), status: z.enum(["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN", "WAITLISTED"]), waitlistPosition: z.number().int().optional().openapi({ description: "1 = next in line. Only while WAITLISTED." }) }).nullable(),
+    result: z.object({ ourScore: z.number().int(), theirScore: z.number().int(), opponentName: z.string().nullable(), summary: z.string().nullable(), outcome: z.enum(["WIN", "DRAW", "LOSS"]), recordedAt: z.string().datetime() }).nullable().openapi({ description: "The score, once the organiser has recorded it. Our side is the organiser's." }),
     series: z.object({ id: z.string(), title: z.string() }).nullable().openapi({ description: "The weekly game this match belongs to." }),
     waitlistCount: z.number().int().openapi({ description: "How many people are waiting for a spot." }),
     pendingApplicants: z.number().int().optional().openapi({ description: "Owner only." }),
     createdAt: z.string().datetime(),
   })
   .openapi("PlayerRequest");
+
+export const resultBody = z.strictObject({
+  ourScore: z.number().int().min(0).max(999),
+  theirScore: z.number().int().min(0).max(999),
+  opponentName: z.string().trim().max(60).nullable().optional(),
+  summary: z.string().trim().max(80).nullable().optional().openapi({ description: 'Free text for sports where a number is not enough, e.g. "won by 3 wickets".' }),
+});
 
 const T = "Requests";
 registerRoute({ method: "post", path: "/requests", tag: T, summary: "Post a 'player needed' request", description: `Matching players (sport, position, khep/budget, travel radius) are notified. Max ${MAX_OPEN_REQUESTS} open upcoming requests per user.`, auth: true, body: createRequestBody, response: RequestItem, status: 201, errors: [409, 422] });
@@ -120,4 +128,5 @@ registerRoute({ method: "get", path: "/requests/{id}", tag: T, summary: "One req
 registerRoute({ method: "patch", path: "/requests/{id}", tag: T, summary: "Edit my request (OPEN or FILLED)", description: "Sport and location can't change — cancel and repost. Accepted players are notified of time/venue changes. `playersNeeded` can't drop below the accepted count; changing it re-opens or fills the request accordingly.", auth: true, params: requestParams, body: updateRequestBody, response: RequestItem, errors: [403, 404, 409, 422] });
 registerRoute({ method: "post", path: "/requests/{id}/cancel", tag: T, summary: "Cancel my request", description: "Notifies accepted and pending applicants; pending applications become REJECTED.", auth: true, params: requestParams, response: RequestItem, errors: [403, 404, 409] });
 registerRoute({ method: "post", path: "/requests/{id}/fill", tag: T, summary: "Mark as filled (close applications early)", auth: true, params: requestParams, response: RequestItem, errors: [403, 404, 409] });
+registerRoute({ method: "put", path: "/requests/{id}/result", tag: T, summary: "Record the score (organiser)", description: "Only for a match that has started and was not cancelled. The organiser's side is first. Calling it again corrects the score. The players who were accepted are told the first time.", auth: true, params: requestParams, body: resultBody, response: RequestItem, errors: [403, 404, 409, 422] });
 registerRoute({ method: "post", path: "/requests/{id}/complete", tag: T, summary: "Mark the match completed", description: "Only after the match time and with at least one accepted player. Starts the 7-day rating window.", auth: true, params: requestParams, response: RequestItem, errors: [403, 404, 409] });

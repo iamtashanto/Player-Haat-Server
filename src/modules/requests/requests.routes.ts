@@ -41,6 +41,9 @@ requestsRoutes.get("/:id", validate({ params: s.requestParams }), async (req, re
 requestsRoutes.patch("/:id", mutateLimiter, validate({ params: s.requestParams, body: s.updateRequestBody }), async (req, res) => {
   ok(res, await svc.updateRequest(me(req), idOf(req), valid<z.infer<typeof s.updateRequestBody>>(req).body));
 });
+requestsRoutes.put("/:id/result", mutateLimiter, validate({ params: s.requestParams, body: s.resultBody }), async (req, res) => {
+  ok(res, await svc.recordResult(me(req), idOf(req), valid<z.infer<typeof s.resultBody>>(req).body));
+});
 requestsRoutes.post("/:id/boost", mutateLimiter, validate({ params: s.requestParams }), async (req, res) => ok(res, await svc.boostRequest(me(req), idOf(req))));
 requestsRoutes.post("/:id/cancel", mutateLimiter, validate({ params: s.requestParams }), async (req, res) => ok(res, await svc.cancelRequest(me(req), idOf(req))));
 requestsRoutes.post("/:id/fill", mutateLimiter, validate({ params: s.requestParams }), async (req, res) => ok(res, await svc.fillRequest(me(req), idOf(req))));

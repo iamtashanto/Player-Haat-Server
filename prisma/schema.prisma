@@ -202,6 +202,7 @@ enum NotificationType {
   PROFILE_VIEWED // a recruiter opened your profile (once per recruiter per day)
   WAITLIST_PROMOTED // a spot opened in a full game you were waiting for
   SERIES_GAME_POSTED // this week's game of a series you are a regular in is up
+  RESULT_POSTED // the organiser recorded the score of a game you played
 }
 
 enum PushStatus {
@@ -770,6 +771,7 @@ model PlayerRequest {
   @@index([createdById, createdAt(sort: Desc)])
   @@index([status, completedAt]) // rating-reminder job and rating windows
   @@index([positionsNeeded], type: Gin)
+  result MatchResult?
 }
 
 /// A weekly game ("Friday football"): the same ground, day and time every week. A job posts the next game once the
@@ -820,6 +822,21 @@ model SeriesMember {
 
   @@unique([seriesId, userId])
   @@index([userId])
+}
+
+/// The score of a played match, entered by its organiser: our side first.
+model MatchResult {
+  id             String   @id @default(cuid())
+  requestId      String   @unique
+  recordedById   String
+  ourScore       Int
+  theirScore     Int
+  opponentName   String?
+  summary        String? // free text for sports where a number is not enough: "won by 3 wickets"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  request PlayerRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 }
 
 model Application {

@@ -12,7 +12,7 @@ import { announceNewRequest } from "./matching.service.js";
 import { notifyPromotions, promoteWaitlist } from "../applications/applications.service.js";
 import { lockRequest } from "./request-lock.js";
 import { toRequest, requestInclude, type RequestRow, type ViewerContext } from "./requests.presenter.js";
-import { MAX_DAYS_AHEAD, MAX_OPEN_REQUESTS, type createRequestBody, type featuredQuery, type feedQuery, type mineQuery, type updateRequestBody } from "./requests.schema.js";
+import { MAX_DAYS_AHEAD, MAX_OPEN_REQUESTS, type createRequestBody, type featuredQuery, type resultBody, type feedQuery, type mineQuery, type updateRequestBody } from "./requests.schema.js";
 
 type Tx = Prisma.TransactionClient;
 const DAY_MS = 86_400_000;
@@ -305,6 +305,34 @@ export async function updateRequest(userId: string, id: string, patch: z.infer<t
   if (notifyAccepted) {
     const accepted = await prisma.application.findMany({ where: { requestId: id, status: "ACCEPTED" }, select: { playerId: true } });
     notify({ userIds: accepted.map((a) => a.playerId), type: "REQUEST_UPDATED", data: { requestId: id }, params: display(updated) });
+  }
+  return presentOne(userId, updated);
+}
+
+// ───────────────────────── result ─────────────────────────
+
+/** The organiser records the score of a match that has started. First entry tells the accepted players; later ones correct it. */
+export async function recordResult(userId: string, id: string, input: z.infer<typeof resultBody>) {
+  const { updated, first, audience } = await prisma.$transaction(async (tx) => {
+    const r = await lockRequest(tx, id);
+    assertOwner(r, userId);
+    if (r.kind !== "MATCH") throw AppError.conflict("RESULT_MATCH_ONLY", "Scores are recorded for matches, not events");
+    if (r.status === "CANCELLED") throw AppError.conflict("REQUEST_NOT_OPEN", "This request was cancelled");
+    if (r.matchAt.getTime() > Date.now()) throw AppError.conflict("REQUEST_NOT_STARTED", "The match has not started yet");
+    const data = { ourScore: input.ourScore, theirScore: input.theirScore, opponentName: input.opponentName || null, summary: input.summary || null };
+    const first = !r.result;
+    await tx.matchResult.upsert({ where: { requestId: id }, create: { requestId: id, recordedById: userId, ...data }, update: data });
+    const updated = await tx.playerRequest.findUniqueOrThrow({ where: { id }, include: requestInclude });
+    const audience = first ? await tx.application.findMany({ where: { requestId: id, status: "ACCEPTED" }, select: { playerId: true } }) : [];
+    return { updated, first, audience };
+  });
+  if (first && audience.length) {
+    notify({
+      userIds: audience.map((a) => a.playerId),
+      type: "RESULT_POSTED",
+      data: { requestId: id },
+      params: { ...display(updated), text: `${input.ourScore}–${input.theirScore}` },
+    });
   }
   return presentOne(userId, updated);
 }

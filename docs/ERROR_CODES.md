@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-179 codes. Messages are developer-facing English and may change; **codes are stable**.
+180 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -336,6 +336,12 @@ Every error response has this shape — the app should translate `error.code`, n
 | `REQUEST_NOT_OWNER` | 403 | Only the poster can see applicants | `modules/applications/applications.service.ts`, `modules/games/games.service.ts`, `modules/requests/requests.service.ts`, `modules/series/series.service.ts` |
 | `REQUEST_NOT_STARTED` | 409 | The game hasn't started yet | `modules/games/games.service.ts`, `modules/requests/requests.service.ts` |
 | `REQUEST_OWN` | 403 | You can't apply to your own request | `modules/applications/applications.service.ts` |
+
+## RESULT
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `RESULT_MATCH_ONLY` | 409 | Scores are recorded for matches, not events | `modules/requests/requests.service.ts` |
 
 ## ROUTE
 
