@@ -516,7 +516,6 @@ export async function featured(viewerId: string, q: z.infer<typeof featuredQuery
       createdById: { not: viewerId },
       createdBy: { status: "ACTIVE" },
       ...(q.kind && { kind: q.kind }),
-    ...(q.turf !== undefined && { isTurf: q.turf }),
       ...(q.sportId !== undefined && { sportId: q.sportId }),
       ...(q.districtId !== undefined && { districtId: q.districtId }),
       ...(q.upazilaId !== undefined && { upazilaId: q.upazilaId }),
