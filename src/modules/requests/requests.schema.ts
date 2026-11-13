@@ -8,6 +8,10 @@ export const MAX_DAYS_AHEAD = 120;
 const intId = z.number().int().positive();
 const qid = z.coerce.number().int().positive();
 const money = z.number().int().min(0).max(1_000_000);
+/** Inside Bangladesh's bounding box: a pin outside it is a mistake, not a ground. */
+export const BD_BOX = { minLat: 20.5, maxLat: 26.7, minLng: 88.0, maxLng: 92.8 } as const;
+const lat = z.number().min(BD_BOX.minLat).max(BD_BOX.maxLat);
+const lng = z.number().min(BD_BOX.minLng).max(BD_BOX.maxLng);
 const positions = z.array(z.string().trim().min(1).max(20)).max(6);
 
 export const createRequestBody = z.strictObject({
@@ -27,12 +31,15 @@ export const createRequestBody = z.strictObject({
   kind: z.enum(["MATCH", "EVENT"]).optional().openapi({ description: "MATCH (default): players apply. EVENT: a recruiter's trial or camp — players tap 'interested'. Events are for recruiters and need a `title`." }),
   joinMode: z.enum(["APPROVAL", "OPEN_JOIN"]).optional().openapi({ description: "APPROVAL (default): you accept each applicant. OPEN_JOIN: players are in as soon as they join, until the game is full (matches only)." }),
   title: z.string().trim().min(3).max(80).nullable().optional().openapi({ description: "Required for events, e.g. 'Under-17 trial, Barishal'." }),
+  venueLat: lat.nullable().optional().openapi({ description: "Optional pin of the ground (both `venueLat` and `venueLng`). Shown to everyone who can see the game, so only pin the ground itself, never a home." }),
+  venueLng: lng.nullable().optional(),
   groundFee: money.nullable().optional().openapi({ description: "Matches only. Total ground rent in BDT; each player's share is this divided by `playersNeeded`. Payment itself happens outside the app." }),
   feePayTo: z.string().trim().max(80).nullable().optional().openapi({ description: 'Where to send the share, e.g. "bKash 01XXXXXXXXX". Accepted players see it; nobody else.' }),
 })
   .refine((b) => b.kind !== "EVENT" || !!b.title, { message: "An event needs a title", path: ["title"] })
   .refine((b) => b.kind !== "EVENT" || b.joinMode !== "OPEN_JOIN", { message: "Events can't use open join", path: ["joinMode"] })
   .refine((b) => b.kind !== "EVENT" || (b.groundFee == null && !b.feePayTo), { message: "Events have no ground fee", path: ["groundFee"] })
+  .refine((b) => (b.venueLat == null) === (b.venueLng == null), { message: "Send both venueLat and venueLng, or neither", path: ["venueLng"] })
   .refine((b) => !b.feePayTo || b.groundFee != null, { message: "Set the ground fee first", path: ["feePayTo"] });
 
 // Sport and location are fixed once posted: players were matched and notified on them.
@@ -49,8 +56,11 @@ export const updateRequestBody = z
     title: z.string().trim().min(3).max(80),
     groundFee: money.nullable(),
     feePayTo: z.string().trim().max(80).nullable(),
+    venueLat: lat.nullable(),
+    venueLng: lng.nullable(),
   })
   .partial()
+  .refine((b) => (b.venueLat === undefined) === (b.venueLng === undefined) && (b.venueLat === null) === (b.venueLng === null), { message: "Send both venueLat and venueLng (or null for both)", path: ["venueLng"] })
   .refine((b) => Object.keys(b).length > 0, "Send at least one field");
 
 export const requestParams = z.object({ id: z.string().min(1).max(40) });
@@ -71,6 +81,13 @@ export const feedQuery = pageQuery
   })
   .refine((q) => !q.position || q.sportId !== undefined, { message: "position requires sportId", path: ["position"] })
   .refine((q) => q.sort !== "near" || q.nearDistrictId !== undefined, { message: "sort=near requires nearDistrictId", path: ["nearDistrictId"] });
+
+export const mapQuery = z.object({
+  sportId: qid.optional(),
+  districtId: qid.optional(),
+  upazilaId: qid.optional(),
+  kind: z.enum(["MATCH", "EVENT"]).optional(),
+});
 
 export const featuredQuery = z.object({
   kind: z.enum(["MATCH", "EVENT"]).optional(),
@@ -109,6 +126,8 @@ const RequestItem = z
     interested: z.object({ count: z.number().int(), preview: z.array(z.object({ profileId: z.string(), name: z.string(), avatarUrl: z.string().nullable() })) }).openapi({ description: "People who applied / tapped 'interested' (pending or accepted). `preview` lists a few visible players, newest first, for events." }),
     isOwner: z.boolean(),
     myApplication: z.object({ id: z.string(), status: z.enum(["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN", "WAITLISTED"]), waitlistPosition: z.number().int().optional().openapi({ description: "1 = next in line. Only while WAITLISTED." }) }).nullable(),
+    pin: z.object({ lat: z.number(), lng: z.number() }).nullable().openapi({ description: "The ground's pin, when the organiser set one." }),
+    areaCentre: z.object({ lat: z.number(), lng: z.number() }).nullable().openapi({ description: "Centre of the game's upazila (or district): where to centre a map when there is no pin. Approximate." }),
     fee: z.object({ total: z.number().int(), share: z.number().int().openapi({ description: "BDT per player: total ÷ playersNeeded, rounded up." }), payTo: z.string().nullable().openapi({ description: "Only the organiser and accepted players see it." }), paidCount: z.number().int().optional().openapi({ description: "Owner only: accepted players ticked as paid." }), iPaid: z.boolean().optional().openapi({ description: "Accepted player only: the organiser has ticked my share." }) }).nullable().openapi({ description: "The ground-fee split, when the organiser set a fee." }),
     result: z.object({ ourScore: z.number().int(), theirScore: z.number().int(), opponentName: z.string().nullable(), summary: z.string().nullable(), outcome: z.enum(["WIN", "DRAW", "LOSS"]), recordedAt: z.string().datetime(), opponentTeam: z.object({ id: z.string(), name: z.string() }).nullable(), confirmed: z.boolean().openapi({ description: "The opponent team's captain confirmed the score. Only confirmed scores count in standings." }), canConfirm: z.boolean().openapi({ description: "I am the opponent captain and have not confirmed yet." }) }).nullable().openapi({ description: "The score, once the organiser has recorded it. Our side is the organiser's." }),
     series: z.object({ id: z.string(), title: z.string() }).nullable().openapi({ description: "The weekly game this match belongs to." }),
@@ -139,5 +158,20 @@ registerRoute({ method: "post", path: "/requests/{id}/fill", tag: T, summary: "M
 registerRoute({ method: "put", path: "/requests/{id}/result", tag: T, summary: "Record the score (organiser)", description: "Only for a match that has started and was not cancelled. The organiser's side is first. Calling it again corrects the score. The players who were accepted are told the first time.", auth: true, params: requestParams, body: resultBody, response: RequestItem, errors: [403, 404, 409, 422] });
 registerRoute({ method: "post", path: "/requests/{id}/result/confirm", tag: T, summary: "Confirm the score (opponent captain)", description: "Makes the score count in both teams' standings.", auth: true, params: requestParams, response: RequestItem, errors: [403, 404, 409] });
 registerRoute({ method: "post", path: "/requests/{id}/result/reject", tag: T, summary: "Reject the score (opponent captain)", description: "Unlinks the score from your team. It stays on the match but never counts in standings.", auth: true, params: requestParams, response: RequestItem, errors: [403, 404, 409] });
+const MapGame = z.object({
+  id: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  exact: z.boolean().openapi({ description: "true: the organiser pinned the ground. false: the centre of the upazila (approximate)." }),
+  kind: z.enum(["MATCH", "EVENT"]),
+  title: z.string().nullable(),
+  sport: z.object({ id: z.number(), code: z.string(), nameBn: z.string(), nameEn: z.string() }),
+  matchAt: z.string().datetime(),
+  venueText: z.string(),
+  spotsLeft: z.number().int(),
+  isPaid: z.boolean(),
+});
+registerRoute({ method: "get", path: "/requests/map", tag: T, summary: "Open games as map points", description: "Open, upcoming games (up to 300) with a position: the pinned ground, else the centre of the upazila (`exact: false`). Same visibility rules as the feed, minus the person filter: your own games are included.", auth: true, query: mapQuery, response: z.array(MapGame), errors: [422] });
+registerRoute({ method: "get", path: "/public/requests/map", tag: "Public", summary: "Open games as map points (signed out)", description: "Same as `GET /requests/map` without sign-in.", query: mapQuery, response: z.array(MapGame), errors: [422] });
 registerRoute({ method: "get", path: "/requests/{id}/weather", tag: T, summary: "Rain outlook for the game", description: "From Open-Meteo, for the centre of the game's area (no user data is sent). `null` when the match is past, more than 14 days away, or the forecast can't be fetched.", auth: true, params: requestParams, response: z.object({ level: z.enum(["LIKELY", "POSSIBLE", "UNLIKELY"]), rainChance: z.number().int().openapi({ description: "Highest chance of rain, percent, during the two hours of play." }), rainMm: z.number() }).nullable(), errors: [404] });
 registerRoute({ method: "post", path: "/requests/{id}/complete", tag: T, summary: "Mark the match completed", description: "Only after the match time and with at least one accepted player. Starts the 7-day rating window.", auth: true, params: requestParams, response: RequestItem, errors: [403, 404, 409] });

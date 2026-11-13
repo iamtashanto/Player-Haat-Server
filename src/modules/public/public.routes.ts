@@ -9,8 +9,8 @@ import { validate } from "../../middlewares/validate.js";
 import { profileParams, searchQuery } from "../players/players.schema.js";
 import { searchPlayers } from "../players/search.service.js";
 import { getPublicProfile } from "../players/players.service.js";
-import { feedQuery, requestParams } from "../requests/requests.schema.js";
-import { feed, getRequest } from "../requests/requests.service.js";
+import { feedQuery, mapQuery, requestParams } from "../requests/requests.schema.js";
+import { feed, getRequest, mapGames } from "../requests/requests.service.js";
 import { publicPlayerReviews } from "../ratings/ratings.service.js";
 import { playerRatingsQuery } from "../ratings/ratings.schema.js";
 import { RATING_RULES } from "../ratings/ratings.config.js";
@@ -60,6 +60,7 @@ publicRoutes.get("/tournaments", limiter, validate({ query: tournamentsQuery }),
   ok(res, items, { nextCursor, limit: query.limit });
 });
 publicRoutes.get("/tournaments/:id", limiter, validate({ params: tournamentParams }), async (req, res) => ok(res, await tournaments.get(null, valid<unknown, z.infer<typeof tournamentParams>>(req).params.id)));
+publicRoutes.get("/requests/map", limiter, validate({ query: mapQuery }), async (req, res) => ok(res, await mapGames(valid<unknown, unknown, z.infer<typeof mapQuery>>(req).query)));
 publicRoutes.get("/requests", limiter, validate({ query: feedQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof feedQuery>>(req);
   const { items, nextCursor } = await feed("", query);

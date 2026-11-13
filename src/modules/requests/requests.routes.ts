@@ -29,6 +29,7 @@ requestsRoutes.get("/mine", validate({ query: s.mineQuery }), async (req, res) =
   const { items, nextCursor } = await svc.myRequests(me(req), query);
   ok(res, items, { nextCursor, limit: query.limit });
 });
+requestsRoutes.get("/map", feedLimiter, validate({ query: s.mapQuery }), async (req, res) => ok(res, await svc.mapGames(valid<unknown, unknown, z.infer<typeof s.mapQuery>>(req).query)));
 requestsRoutes.get("/featured", feedLimiter, validate({ query: s.featuredQuery }), async (req, res) => {
   ok(res, await svc.featured(me(req), valid<unknown, unknown, z.infer<typeof s.featuredQuery>>(req).query));
 });

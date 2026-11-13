@@ -54,6 +54,8 @@ export async function outlookFor(lat: number | null | undefined, lng: number | n
 const gameWithPlace = {
   id: true, matchAt: true, venueText: true, createdById: true, isHidden: true, status: true, kind: true,
   sport: { select: { nameBn: true, nameEn: true } },
+  venueLat: true,
+  venueLng: true,
   upazila: { select: { lat: true, lng: true } },
   district: { select: { lat: true, lng: true } },
 } as const;
@@ -61,7 +63,7 @@ const gameWithPlace = {
 export async function outlookForRequest(requestId: string): Promise<Outlook | null> {
   const r = await prisma.playerRequest.findUnique({ where: { id: requestId }, select: gameWithPlace });
   if (!r || r.isHidden) return null;
-  return outlookFor(r.upazila.lat ?? r.district.lat, r.upazila.lng ?? r.district.lng, r.matchAt);
+  return outlookFor(r.venueLat ?? r.upazila.lat ?? r.district.lat, r.venueLng ?? r.upazila.lng ?? r.district.lng, r.matchAt);
 }
 
 /**
@@ -76,7 +78,7 @@ export async function sendRainAlerts(now = new Date()): Promise<number> {
   });
   let sent = 0;
   for (const g of games) {
-    const outlook = await outlookFor(g.upazila.lat ?? g.district.lat, g.upazila.lng ?? g.district.lng, g.matchAt);
+    const outlook = await outlookFor(g.venueLat ?? g.upazila.lat ?? g.district.lat, g.venueLng ?? g.upazila.lng ?? g.district.lng, g.matchAt);
     if (!outlook || outlook.level !== "LIKELY") continue;
     // claim it first: only one instance sends
     const claimed = await prisma.playerRequest.updateMany({ where: { id: g.id, rainAlertedAt: null }, data: { rainAlertedAt: now } });

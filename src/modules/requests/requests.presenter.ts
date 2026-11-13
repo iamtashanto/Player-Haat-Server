@@ -5,7 +5,9 @@ import { locationInclude } from "../locations/location.service.js";
 
 export const requestInclude = {
   sport: { select: { id: true, code: true, nameBn: true, nameEn: true } },
-  ...locationInclude,
+  district: { select: { id: true, nameBn: true, nameEn: true, lat: true, lng: true } },
+  upazila: { select: { id: true, nameBn: true, nameEn: true, lat: true, lng: true } },
+  union: locationInclude.union,
   team: { select: { id: true, name: true, logoUrl: true } },
   series: { select: { id: true, title: true } },
   result: { select: { ourScore: true, theirScore: true, opponentName: true, summary: true, updatedAt: true, opponentConfirmedAt: true, opponentTeam: { select: { id: true, name: true, captainId: true } } } },
@@ -13,6 +15,12 @@ export const requestInclude = {
 } satisfies Prisma.PlayerRequestInclude;
 
 export type RequestRow = Prisma.PlayerRequestGetPayload<{ include: typeof requestInclude }>;
+
+/** Upazila centre when known, else the district's. */
+function centre(r: { upazila: { lat: number | null; lng: number | null }; district: { lat: number | null; lng: number | null } }) {
+  const c = r.upazila.lat != null && r.upazila.lng != null ? r.upazila : r.district;
+  return c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : null;
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -39,7 +47,7 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
     sport: r.sport,
     matchAt: r.matchAt.toISOString(),
     venueText: r.venueText,
-    location: { district: r.district, upazila: r.upazila, union: r.union },
+    location: { district: { id: r.district.id, nameBn: r.district.nameBn, nameEn: r.district.nameEn }, upazila: { id: r.upazila.id, nameBn: r.upazila.nameBn, nameEn: r.upazila.nameEn }, union: r.union },
     positionsNeeded: r.positionsNeeded,
     playersNeeded: r.playersNeeded,
     playersAccepted: r.playersAccepted,
@@ -80,6 +88,8 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
       ? { ourScore: r.result.ourScore, theirScore: r.result.theirScore, opponentName: r.result.opponentName, summary: r.result.summary, outcome: (r.result.ourScore > r.result.theirScore ? "WIN" : r.result.ourScore < r.result.theirScore ? "LOSS" : "DRAW") as "WIN" | "DRAW" | "LOSS", recordedAt: r.result.updatedAt.toISOString(), opponentTeam: r.result.opponentTeam ? { id: r.result.opponentTeam.id, name: r.result.opponentTeam.name } : null, confirmed: !!r.result.opponentConfirmedAt, canConfirm: !!r.result.opponentTeam && !r.result.opponentConfirmedAt && r.result.opponentTeam.captainId === ctx.viewerId }
       : null,
     series: r.series ? { id: r.series.id, title: r.series.title } : null,
+    pin: r.venueLat != null && r.venueLng != null ? { lat: r.venueLat, lng: r.venueLng } : null,
+    areaCentre: centre(r),
     waitlistCount: ctx.waitlistCounts?.get(r.id) ?? 0,
     isOwner,
     myApplication: isOwner

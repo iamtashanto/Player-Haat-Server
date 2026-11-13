@@ -787,6 +787,8 @@ model PlayerRequest {
   invites        Invite[]
   chatMessages   GameMessage[]
   rainAlertedAt  DateTime? // the one rain warning for this game has been sent
+  venueLat        Float? // the ground's pin, set by the organiser (public: it is where the game is)
+  venueLng        Float?
   groundFee      Int? // total ground rent in BDT, split between the players
   feePayTo       String? // where players send their share, e.g. "bKash 01XXXXXXXXX"; shown to accepted players only
   seriesId       String?

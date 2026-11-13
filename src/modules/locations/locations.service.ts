@@ -7,10 +7,10 @@ const base = { id: true, nameBn: true, nameEn: true, slug: true } as const;
 export const listDivisions = () => prisma.division.findMany({ select: base, orderBy: { nameEn: "asc" } });
 
 export const listDistricts = (divisionId: number) =>
-  prisma.district.findMany({ where: { divisionId }, select: { ...base, divisionId: true }, orderBy: { nameEn: "asc" } });
+  prisma.district.findMany({ where: { divisionId }, select: { ...base, divisionId: true, lat: true, lng: true }, orderBy: { nameEn: "asc" } });
 
 export const listUpazilas = (districtId: number) =>
-  prisma.upazila.findMany({ where: { districtId }, select: { ...base, districtId: true }, orderBy: { nameEn: "asc" } });
+  prisma.upazila.findMany({ where: { districtId }, select: { ...base, districtId: true, lat: true, lng: true }, orderBy: { nameEn: "asc" } });
 
 export const listUnions = (upazilaId: number) =>
   prisma.union.findMany({ where: { upazilaId }, select: { ...base, upazilaId: true }, orderBy: { nameEn: "asc" } });

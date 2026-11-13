@@ -12,7 +12,7 @@ import { announceNewRequest } from "./matching.service.js";
 import { notifyPromotions, promoteWaitlist } from "../applications/applications.service.js";
 import { lockRequest } from "./request-lock.js";
 import { toRequest, requestInclude, type RequestRow, type ViewerContext } from "./requests.presenter.js";
-import { MAX_DAYS_AHEAD, MAX_OPEN_REQUESTS, type createRequestBody, type featuredQuery, type resultBody, type feedQuery, type mineQuery, type updateRequestBody } from "./requests.schema.js";
+import { MAX_DAYS_AHEAD, MAX_OPEN_REQUESTS, type createRequestBody, type featuredQuery, type mapQuery, type resultBody, type feedQuery, type mineQuery, type updateRequestBody } from "./requests.schema.js";
 
 type Tx = Prisma.TransactionClient;
 const DAY_MS = 86_400_000;
@@ -170,6 +170,8 @@ export async function createRequest(userId: string, input: z.infer<typeof create
       joinMode: kind === "MATCH" ? (input.joinMode ?? "APPROVAL") : "APPROVAL",
       title: kind === "EVENT" ? (input.title ?? null) : null,
       seriesId: extra.seriesId ?? null,
+      venueLat: input.venueLat ?? null,
+      venueLng: input.venueLng ?? null,
       groundFee: kind === "MATCH" ? (input.groundFee ?? null) : null,
       feePayTo: kind === "MATCH" && input.groundFee != null ? (input.feePayTo || null) : null,
     },
@@ -178,6 +180,38 @@ export async function createRequest(userId: string, input: z.infer<typeof create
 
   announceNewRequest(created.id);
   return presentOne(userId, created);
+}
+
+// ───────────────────────── map ─────────────────────────
+
+/** Open, upcoming games that can be drawn on a map: the organiser's pin, else the upazila (or district) centre. */
+export async function mapGames(q: z.infer<typeof mapQuery>) {
+  const rows = await prisma.playerRequest.findMany({
+    where: {
+      status: "OPEN",
+      isHidden: false,
+      matchAt: { gt: new Date() },
+      createdBy: { status: "ACTIVE" },
+      ...(q.sportId && { sportId: q.sportId }),
+      ...(q.districtId && { districtId: q.districtId }),
+      ...(q.upazilaId && { upazilaId: q.upazilaId }),
+      ...(q.kind && { kind: q.kind }),
+    },
+    orderBy: [{ matchAt: "asc" }, { id: "asc" }],
+    take: 300,
+    select: {
+      id: true, kind: true, title: true, matchAt: true, venueText: true, playersNeeded: true, playersAccepted: true, isPaid: true, venueLat: true, venueLng: true,
+      sport: { select: { id: true, code: true, nameBn: true, nameEn: true } },
+      upazila: { select: { lat: true, lng: true } },
+      district: { select: { lat: true, lng: true } },
+    },
+  });
+  return rows.flatMap((r) => {
+    const pin = r.venueLat != null && r.venueLng != null;
+    const c = pin ? { lat: r.venueLat!, lng: r.venueLng! } : r.upazila.lat != null && r.upazila.lng != null ? r.upazila : r.district.lat != null && r.district.lng != null ? r.district : null;
+    if (!c || c.lat == null || c.lng == null) return [];
+    return [{ id: r.id, lat: c.lat, lng: c.lng, exact: pin, kind: r.kind, title: r.title, sport: r.sport, matchAt: r.matchAt.toISOString(), venueText: r.venueText, spotsLeft: Math.max(0, r.playersNeeded - r.playersAccepted), isPaid: r.isPaid }];
+  });
 }
 
 // ───────────────────────── read ─────────────────────────
@@ -309,6 +343,7 @@ export async function updateRequest(userId: string, id: string, patch: z.infer<t
         budgetMax: state.budgetMax,
         status,
         ...feeData,
+        ...(patch.venueLat !== undefined && { venueLat: patch.venueLat, venueLng: patch.venueLng }),
       },
       include: requestInclude,
     });

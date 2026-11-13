@@ -25,8 +25,8 @@ const T = "Reference";
 const list = (shape: z.ZodRawShape) => z.array(z.object({ ...Name, ...shape }));
 
 registerRoute({ method: "get", path: "/locations/divisions", tag: T, summary: "List divisions", response: list({}) });
-registerRoute({ method: "get", path: "/locations/districts", tag: T, summary: "Districts of a division", query: districtsQuery, response: list({ divisionId: z.number() }), errors: [422] });
-registerRoute({ method: "get", path: "/locations/upazilas", tag: T, summary: "Upazilas of a district", query: upazilasQuery, response: list({ districtId: z.number() }), errors: [422] });
+registerRoute({ method: "get", path: "/locations/districts", tag: T, summary: "Districts of a division", query: districtsQuery, response: list({ divisionId: z.number(), lat: z.number().nullable(), lng: z.number().nullable() }), errors: [422] });
+registerRoute({ method: "get", path: "/locations/upazilas", tag: T, summary: "Upazilas of a district", query: upazilasQuery, response: list({ districtId: z.number(), lat: z.number().nullable(), lng: z.number().nullable() }), errors: [422] });
 registerRoute({ method: "get", path: "/locations/unions", tag: T, summary: "Unions of an upazila", query: unionsQuery, response: list({ upazilaId: z.number() }), errors: [422] });
 registerRoute({
   method: "get",
