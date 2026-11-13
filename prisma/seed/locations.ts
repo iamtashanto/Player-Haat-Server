@@ -96,6 +96,8 @@ export async function seedLocations(prisma: PrismaClient) {
 
   const boundaries = readJson<Record<string, Ring[][]>>("./data/boundaries/upazilas.json") ?? {};
   const postcodes = readJson<Record<string, { office: string; code: string }[]>>("./data/postcodes.json") ?? {};
+  const places = readJson<[string, string, string, number, number, string, string][]>("./data/places.json") ?? [];
+  const upazilaIds = new Map<string, number>(); // "district|upazila" → id, for placing the places below
   let upazilaCount = 0;
   let unionCount = 0;
   let postOfficeCount = 0;
@@ -109,6 +111,7 @@ export async function seedLocations(prisma: PrismaClient) {
       create: { districtId, slug, nameEn: u.nameEn, nameBn: u.nameBn, code: u.code ?? null },
     });
     upazilaCount++;
+    upazilaIds.set(`${u.district}|${u.nameEn}`, row.id);
     const centre = boundaries[`${u.district}|${u.nameEn}`] ? centroid(boundaries[`${u.district}|${u.nameEn}`]!) : null;
     if (centre) await prisma.upazila.update({ where: { id: row.id }, data: centre });
     const offices = postcodes[`${u.district}|${u.nameEn}`];
@@ -129,8 +132,20 @@ export async function seedLocations(prisma: PrismaClient) {
     }
   }
 
+  // Villages, towns, markets, beaches: replaced wholesale each seed (they have no natural key worth upserting on).
+  let placeCount = 0;
+  if (places.length > 0) {
+    await prisma.place.deleteMany();
+    const data = places.flatMap(([nameEn, nameBn, kind, lat, lng, district, upazila]) => {
+      const districtId = districtIds.get(district);
+      return districtId ? [{ nameEn, nameBn: nameBn || null, kind, lat, lng, districtId, upazilaId: upazila ? (upazilaIds.get(`${district}|${upazila}`) ?? null) : null }] : [];
+    });
+    for (let i = 0; i < data.length; i += 5000) placeCount += (await prisma.place.createMany({ data: data.slice(i, i + 5000) })).count;
+  }
+
   return {
     divisions: divisions.length,
+    places: placeCount,
     districts: districtIds.size,
     upazilas: upazilaCount,
     unions: unionCount,

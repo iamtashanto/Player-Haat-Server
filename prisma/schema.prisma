@@ -430,6 +430,7 @@ model District {
   recruiters  RecruiterProfile[]
   gameSeries  GameSeries[]
   tournaments Tournament[]
+  places      Place[]
 
   @@unique([divisionId, slug])
   @@index([nameEn])
@@ -453,9 +454,29 @@ model Upazila {
   gameSeries  GameSeries[]
   tournaments Tournament[]
   postOffices PostOffice[]
+  places      Place[]
 
   @@unique([districtId, slug])
   @@index([nameEn])
+}
+
+/// A named place that is not an administrative unit: a village, town, bazaar, island, beach or well-known area
+/// (GeoNames, CC BY 4.0, plus a hand-checked list). Found by search; choosing one sets its district and upazila.
+model Place {
+  id         Int     @id @default(autoincrement())
+  nameEn     String
+  nameBn     String?
+  kind       String // VILLAGE | TOWN | MARKET | ISLAND | BEACH | AREA
+  lat        Float
+  lng        Float
+  districtId Int
+  upazilaId  Int?
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  upazila  Upazila? @relation(fields: [upazilaId], references: [id], onDelete: Cascade)
+
+  @@index([upazilaId])
+  @@index([districtId])
 }
 
 /// A post office and its code (BBS post-office directory via bd-geo-info). Upazila-level only: one upazila has several.

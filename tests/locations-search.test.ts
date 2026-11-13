@@ -65,3 +65,25 @@ describe("post codes", () => {
     expect((await search("9999")).body.data).toEqual([]);
   });
 });
+
+describe("places (villages, towns, beaches)", () => {
+  it("finds Kuakata by English or Bangla name and returns its upazila, district and kind", async () => {
+    await prisma.place.createMany({ data: [
+      { nameEn: "Kuakata", nameBn: "কুয়াকাটা", kind: "BEACH", lat: 21.82, lng: 90.12, districtId: w.patuakhali.id, upazilaId: w.kalapara.id },
+      { nameEn: "Kuakata Bazar", nameBn: null, kind: "MARKET", lat: 21.81, lng: 90.11, districtId: w.patuakhali.id, upazilaId: w.kalapara.id },
+      { nameEn: "Some Village", nameBn: null, kind: "VILLAGE", lat: 22.5, lng: 90.4, districtId: w.dhaka.id, upazilaId: w.savar.id },
+    ] });
+    const en = (await search("kuakata")).body.data as { level: string; nameEn: string; kind?: string; upazila: { id: number } | null; district: { id: number } | null }[];
+    expect(en[0]).toMatchObject({ level: "place", nameEn: "Kuakata", kind: "BEACH", upazila: { id: w.kalapara.id }, district: { id: w.patuakhali.id } });
+    expect(en.map((r) => r.nameEn)).toEqual(["Kuakata", "Kuakata Bazar"]);
+    const bn = (await search("কুয়াকাটা")).body.data as { nameEn: string }[];
+    expect(bn[0]?.nameEn).toBe("Kuakata");
+    // a place can be found through its parents too, and a plain upazila search still ranks the upazila first
+    const byParent = (await search("kuakata kalapara")).body.data as { nameEn: string }[];
+    expect(byParent.map((r) => r.nameEn)).toContain("Kuakata");
+    expect(((await search("kalapara")).body.data as { level: string }[])[0]?.level).toBe("upazila");
+    // restricting the level excludes places
+    expect(((await search("kuakata", "&level=union")).body.data as unknown[]).length).toBe(0);
+    expect(((await search("kuakata", "&level=place")).body.data as unknown[]).length).toBe(2);
+  });
+});

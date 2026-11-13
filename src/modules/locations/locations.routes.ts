@@ -42,5 +42,5 @@ locationsRoutes.get("/by-ip", searchLimiter, async (req, res) => {
 
 locationsRoutes.get("/search", searchLimiter, validate({ query: s.searchQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof s.searchQuery>>(req);
-  ok(res, await svc.searchLocations(query.q, query.level ? [query.level] : ["district", "upazila", "union"], query.limit));
+  ok(res, await svc.searchLocations(query.q, query.level ? [query.level] : ["district", "upazila", "union", "place"], query.limit));
 });

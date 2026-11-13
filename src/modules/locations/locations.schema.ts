@@ -8,9 +8,9 @@ export const unionsQuery = z.object({ upazilaId: id });
 export const searchQuery = z.object({
   q: z.string().trim().min(2).max(60).openapi({ example: "latachapli kalapara", description: "Any part of an address, one or more words, Bangla or English." }),
   level: z
-    .enum(["district", "upazila", "union"])
+    .enum(["district", "upazila", "union", "place"])
     .optional()
-    .openapi({ description: "Restrict to one level; omit to search all three." }),
+    .openapi({ description: "Restrict to one level; omit to search all four (a `place` is a village, town, bazaar, island, beach or well-known area like Kuakata)." }),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
@@ -35,7 +35,7 @@ registerRoute({
   summary: "Search places by Bangla or English name",
   query: searchQuery,
   response: z.array(
-    z.object({ level: z.enum(["district", "upazila", "union"]), id: z.number(), nameBn: z.string(), nameEn: z.string(), division: Ref.nullable(), district: Ref.nullable(), upazila: Ref.nullable(), postcodes: z.array(z.object({ code: z.string(), office: z.string() })).openapi({ description: "Post offices of the upazila (for upazila and union results). Type a 4-digit code to find its upazila." }) }),
+    z.object({ level: z.enum(["district", "upazila", "union", "place"]), id: z.number(), kind: z.enum(["VILLAGE", "TOWN", "MARKET", "ISLAND", "BEACH", "AREA"]).optional().openapi({ description: "Places only." }), lat: z.number().optional(), lng: z.number().optional(), nameBn: z.string(), nameEn: z.string(), division: Ref.nullable(), district: Ref.nullable(), upazila: Ref.nullable(), postcodes: z.array(z.object({ code: z.string(), office: z.string() })).openapi({ description: "Post offices of the upazila (for upazila and union results). Type a 4-digit code to find its upazila." }) }),
   ),
   errors: [422],
 });

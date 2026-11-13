@@ -44,7 +44,7 @@ export const listUpazilas = (districtId: number) =>
 export const listUnions = (upazilaId: number) =>
   prisma.union.findMany({ where: { upazilaId }, select: { ...base, upazilaId: true }, orderBy: { nameEn: "asc" } });
 
-export type LocationLevel = "district" | "upazila" | "union";
+export type LocationLevel = "district" | "upazila" | "union" | "place";
 
 type NameFilter = { OR: Array<{ nameEn: { contains: string; mode: "insensitive" } } | { nameBn: { contains: string } }> };
 const nameHas = (tok: string): NameFilter => ({ OR: [{ nameEn: { contains: tok, mode: "insensitive" } }, { nameBn: { contains: tok } }] });
@@ -65,7 +65,23 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
     AND: tokens.map((tok) => ({ OR: [...nameHas(tok).OR, ...chain.map((rel) => relFilter(rel, nameHas(tok)))] })),
   });
 
-  const [districts, upazilas, unions] = await Promise.all([
+  const placesQ = levels.includes("place")
+    ? prisma.place.findMany({
+        where: {
+          AND: tokens.map((tok) => ({
+            OR: [...nameHas(tok).OR, { upazila: nameHas(tok) }, { district: nameHas(tok) }],
+          })),
+        },
+        take: per,
+        orderBy: { nameEn: "asc" },
+        select: {
+          id: true, nameBn: true, nameEn: true, kind: true, lat: true, lng: true,
+          upazila: { select: { id: true, nameBn: true, nameEn: true } },
+          district: { select: { id: true, nameBn: true, nameEn: true, division: ref } },
+        },
+      })
+    : [];
+  const [districts, upazilas, unions, placeRows] = await Promise.all([
     levels.includes("district")
       ? prisma.district.findMany({ where: each("division"), take: per, select: { id: true, nameBn: true, nameEn: true, division: ref } })
       : [],
@@ -88,6 +104,7 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
           },
         })
       : [],
+    placesQ,
   ]);
 
   // A 4-digit token is a post code: it finds the upazilas that have a post office with that code.
@@ -111,6 +128,19 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
 
   const all = [
     ...districts.map((d) => ({ level: "district" as const, id: d.id, nameBn: d.nameBn, nameEn: d.nameEn, division: d.division, district: null, upazila: null, _s: score(d, 0) })),
+    ...placeRows.map((p) => ({
+      level: "place" as const,
+      id: p.id,
+      nameBn: p.nameBn ?? p.nameEn,
+      nameEn: p.nameEn,
+      kind: p.kind,
+      lat: p.lat,
+      lng: p.lng,
+      division: p.district.division,
+      district: { id: p.district.id, nameBn: p.district.nameBn, nameEn: p.district.nameEn },
+      upazila: p.upazila,
+      _s: score({ nameEn: p.nameEn, nameBn: p.nameBn ?? "" }, 3) - (p.kind === "BEACH" || p.kind === "TOWN" || p.kind === "ISLAND" ? 1000 : 0), // well-known kinds first among equals
+    })),
     ...byCode.map((u) => ({ level: "upazila" as const, id: u.id, nameBn: u.nameBn, nameEn: u.nameEn, division: u.district.division, district: { id: u.district.id, nameBn: u.district.nameBn, nameEn: u.district.nameEn }, upazila: null, _s: -1 })),
     ...upazilas.map((u) => ({ level: "upazila" as const, id: u.id, nameBn: u.nameBn, nameEn: u.nameEn, division: u.district.division, district: { id: u.district.id, nameBn: u.district.nameBn, nameEn: u.district.nameEn }, upazila: null, _s: score(u, 1) })),
     ...unions.map((u) => ({
@@ -133,7 +163,7 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
   const upazilaIds = [...new Set(top.flatMap((r) => (r.level === "upazila" ? [r.id] : r.level === "union" && r.upazila ? [r.upazila.id] : [])))];
   const offices = upazilaIds.length ? await prisma.postOffice.findMany({ where: { upazilaId: { in: upazilaIds } }, orderBy: { code: "asc" }, select: { upazilaId: true, code: true, nameEn: true } }) : [];
   const codesOf = (upazilaId: number) => offices.filter((o) => o.upazilaId === upazilaId).map((o) => ({ code: o.code, office: o.nameEn }));
-  return top.map(({ _s, ...r }) => ({ ...r, postcodes: r.level === "upazila" ? codesOf(r.id) : r.level === "union" && r.upazila ? codesOf(r.upazila.id) : [] }));
+  return top.map(({ _s, ...r }) => ({ ...r, kind: "kind" in r ? (r as { kind: string }).kind : undefined, postcodes: r.level === "upazila" ? codesOf(r.id) : r.level === "union" && r.upazila ? codesOf(r.upazila.id) : [] }));
 }
 
 /** `relFilter("upazila.district", f)` => { upazila: { district: f } } */
