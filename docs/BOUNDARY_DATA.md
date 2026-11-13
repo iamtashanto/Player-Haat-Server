@@ -46,10 +46,9 @@ then review `match-report.json` and add `overrides.json` entries.
 
 ## Places (villages, towns, bazaars, beaches, islands)
 `prisma/seed/data/places.json` (47,813 rows) is built by `scripts/build-places.ts` from GeoNames' Bangladesh extract
-(https://download.geonames.org/export/dump/BD.zip, **CC BY 4.0: the credit is on the About page; keep it**) plus
-`places-extra.json`, a hand-checked list with Bangla names (Kuakata, Cox's Bazar beach, Saint Martin's, Sajek...).
+(https://download.geonames.org/export/dump/BD.zip, **CC BY 4.0: the credit is on the About page; keep it**),
+including hand-checked popular places with Bangla names (Kuakata, Cox's Bazar beach, Saint Martin's, Sajek...).
 Each place is put in its district and upazila by our boundary polygons; 826 fall outside any upazila polygon (city areas) and
-keep only their district. Most village names are English only: GeoNames has Bangla for few. To improve that, add rows to
-`places-extra.json` or merge OpenStreetMap `name:bn` (the Overpass service was overloaded when this was built).
+keep only their district.
 Seed with `npm run db:seed`. The same data is exported into the bd-geo-info package with
 `scripts/export-places-to-geo-package.ts <bd-geo-info>/src/data`.

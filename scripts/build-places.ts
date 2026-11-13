@@ -6,7 +6,7 @@
  * (hand-checked well-known places with Bangla names). Each place is assigned to its district and upazila by the boundary polygons;
  * a place outside every polygon is dropped. Row format: [nameEn, nameBn, kind, lat, lng, district, upazila].
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { locate } from "../src/modules/locations/boundaries.js";
 
 const src = process.argv[2];
@@ -40,7 +40,11 @@ for (const line of readFileSync(src, "utf8").split("\n")) {
   add(name, bn, kind, Number(f[4]), Number(f[5]));
 }
 const geonames = rows.length;
-for (const [name, bn, kind, lat, lng] of JSON.parse(readFileSync(new URL("../prisma/seed/data/places-extra.json", import.meta.url), "utf8")) as [string, string, string, number, number][]) {
+const extraUrl = new URL("../prisma/seed/data/places-extra.json", import.meta.url);
+const extraRows: [string, string, string, number, number][] = existsSync(extraUrl)
+  ? (JSON.parse(readFileSync(extraUrl, "utf8")) as [string, string, string, number, number][])
+  : [];
+for (const [name, bn, kind, lat, lng] of extraRows) {
   // the hand-checked entry replaces a GeoNames one of the same name (so its Bangla name wins)
   const i = rows.findIndex((r) => r[0].toLowerCase() === name.toLowerCase());
   const at = locate(lat, lng);
