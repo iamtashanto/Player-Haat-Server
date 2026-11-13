@@ -24,6 +24,7 @@
     "ratings:reconcile": "tsx scripts/reconcile-ratings.ts",
     "cleanup:demo": "tsx scripts/cleanup-demo-and-e2e.ts",
     "admin:create": "tsx src/scripts/create-admin.ts",
+    "admin:create:dev": "tsx src/scripts/create-dev-admin.ts",
     "db:reset": "prisma migrate reset --force",
     "vapid:generate": "tsx scripts/generate-vapid-keys.ts",
     "admin:grant": "tsx src/scripts/grant-admin.ts",
