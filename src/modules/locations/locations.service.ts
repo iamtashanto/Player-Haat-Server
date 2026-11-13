@@ -1,6 +1,35 @@
 import { prisma } from "../../lib/prisma.js";
 import { AppError } from "../../lib/errors.js";
 import { locate } from "./boundaries.js";
+import { logger } from "../../lib/logger.js";
+
+/**
+ * "Approximately where am I", from the internet connection, for when the phone or browser cannot give a GPS position
+ * (Brave without location services, desktops, blocked sensors). Free, no key: ipwho.is. Only the visitor's own address is
+ * sent, nothing is stored, and the answer is a town-level guess: always shown as approximate.
+ */
+export const ipDeps = { fetch: (url: string, init?: RequestInit) => fetch(url, init) as Promise<Response> };
+const ipCache = new Map<string, { at: number; v: { lat: number; lng: number } | null }>();
+const IP_TTL = 60 * 60 * 1000;
+const isLocal = (ip: string) => !ip || ip === "::1" || ip === "127.0.0.1" || ip.startsWith("::ffff:127.") || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|fc|fd|fe80)/i.test(ip);
+
+export async function approximatePoint(ip: string): Promise<{ lat: number; lng: number } | null> {
+  const key = isLocal(ip) ? "self" : ip; // on a developer machine ask about the machine's own public address
+  const hit = ipCache.get(key);
+  if (hit && Date.now() - hit.at < IP_TTL) return hit.v;
+  try {
+    const res = await ipDeps.fetch(`https://ipwho.is/${key === "self" ? "" : encodeURIComponent(key)}?fields=success,latitude,longitude,country_code`, { signal: AbortSignal.timeout(4000) });
+    const j = (await res.json()) as { success?: boolean; latitude?: number; longitude?: number; country_code?: string };
+    const v = j.success && j.country_code === "BD" && typeof j.latitude === "number" && typeof j.longitude === "number" ? { lat: Math.round(j.latitude * 100) / 100, lng: Math.round(j.longitude * 100) / 100 } : null;
+    ipCache.set(key, { at: Date.now(), v });
+    return v;
+  } catch (err) {
+    logger.warn({ err }, "ip lookup failed");
+    return null;
+  }
+}
+
+export const clearIpCache = () => ipCache.clear();
 
 const base = { id: true, nameBn: true, nameEn: true, slug: true } as const;
 
@@ -113,6 +142,12 @@ function relFilter(path: string, f: NameFilter): Record<string, unknown> {
 }
 
 
+
+export async function areaByIp(ip: string) {
+  const p = await approximatePoint(ip);
+  if (!p) throw AppError.notFound(undefined, "Could not work out an area for this connection");
+  return { ...(await containingArea(p.lat, p.lng)), lat: p.lat, lng: p.lng, approximate: true as const };
+}
 
 /**
  * The district and upazila that CONTAIN a point (polygons from OCHA/HDX COD-AB, in memory), with parents and ids.

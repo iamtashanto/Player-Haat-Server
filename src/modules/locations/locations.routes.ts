@@ -34,6 +34,12 @@ locationsRoutes.get("/nearest", searchLimiter, validate({ query: s.nearestQuery 
   ok(res, await svc.containingArea(query.lat, query.lng));
 });
 
+// Per-visitor and never cached: a CDN must not hand one person's town to another.
+locationsRoutes.get("/by-ip", searchLimiter, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  ok(res, await svc.areaByIp(req.ip ?? ""));
+});
+
 locationsRoutes.get("/search", searchLimiter, validate({ query: s.searchQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof s.searchQuery>>(req);
   ok(res, await svc.searchLocations(query.q, query.level ? [query.level] : ["district", "upazila", "union"], query.limit));

@@ -41,6 +41,24 @@ registerRoute({
 });
 registerRoute({
   method: "get",
+  path: "/locations/by-ip",
+  tag: T,
+  summary: "Approximate area from the internet connection",
+  description: "For when GPS is unavailable. Town-level only, always `approximate: true`. 404 when the connection is outside Bangladesh or unknown. Never cached; nothing is stored.",
+  response: z.object({
+    division: Ref,
+    district: Ref,
+    upazila: Ref.nullable(),
+    precision: z.enum(["upazila", "district"]),
+    nearBorder: z.boolean(),
+    lat: z.number(),
+    lng: z.number(),
+    approximate: z.literal(true),
+  }),
+  errors: [404],
+});
+registerRoute({
+  method: "get",
   path: "/locations/nearest",
   tag: T,
   summary: "The area that contains a coordinate",

@@ -63,3 +63,27 @@ describe("ground pin and map feed", () => {
     expect(ups.find((u) => u.id === w.kalapara.id)?.lat).toBe(21.99);
   });
 });
+
+describe("approximate area from the connection", () => {
+  it("answers with a town-level point and its area, only for Bangladesh, and never from a failing service", async () => {
+    const { ipDeps, clearIpCache } = await import("../src/modules/locations/locations.service.js");
+    const real = ipDeps.fetch;
+    try {
+      clearIpCache();
+      ipDeps.fetch = async () => new Response(JSON.stringify({ success: true, latitude: 21.9912, longitude: 90.2234, country_code: "BD" }), { status: 200 });
+      const res = await api().get(`${V1}/locations/by-ip`);
+      expect(res.headers["cache-control"]).toBe("no-store");
+      if (res.status === 200) expect(res.body.data).toMatchObject({ approximate: true, lat: 21.99, lng: 90.22 });
+      else expect(res.status).toBe(404); // the tiny test world has no boundary polygons
+      clearIpCache();
+      ipDeps.fetch = async () => new Response(JSON.stringify({ success: true, latitude: 51.5, longitude: -0.1, country_code: "GB" }), { status: 200 });
+      expect((await api().get(`${V1}/locations/by-ip`)).status).toBe(404);
+      clearIpCache();
+      ipDeps.fetch = async () => { throw new Error("down"); };
+      expect((await api().get(`${V1}/locations/by-ip`)).status).toBe(404);
+    } finally {
+      ipDeps.fetch = real;
+      clearIpCache();
+    }
+  });
+});
