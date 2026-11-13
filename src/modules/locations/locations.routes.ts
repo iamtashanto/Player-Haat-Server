@@ -28,6 +28,10 @@ locationsRoutes.get("/unions", validate({ query: s.unionsQuery }), async (req, r
   const { query } = valid<unknown, unknown, z.infer<typeof s.unionsQuery>>(req);
   ok(res, await svc.listUnions(query.upazilaId));
 });
+locationsRoutes.get("/places", validate({ query: s.placesQuery }), async (req, res) => {
+  const { query } = valid<unknown, unknown, z.infer<typeof s.placesQuery>>(req);
+  ok(res, await svc.listPlaces(query.upazilaId, query.districtId));
+});
 
 locationsRoutes.get("/nearest", searchLimiter, validate({ query: s.nearestQuery }), async (req, res) => {
   const { query } = valid<unknown, unknown, z.infer<typeof s.nearestQuery>>(req);

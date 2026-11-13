@@ -44,6 +44,27 @@ export const listUpazilas = (districtId: number) =>
 export const listUnions = (upazilaId: number) =>
   prisma.union.findMany({ where: { upazilaId }, select: { ...base, upazilaId: true }, orderBy: { nameEn: "asc" } });
 
+export const listPlaces = (upazilaId?: number, districtId?: number) => {
+  if (!upazilaId && !districtId) return [];
+  return prisma.place.findMany({
+    where: {
+      ...(upazilaId ? { upazilaId } : {}),
+      ...(districtId && !upazilaId ? { districtId } : {}),
+    },
+    select: {
+      id: true,
+      nameBn: true,
+      nameEn: true,
+      kind: true,
+      lat: true,
+      lng: true,
+      districtId: true,
+      upazilaId: true,
+    },
+    orderBy: { nameEn: "asc" },
+  });
+};
+
 export type LocationLevel = "district" | "upazila" | "union" | "place";
 
 type NameFilter = { OR: Array<{ nameEn: { contains: string; mode: "insensitive" } } | { nameBn: { contains: string } }> };

@@ -5,6 +5,7 @@ const id = z.coerce.number().int().positive();
 export const districtsQuery = z.object({ divisionId: id });
 export const upazilasQuery = z.object({ districtId: id });
 export const unionsQuery = z.object({ upazilaId: id });
+export const placesQuery = z.object({ upazilaId: id.optional(), districtId: id.optional() });
 export const searchQuery = z.object({
   q: z.string().trim().min(2).max(60).openapi({ example: "latachapli kalapara", description: "Any part of an address, one or more words, Bangla or English." }),
   level: z
@@ -28,6 +29,24 @@ registerRoute({ method: "get", path: "/locations/divisions", tag: T, summary: "L
 registerRoute({ method: "get", path: "/locations/districts", tag: T, summary: "Districts of a division", query: districtsQuery, response: list({ divisionId: z.number(), lat: z.number().nullable(), lng: z.number().nullable() }), errors: [422] });
 registerRoute({ method: "get", path: "/locations/upazilas", tag: T, summary: "Upazilas of a district", query: upazilasQuery, response: list({ districtId: z.number(), lat: z.number().nullable(), lng: z.number().nullable() }), errors: [422] });
 registerRoute({ method: "get", path: "/locations/unions", tag: T, summary: "Unions of an upazila", query: unionsQuery, response: list({ upazilaId: z.number() }), errors: [422] });
+registerRoute({
+  method: "get",
+  path: "/locations/places",
+  tag: T,
+  summary: "Places (villages, towns, bazaars, beaches, areas) of an upazila or district",
+  query: placesQuery,
+  response: z.array(z.object({
+    id: z.number().int(),
+    nameEn: z.string(),
+    nameBn: z.string().nullable(),
+    kind: z.string(),
+    lat: z.number(),
+    lng: z.number(),
+    districtId: z.number(),
+    upazilaId: z.number().nullable(),
+  })),
+  errors: [422],
+});
 registerRoute({
   method: "get",
   path: "/locations/search",
