@@ -45,7 +45,7 @@ const display = (r: Row["request"], sport: { nameBn: string; nameEn: string } | 
 
 export async function createInvite(recruiterId: string, input: z.infer<typeof createInviteBody>) {
   const target = await prisma.playerProfile.findFirst({
-    where: { id: input.profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE", role: "PLAYER" } },
+    where: { id: input.profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE" } },
     select: { id: true, userId: true, sports: { where: { isVisible: true, hiddenByAdminAt: null }, select: { sportId: true } } },
   });
   if (!target) throw AppError.notFound("PLAYER_PROFILE_NOT_FOUND", "Player not found");

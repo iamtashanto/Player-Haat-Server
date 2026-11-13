@@ -12,7 +12,7 @@ const dhakaDay = (now: Date) => new Date(Math.floor((now.getTime() + 6 * 3_600_0
 export async function recordProfileView(viewerId: string, profileId: string, ownerUserId: string) {
   if (viewerId === ownerUserId) return;
   const viewer = await prisma.user.findUnique({ where: { id: viewerId }, select: { role: true, name: true, status: true, recruiterProfile: { select: { organization: true } } } });
-  if (!viewer || viewer.role !== "RECRUITER" || viewer.status !== "ACTIVE") return;
+  if (!viewer || !viewer.recruiterProfile || viewer.status !== "ACTIVE") return; // anyone with a recruiter profile, whichever hat they wear
   const { count } = await prisma.profileView.createMany({ data: [{ profileId, viewerId, day: dhakaDay(clock.now()) }], skipDuplicates: true });
   if (count === 0) return; // already counted today
   notify({

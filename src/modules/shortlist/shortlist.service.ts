@@ -14,7 +14,7 @@ export async function shortlistedAmong(viewerId: string, profileIds: string[]): 
 }
 
 export async function save(recruiterId: string, profileId: string, input: z.infer<typeof saveBody>) {
-  const visible = await prisma.playerProfile.findFirst({ where: { id: profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE", role: "PLAYER" } }, select: { id: true } });
+  const visible = await prisma.playerProfile.findFirst({ where: { id: profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE" } }, select: { id: true } });
   if (!visible) throw AppError.notFound("PLAYER_PROFILE_NOT_FOUND", "Player not found");
 
   const existing = await prisma.shortlistEntry.findUnique({ where: { recruiterId_profileId: { recruiterId, profileId } }, select: { id: true } });
@@ -40,7 +40,7 @@ export async function list(recruiterId: string, q: z.infer<typeof shortlistQuery
   const rows = await prisma.shortlistEntry.findMany({
     where: {
       recruiterId,
-      profile: { isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE", role: "PLAYER" }, ...(q.sportId && { sports: { some: { sportId: q.sportId, isVisible: true, hiddenByAdminAt: null } } }) },
+      profile: { isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE" }, ...(q.sportId && { sports: { some: { sportId: q.sportId, isVisible: true, hiddenByAdminAt: null } } }) },
     },
     include: { profile: { include: profileInclude } },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],

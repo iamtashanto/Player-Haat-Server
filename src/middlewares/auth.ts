@@ -24,7 +24,11 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
   if (!user || user.status === "DELETED") throw AppError.unauthorized(ErrorCode.AUTH_UNAUTHENTICATED);
   if (user.status === "SUSPENDED") throw AppError.forbidden(ErrorCode.AUTH_ACCOUNT_SUSPENDED);
 
-  req.auth = { userId: user.id, role: user.role };
+  // One account can be a player and a recruiter: the website says which hat it is wearing with `X-Active-Role`.
+  // Only the two app roles can be asked for, and only by an app account. The app sends no header and keeps its own role.
+  const asked = String(req.headers["x-active-role"] ?? "").toUpperCase();
+  const role = (user.role === "PLAYER" || user.role === "RECRUITER") && (asked === "PLAYER" || asked === "RECRUITER") ? asked : user.role;
+  req.auth = { userId: user.id, role };
   next();
 };
 

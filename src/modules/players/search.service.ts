@@ -62,7 +62,7 @@ export function buildSearchSql(viewerId: string, q: Query): Prisma.Sql {
     Prisma.sql`p."isVisible" = true`,
     Prisma.sql`p."hiddenByAdminAt" IS NULL`,
     Prisma.sql`u.status = 'ACTIVE'`,
-    Prisma.sql`u.role = 'PLAYER'`, // an account switched to another role drops out of discovery
+    // anyone with a visible player profile is discoverable, whichever hat they are wearing today
     Prisma.sql`p."userId" <> ${viewerId}`,
   ];
 

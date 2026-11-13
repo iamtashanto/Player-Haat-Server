@@ -58,7 +58,7 @@ export async function open(userId: string, role: "PLAYER" | "RECRUITER", input: 
   if (role === "RECRUITER") {
     if (!input.profileId) throw AppError.invalid("profileId", "Say which player");
     const p = await prisma.playerProfile.findFirst({
-      where: { id: input.profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE", role: "PLAYER" } },
+      where: { id: input.profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE" } },
       select: { userId: true, contactVisibility: true },
     });
     if (!p) throw AppError.notFound("PLAYER_PROFILE_NOT_FOUND", "Player not found");

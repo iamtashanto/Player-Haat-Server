@@ -77,7 +77,7 @@ export async function updateProfile(userId: string, patch: z.infer<typeof update
 /** Public view: only visible profiles of active users. Hidden ones are indistinguishable from missing. */
 export async function getPublicProfile(profileId: string, viewerId?: string) {
   const profile = await prisma.playerProfile.findFirst({
-    where: { id: profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE", role: "PLAYER" } },
+    where: { id: profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE" } },
     include: profileInclude,
   });
   if (!profile) throw AppError.notFound(NOT_FOUND, "Player not found");

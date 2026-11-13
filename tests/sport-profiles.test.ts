@@ -159,14 +159,17 @@ describe("recruiter discovery", () => {
     expect((await call("get", "/players", rec.auth, {}, { minExperienceYears: 61 })).status).toBe(422);
   });
 
-  it("drops an account that has been switched to recruiter, and never shows contact details", async () => {
+  it("keeps a player discoverable when the account also acts as a recruiter, and never shows contact details", async () => {
     const rec = await recruiterUser(w);
     const p = await playerUser(w, "p@example.com", [{ sportId: w.football.id }]);
     const body = JSON.stringify((await call("get", `/players/${p.profileId}`, rec.auth)).body);
     expect(body).not.toMatch(/p@example\.com|passwordHash|"email"|"phone"/);
     await prisma.user.update({ where: { id: p.user.id }, data: { role: "RECRUITER" } });
+    expect((await call("get", "/players", rec.auth)).body.data).toHaveLength(1); // the profile is what makes someone discoverable
+    expect((await call("get", `/players/${p.profileId}`, rec.auth)).status).toBe(200);
+    // a suspended account still drops out
+    await prisma.user.update({ where: { id: p.user.id }, data: { status: "SUSPENDED" } });
     expect((await call("get", "/players", rec.auth)).body.data).toHaveLength(0);
-    expect((await call("get", `/players/${p.profileId}`, rec.auth)).status).toBe(404);
   });
 
   it("can't modify anything a player owns", async () => {

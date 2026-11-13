@@ -14,7 +14,7 @@ const DAY_MS = 86_400_000;
 /** The player behind a profile id, as a viewer is allowed to reach them (hidden/suspended ones don't exist). */
 async function loadTarget(profileId: string) {
   const p = await prisma.playerProfile.findFirst({
-    where: { id: profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE", role: "PLAYER" } },
+    where: { id: profileId, isVisible: true, hiddenByAdminAt: null, user: { status: "ACTIVE" } },
     select: { id: true, userId: true, contactVisibility: true, user: { select: { phone: true, name: true } } },
   });
   if (!p) throw AppError.notFound("PLAYER_PROFILE_NOT_FOUND", "Player not found");

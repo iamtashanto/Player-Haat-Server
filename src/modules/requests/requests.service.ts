@@ -124,8 +124,8 @@ export async function createRequest(userId: string, input: z.infer<typeof create
 
   const kind = input.kind ?? "MATCH";
   if (kind === "EVENT") {
-    const poster = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { role: true } });
-    if (poster.role !== "RECRUITER") throw AppError.forbidden("EVENT_RECRUITERS_ONLY", "Only recruiters can launch events");
+    const poster = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { role: true, recruiterProfile: { select: { id: true } } } });
+    if (poster.role !== "RECRUITER" && !poster.recruiterProfile) throw AppError.forbidden("EVENT_RECRUITERS_ONLY", "Only recruiters can launch events");
   }
 
   const matchAt = new Date(input.matchAt);
