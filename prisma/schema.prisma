@@ -395,6 +395,7 @@ model VerificationCode {
 
   @@index([type, target, createdAt])
   @@index([expiresAt])
+  @@index([userId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -795,10 +796,10 @@ model PlayerRequest {
   invites        Invite[]
   chatMessages   GameMessage[]
   rainAlertedAt  DateTime? // the one rain warning for this game has been sent
-  venueLat        Float? // the ground's pin, set by the organiser (public: it is where the game is)
-  venueLng        Float?
-  feeMode         FeeMode  @default(TOTAL)
-  isTurf          Boolean  @default(false) // played on a rented turf or ground, so a fee is normal
+  venueLat       Float? // the ground's pin, set by the organiser (public: it is where the game is)
+  venueLng       Float?
+  feeMode        FeeMode       @default(TOTAL)
+  isTurf         Boolean       @default(false) // played on a rented turf or ground, so a fee is normal
   groundFee      Int? // total ground rent in BDT, split between the players
   feePayTo       String? // where players send their share, e.g. "bKash 01XXXXXXXXX"; shown to accepted players only
   seriesId       String?
@@ -815,6 +816,8 @@ model PlayerRequest {
   @@index([createdById, createdAt(sort: Desc)])
   @@index([status, completedAt]) // rating-reminder job and rating windows
   @@index([positionsNeeded], type: Gin)
+  @@index([teamId])
+  @@index([opponentTeamId])
 }
 
 /// A weekly game ("Friday football"): the same ground, day and time every week. A job posts the next game once the
@@ -1026,6 +1029,7 @@ model GameMessage {
   sender  User          @relation("GameMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([requestId, createdAt(sort: Desc)])
+  @@index([senderId])
 }
 
 model Rating {
@@ -1058,6 +1062,7 @@ model Rating {
   @@unique([requestId, raterId, rateeId])
   @@index([rateeId, direction])
   @@index([revealedAt])
+  @@index([raterId])
 }
 
 enum RatingDisputeStatus {
@@ -1131,6 +1136,8 @@ model ProfileView {
 
   @@unique([profileId, viewerId, day])
   @@index([profileId, createdAt(sort: Desc)])
+  @@index([viewerId])
+  @@index([createdAt])
 }
 
 /// Facts about every uploaded image, keyed by its storage path: so layouts can reserve the space before it loads.
@@ -1265,6 +1272,7 @@ model Report {
 
   @@index([status, createdAt])
   @@index([targetType, targetId])
+  @@index([reporterId])
 }
 
 model AppConfig {
@@ -1332,6 +1340,7 @@ model Invite {
   // A partial unique index (one PENDING invite per recruiter + player) lives in the migration.
   @@index([profileId, status, createdAt(sort: Desc)])
   @@index([recruiterId, createdAt(sort: Desc)])
+  @@index([requestId])
 }
 
 model ShortlistEntry {
@@ -1346,6 +1355,7 @@ model ShortlistEntry {
 
   @@unique([recruiterId, profileId])
   @@index([recruiterId, createdAt(sort: Desc)])
+  @@index([profileId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1469,6 +1479,7 @@ model Message {
   sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt(sort: Desc)])
+  @@index([senderId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

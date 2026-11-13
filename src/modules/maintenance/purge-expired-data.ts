@@ -9,7 +9,16 @@ export interface PurgeResult {
   notifications: number;
   pushLog: number;
   telemetry: number;
+  profileViews: number;
 }
+
+/** How long things are kept. Short enough that the tables stay small, long enough to be useful. */
+export const RETENTION = {
+  readNotificationDays: 30,
+  anyNotificationDays: 90,
+  notificationsPerUser: 300,
+  profileViewDays: 180,
+};
 
 /** `timestamp` columns hold UTC; bind UTC text so a non-UTC DB session can't skew the cutoff. */
 const utc = (ms: number) => new Date(ms).toISOString();
@@ -28,7 +37,8 @@ async function deleteInChunks(run: (limit: number) => Promise<number>, chunk: nu
  * Housekeeping for tables that otherwise grow forever:
  *  - refresh tokens a week past their expiry (revoked or not; a replayed token that old is rejected anyway);
  *  - verification codes two days past expiry/use;
- *  - notifications older than `notificationDays` (default 180);
+ *  - notifications: read ones after 30 days, any after 90, and never more than the newest 300 per person;
+ *  - profile views ("who viewed me") after 180 days;
  *  - finished push-log rows (sent, failed, skipped) older than 30 days — the queue itself is never touched.
  * Idempotent; safe on several instances at once.
  */
@@ -37,7 +47,6 @@ export async function purgeExpiredData(now = new Date(), opts: { chunk?: number;
   const t = now.getTime();
   const tokensBefore = utc(t - 7 * DAY);
   const codesBefore = utc(t - 2 * DAY);
-  const notificationsBefore = utc(t - (opts.notificationDays ?? 180) * DAY);
 
   const refreshTokens = await deleteInChunks(
     (n) => prisma.$executeRaw`DELETE FROM "RefreshToken" WHERE id IN (SELECT id FROM "RefreshToken" WHERE "expiresAt" < ${tokensBefore}::timestamp LIMIT ${n})`,
@@ -49,8 +58,25 @@ export async function purgeExpiredData(now = new Date(), opts: { chunk?: number;
         SELECT id FROM "VerificationCode" WHERE "expiresAt" < ${codesBefore}::timestamp OR "consumedAt" < ${codesBefore}::timestamp LIMIT ${n})`,
     chunk,
   );
-  const notifications = await deleteInChunks(
-    (n) => prisma.$executeRaw`DELETE FROM "Notification" WHERE id IN (SELECT id FROM "Notification" WHERE "createdAt" < ${notificationsBefore}::timestamp LIMIT ${n})`,
+  const anyBefore = utc(t - (opts.notificationDays ?? RETENTION.anyNotificationDays) * DAY);
+  const readBefore = utc(t - RETENTION.readNotificationDays * DAY);
+  const old = await deleteInChunks(
+    (n) => prisma.$executeRaw`DELETE FROM "Notification" WHERE id IN (SELECT id FROM "Notification" WHERE "createdAt" < ${anyBefore}::timestamp OR ("readAt" IS NOT NULL AND "createdAt" < ${readBefore}::timestamp) LIMIT ${n})`,
+    chunk,
+  );
+  // a person who gets hundreds of alerts keeps the newest few hundred, however recent
+  const overCap = await deleteInChunks(
+    (n) => prisma.$executeRaw`DELETE FROM "Notification" WHERE id IN (
+      SELECT id FROM (
+        SELECT id, row_number() OVER (PARTITION BY "userId" ORDER BY "createdAt" DESC, id DESC) AS rn
+        FROM "Notification"
+        WHERE "userId" IN (SELECT "userId" FROM "Notification" GROUP BY "userId" HAVING count(*) > ${RETENTION.notificationsPerUser})
+      ) ranked WHERE rn > ${RETENTION.notificationsPerUser} LIMIT ${n})`,
+    chunk,
+  );
+  const notifications = old + overCap;
+  const profileViews = await deleteInChunks(
+    (n) => prisma.$executeRaw`DELETE FROM "ProfileView" WHERE id IN (SELECT id FROM "ProfileView" WHERE "createdAt" < ${utc(t - RETENTION.profileViewDays * DAY)}::timestamp LIMIT ${n})`,
     chunk,
   );
   const pushLog = await deleteInChunks(
@@ -58,5 +84,5 @@ export async function purgeExpiredData(now = new Date(), opts: { chunk?: number;
     chunk,
   );
   const telemetry = await purgeTelemetry(new Date(t - 90 * DAY));
-  return { refreshTokens, verificationCodes, notifications, pushLog, telemetry };
+  return { refreshTokens, verificationCodes, notifications, pushLog, telemetry, profileViews };
 }

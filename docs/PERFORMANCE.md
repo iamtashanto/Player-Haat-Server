@@ -95,3 +95,20 @@ npm run loadtest:explain before            # plans → scripts/loadtest/plans-be
 npm run build && NODE_ENV=test PORT=4020 LOG_LEVEL=silent node dist/server.js &
 BASE_URL=http://localhost:4020/api/v1 k6 run scripts/loadtest/search.k6.js
 ```
+
+## Data retention (what is deleted automatically)
+The daily job `purge-expired-data` keeps the tables that grow with traffic small. Nothing here needs a user setting.
+
+| Table | Kept for |
+|---|---|
+| Notification (alerts inbox) | read: 30 days; unread: 90 days; never more than the newest 300 per person. People can also delete or clear alerts themselves |
+| PushJob (push log) | 30 days after it finished |
+| TelemetryEvent (crash and usage) | 90 days |
+| RefreshToken | 7 days after expiry |
+| VerificationCode | 2 days after expiry or use |
+| ProfileView ("who viewed me") | 180 days |
+
+Kept on purpose: chat messages, ratings, games, payments and the admin audit log (they are records, not logs). If chat grows large, archive by game age later.
+
+## Indexes
+Every foreign key that is filtered, joined or cascaded on has an index (audited 13 Nov 2026, migration `20261113220000_indexes_and_retention`). Re-check with the query in that audit when adding a relation: a foreign key with no index makes deleting the parent row (a user, a team) scan the child table.

@@ -100,10 +100,48 @@ describe("purgeExpiredData", () => {
         { userId: u.user.id, type: "SYSTEM", data: {} },
       ],
     });
+    // anything past 90 days goes (the 200- and 100-day-old ones); today's stays
+    expect((await purgeExpiredData()).notifications).toBe(2);
+    expect(await prisma.notification.count()).toBe(1);
+  });
+
+  it("deletes read alerts after 30 days but keeps unread ones until 90", async () => {
+    const u = await signedIn("u@example.com");
+    await prisma.notification.createMany({
+      data: [
+        { userId: u.user.id, type: "SYSTEM", data: {}, createdAt: daysAgo(45), readAt: daysAgo(44) }, // read and old: goes
+        { userId: u.user.id, type: "SYSTEM", data: {}, createdAt: daysAgo(45) }, // unread: stays
+        { userId: u.user.id, type: "SYSTEM", data: {}, createdAt: daysAgo(10), readAt: daysAgo(9) }, // read but recent: stays
+      ],
+    });
     expect((await purgeExpiredData()).notifications).toBe(1);
     expect(await prisma.notification.count()).toBe(2);
-    expect((await purgeExpiredData(new Date(), { notificationDays: 30 })).notifications).toBe(1); // configurable: now the 100-day-old one goes
-    expect(await prisma.notification.count()).toBe(1);
+  });
+
+  it("keeps only the newest 300 alerts per person, leaving other people alone", async () => {
+    const a = await signedIn("a@example.com");
+    const b = await signedIn("b@example.com");
+    const now = Date.now();
+    await prisma.notification.createMany({ data: Array.from({ length: 320 }, (_, i) => ({ userId: a.user.id, type: "SYSTEM" as const, data: { n: i }, createdAt: new Date(now - i * 1000) })) });
+    await prisma.notification.createMany({ data: Array.from({ length: 5 }, () => ({ userId: b.user.id, type: "SYSTEM" as const, data: {} })) });
+    expect((await purgeExpiredData(new Date(), { chunk: 7 })).notifications).toBe(20);
+    expect(await prisma.notification.count({ where: { userId: a.user.id } })).toBe(300);
+    expect(await prisma.notification.count({ where: { userId: b.user.id } })).toBe(5);
+    // the ones kept are the newest
+    const oldest = await prisma.notification.findFirstOrThrow({ where: { userId: a.user.id }, orderBy: { createdAt: "asc" } });
+    expect((oldest.data as { n: number }).n).toBe(299);
+  });
+
+  it("deletes profile views after 180 days", async () => {
+    const rec = await signedIn("rec@example.com");
+    const p = await signedIn("p@example.com");
+    const profile = await prisma.playerProfile.create({ data: { userId: p.user.id, districtId: w.patuakhali.id, upazilaId: w.kalapara.id } });
+    await prisma.profileView.createMany({ data: [
+      { profileId: profile.id, viewerId: rec.user.id, day: daysAgo(200), createdAt: daysAgo(200) },
+      { profileId: profile.id, viewerId: rec.user.id, day: new Date(), createdAt: new Date() },
+    ] });
+    expect((await purgeExpiredData()).profileViews).toBe(1);
+    expect(await prisma.profileView.count()).toBe(1);
   });
 
   it("works through more rows than one chunk, and a second run finds nothing", async () => {
@@ -113,7 +151,7 @@ describe("purgeExpiredData", () => {
       data: Array.from({ length: 11 }, (_, i) => ({ userId: u.user.id, tokenHash: `old-${i}`, familyId: "f", expiresAt: daysAgo(30) })),
     });
     expect((await purgeExpiredData(new Date(), { chunk: 4 })).refreshTokens).toBe(11);
-    expect(await purgeExpiredData()).toEqual({ telemetry: 0, refreshTokens: 0, verificationCodes: 0, notifications: 0, pushLog: 0 });
+    expect(await purgeExpiredData()).toEqual({ telemetry: 0, refreshTokens: 0, verificationCodes: 0, notifications: 0, pushLog: 0, profileViews: 0 });
   });
 });
 
