@@ -387,6 +387,19 @@ describe("player media", () => {
     expect(over.body.error.code).toBe("PLAYER_MEDIA_LIMIT");
   });
 
+  it("stores Facebook, Instagram and TikTok links as clean links without a thumbnail", async () => {
+    const { auth } = await withFootball();
+    expect((await video(auth, "https://m.facebook.com/kalaparafc/videos/987654321098765/?tracking=1")).status).toBe(201);
+    expect((await video(auth, "https://www.instagram.com/reel/C8aBcDeFgHi/?igsh=x")).status).toBe(201);
+    expect((await video(auth, "https://www.tiktok.com/@rakib.fc/video/7301234567890123456?lang=en")).status).toBe(201);
+    expect((await video(auth, "https://www.instagram.com/reel/C8aBcDeFgHi/")).status).toBe(409); // same video, another link form
+    const media = (await get(auth, "/players/me")).body.data.media as { source: string | null; url: string; thumbnailUrl: string | null }[];
+    const videos = media.filter((m) => m.source);
+    expect(videos.map((m) => m.source).sort()).toEqual(["FACEBOOK", "INSTAGRAM", "TIKTOK"]);
+    expect(videos.find((m) => m.source === "FACEBOOK")).toMatchObject({ url: "https://www.facebook.com/kalaparafc/videos/987654321098765", thumbnailUrl: null });
+    expect(JSON.stringify(videos)).not.toContain("tracking");
+  });
+
   it("rejects other sites and junk, duplicates, sports the player doesn't have, and UPLOAD (not available yet)", async () => {
     const { auth } = await withFootball();
     for (const bad of ["https://vimeo.com/123", "https://fb.watch/xyz", "https://evil.example.com/watch?v=dQw4w9WgXcQ", "https://youtube.com.evil.com/watch?v=dQw4w9WgXcQ", "https://www.youtube.com/playlist?list=PL123", "javascript:alert(1)", "not a url", "https://youtu.be/short"]) {

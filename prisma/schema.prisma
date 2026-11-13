@@ -110,6 +110,9 @@ enum VerificationType {
 
 enum VideoSource {
   YOUTUBE
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
   UPLOAD // reserved for our own hosting (a paid feature later); the API answers UPLOAD_NOT_AVAILABLE for now
 }
 

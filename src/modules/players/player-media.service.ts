@@ -3,7 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { deleteImagesQuietly } from "../../lib/storage/safe-delete.js";
 import { uploadOwnedImage } from "../media/media.service.js";
 import { getMyProfile } from "./players.service.js";
-import { parseYouTubeId, youtubeWatchUrl } from "../../lib/youtube.js";
+import { parseVideoLink } from "../../lib/video-links.js";
 import { MAX_PHOTOS, MAX_VIDEOS, type addVideoBody } from "./players.schema.js";
 import type { z } from "zod";
 
@@ -44,11 +44,12 @@ export async function addPhoto(userId: string, buffer: Buffer) {
   return getMyProfile(userId);
 }
 
-/** YouTube only for now. `source: UPLOAD` is reserved for our own hosting and answers UPLOAD_NOT_AVAILABLE. */
+/** YouTube, Facebook, Instagram and TikTok links. `source: UPLOAD` is reserved for our own hosting and answers UPLOAD_NOT_AVAILABLE. */
 export async function addVideo(userId: string, input: z.infer<typeof addVideoBody>) {
   if (input.source === "UPLOAD") throw AppError.badRequest("UPLOAD_NOT_AVAILABLE", "Uploading videos isn't available yet. Add a YouTube link instead.");
-  const videoId = parseYouTubeId(input.url);
-  if (!videoId) throw AppError.invalid("url", "That isn't a YouTube video link");
+  const video = parseVideoLink(input.url);
+  if (!video) throw AppError.invalid("url", "That isn't a YouTube, Facebook, Instagram or TikTok video link");
+  const videoId = video.videoId;
   const profileId = await profileIdOf(userId);
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "PlayerProfile" WHERE id = ${profileId} FOR UPDATE`;
@@ -57,12 +58,12 @@ export async function addVideo(userId: string, input: z.infer<typeof addVideoBod
     const [count, last, dupe] = await Promise.all([
       tx.playerMedia.count({ where: { profileId, type: "VIDEO_LINK", sportId: input.sportId } }),
       tx.playerMedia.findFirst({ where: { profileId }, orderBy: { order: "desc" }, select: { order: true } }),
-      tx.playerMedia.findFirst({ where: { profileId, type: "VIDEO_LINK", sportId: input.sportId, videoId }, select: { id: true } }),
+      tx.playerMedia.findFirst({ where: { profileId, type: "VIDEO_LINK", sportId: input.sportId, source: video.source, videoId }, select: { id: true } }),
     ]);
     if (dupe) throw AppError.conflict("PLAYER_MEDIA_DUPLICATE", "That video is already on this sports profile");
     if (count >= MAX_VIDEOS) throw AppError.conflict("PLAYER_MEDIA_LIMIT", `You can have at most ${MAX_VIDEOS} videos per sports profile`);
     await tx.playerMedia.create({
-      data: { profileId, type: "VIDEO_LINK", url: youtubeWatchUrl(videoId), source: "YOUTUBE", videoId, sportId: input.sportId, caption: input.caption ?? null, order: (last?.order ?? -1) + 1 },
+      data: { profileId, type: "VIDEO_LINK", url: video.url, source: video.source, videoId, sportId: input.sportId, caption: input.caption ?? null, order: (last?.order ?? -1) + 1 },
     });
   });
   return getMyProfile(userId);

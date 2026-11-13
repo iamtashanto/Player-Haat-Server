@@ -99,8 +99,8 @@ export const achievementParams = z.object({ sportId: id, achievementId: z.string
 // ───────── media ─────────
 export const addVideoBody = z.strictObject({
   sportId: z.number().int().positive().openapi({ description: "The sports profile this video belongs to." }),
-  source: z.enum(["YOUTUBE", "UPLOAD"]).default("YOUTUBE").openapi({ description: "`UPLOAD` (our own hosting) is not available yet: it answers 400 `UPLOAD_NOT_AVAILABLE`." }),
-  url: z.string().trim().min(1).max(500).openapi({ description: "Any YouTube link (watch, youtu.be, shorts, embed) or the bare 11-character video id." }),
+  source: z.enum(["YOUTUBE", "FACEBOOK", "INSTAGRAM", "TIKTOK", "UPLOAD"]).default("YOUTUBE").openapi({ description: "Ignored for links: the site is read from the link itself. `UPLOAD` (our own hosting) is not available yet: it answers 400 `UPLOAD_NOT_AVAILABLE`." }),
+  url: z.string().trim().min(1).max(500).openapi({ description: "A YouTube link (watch, youtu.be, shorts, embed) or bare id, or a Facebook video / reel, Instagram reel / post, or TikTok video link." }),
   caption: z.string().trim().max(120).nullable().optional(),
 });
 export const updateMediaBody = z.strictObject({ caption: z.string().trim().max(120).nullable() });
@@ -197,7 +197,7 @@ const MediaItem = z.object({
   thumbnailUrl: z.string().nullable().openapi({ description: "Photos: a 400px-wide rendition. Videos: the YouTube thumbnail." }),
   order: z.number().int(),
   caption: z.string().nullable(),
-  source: z.enum(["YOUTUBE", "UPLOAD"]).nullable(),
+  source: z.enum(["YOUTUBE", "FACEBOOK", "INSTAGRAM", "TIKTOK", "UPLOAD"]).nullable(),
   videoId: z.string().nullable(),
   sportId: z.number().int().nullable().openapi({ description: "Videos: the sports profile they belong to." }),
   width: z.number().int().nullable().openapi({ description: "Photos: pixel size of the original, to reserve the space before it loads." }),
@@ -224,7 +224,7 @@ registerRoute({ method: "delete", path: "/players/me/sports/{sportId}", tag: T, 
 registerRoute({ method: "post", path: "/players/me/sports/{sportId}/achievements", tag: T, summary: "Add an achievement to a sport profile", description: `Up to ${MAX_ACHIEVEMENTS} per sport profile.`, auth: true, params: sportParams, body: addAchievementBody, response: MyProfile, status: 201, errors: [404, 409, 422] });
 registerRoute({ method: "delete", path: "/players/me/sports/{sportId}/achievements/{achievementId}", tag: T, summary: "Remove an achievement", auth: true, params: achievementParams, response: MyProfile, errors: [404] });
 registerRoute({ method: "post", path: "/players/me/media/photos", tag: T, summary: "Add a photo", description: `multipart/form-data, field \`file\`. Up to ${MAX_PHOTOS} photos.`, auth: true, multipart: z.object({ file: binary }), response: MyProfile, status: 201, errors: [404, 409, 413, 415, 422, 502, 503] });
-registerRoute({ method: "post", path: "/players/me/media/videos", tag: T, summary: "Add a YouTube video to a sports profile", description: `Up to ${MAX_VIDEOS} per sports profile. YouTube links only; the id is stored and thumbnails are built from it.`, auth: true, body: addVideoBody, response: MyProfile, status: 201, errors: [400, 404, 409, 422] });
+registerRoute({ method: "post", path: "/players/me/media/videos", tag: T, summary: "Add a video link to a sports profile", description: `Up to ${MAX_VIDEOS} per sports profile. YouTube, Facebook, Instagram and TikTok links; the link is rebuilt from the parsed parts. YouTube thumbnails are built from the id; the other sites have none.`, auth: true, body: addVideoBody, response: MyProfile, status: 201, errors: [400, 404, 409, 422] });
 registerRoute({ method: "patch", path: "/players/me/media/{mediaId}", tag: T, summary: "Set or clear a caption", auth: true, params: mediaParams, body: updateMediaBody, response: MyProfile, errors: [404, 422] });
 registerRoute({ method: "put", path: "/players/me/media/cover", tag: T, summary: "Set my cover photo", description: "multipart/form-data, field `file`. Crop to about 3:1 before upload. The previous cover is deleted.", auth: true, multipart: z.object({ file: binary }), response: MyProfile, errors: [404, 413, 415, 422, 502, 503] });
 registerRoute({ method: "delete", path: "/players/me/media/cover", tag: T, summary: "Remove my cover photo", auth: true, response: MyProfile, errors: [404] });

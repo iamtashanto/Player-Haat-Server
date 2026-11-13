@@ -39,8 +39,8 @@ export function toMediaItem(m: MediaRow, assets?: Map<string, { width: number | 
   return {
     id: m.id,
     type: m.type,
-    url: video && m.videoId ? youtubeWatchUrl(m.videoId) : (imageUrl(m.publicId, m.url) ?? m.url),
-    thumbnailUrl: video ? (m.videoId ? youtubeThumbnail(m.videoId) : null) : imageUrl(m.publicId, m.url, "w_400"),
+    url: video ? (m.source === "YOUTUBE" && m.videoId ? youtubeWatchUrl(m.videoId) : m.url) : (imageUrl(m.publicId, m.url) ?? m.url),
+    thumbnailUrl: video ? (m.source === "YOUTUBE" && m.videoId ? youtubeThumbnail(m.videoId) : null) : imageUrl(m.publicId, m.url, "w_400"),
     order: m.order,
     caption: m.caption,
     source: m.source,
