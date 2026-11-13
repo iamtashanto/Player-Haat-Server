@@ -34,6 +34,8 @@ export const createRequestBody = z.strictObject({
   venueLat: lat.nullable().optional().openapi({ description: "Optional pin of the ground (both `venueLat` and `venueLng`). Shown to everyone who can see the game, so only pin the ground itself, never a home." }),
   venueLng: lng.nullable().optional(),
   groundFee: money.nullable().optional().openapi({ description: "Matches only. Total ground rent in BDT; each player's share is this divided by `playersNeeded`. Payment itself happens outside the app." }),
+  feeMode: z.enum(["TOTAL", "PER_PLAYER"]).optional().openapi({ description: "TOTAL (default): `groundFee` is the whole rent, split between `playersNeeded`. PER_PLAYER: `groundFee` is what each player pays, e.g. 50." }),
+  isTurf: z.boolean().optional().openapi({ description: "A turf or rented ground. Shown as a badge and filterable." }),
   feePayTo: z.string().trim().max(80).nullable().optional().openapi({ description: 'Where to send the share, e.g. "bKash 01XXXXXXXXX". Accepted players see it; nobody else.' }),
 })
   .refine((b) => b.kind !== "EVENT" || !!b.title, { message: "An event needs a title", path: ["title"] })
@@ -56,6 +58,8 @@ export const updateRequestBody = z
     title: z.string().trim().min(3).max(80),
     groundFee: money.nullable(),
     feePayTo: z.string().trim().max(80).nullable(),
+    feeMode: z.enum(["TOTAL", "PER_PLAYER"]),
+    isTurf: z.boolean(),
     venueLat: lat.nullable(),
     venueLng: lng.nullable(),
   })
@@ -74,6 +78,7 @@ export const feedQuery = pageQuery
     unionId: qid.optional(),
     isPaid: z.stringbool().optional(),
     kind: z.enum(["MATCH", "EVENT"]).optional().openapi({ description: "Only matches, or only events (recruiters' trials and camps)." }),
+    turf: z.stringbool().optional().openapi({ description: "true: only games on a turf or rented ground." }),
     sort: z.enum(["soonest", "near"]).default("soonest").openapi({ description: "`near`: same union, then same upazila, then same district, then the rest, soonest first within each; needs `nearDistrictId`. Area ids only, no coordinates." }),
     nearDistrictId: qid.optional(),
     nearUpazilaId: qid.optional(),
@@ -87,6 +92,7 @@ export const mapQuery = z.object({
   districtId: qid.optional(),
   upazilaId: qid.optional(),
   kind: z.enum(["MATCH", "EVENT"]).optional(),
+  turf: z.stringbool().optional(),
 });
 
 export const featuredQuery = z.object({
@@ -128,7 +134,8 @@ const RequestItem = z
     myApplication: z.object({ id: z.string(), status: z.enum(["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN", "WAITLISTED"]), waitlistPosition: z.number().int().optional().openapi({ description: "1 = next in line. Only while WAITLISTED." }) }).nullable(),
     pin: z.object({ lat: z.number(), lng: z.number() }).nullable().openapi({ description: "The ground's pin, when the organiser set one." }),
     areaCentre: z.object({ lat: z.number(), lng: z.number() }).nullable().openapi({ description: "Centre of the game's upazila (or district): where to centre a map when there is no pin. Approximate." }),
-    fee: z.object({ total: z.number().int(), share: z.number().int().openapi({ description: "BDT per player: total ÷ playersNeeded, rounded up." }), payTo: z.string().nullable().openapi({ description: "Only the organiser and accepted players see it." }), paidCount: z.number().int().optional().openapi({ description: "Owner only: accepted players ticked as paid." }), iPaid: z.boolean().optional().openapi({ description: "Accepted player only: the organiser has ticked my share." }) }).nullable().openapi({ description: "The ground-fee split, when the organiser set a fee." }),
+    isTurf: z.boolean(),
+    fee: z.object({ mode: z.enum(["TOTAL", "PER_PLAYER"]), total: z.number().int().openapi({ description: "What the game collects in all: the rent, or the per-player fee times the players needed." }), share: z.number().int().openapi({ description: "BDT per player: the fee itself for PER_PLAYER, else the rent divided by players needed, rounded up." }), payTo: z.string().nullable().openapi({ description: "Only the organiser and accepted players see it." }), paidCount: z.number().int().optional().openapi({ description: "Owner only: accepted players ticked as paid." }), iPaid: z.boolean().optional().openapi({ description: "Accepted player only: the organiser has ticked my share." }) }).nullable().openapi({ description: "The ground-fee split, when the organiser set a fee." }),
     result: z.object({ ourScore: z.number().int(), theirScore: z.number().int(), opponentName: z.string().nullable(), summary: z.string().nullable(), outcome: z.enum(["WIN", "DRAW", "LOSS"]), recordedAt: z.string().datetime(), opponentTeam: z.object({ id: z.string(), name: z.string() }).nullable(), confirmed: z.boolean().openapi({ description: "The opponent team's captain confirmed the score. Only confirmed scores count in standings." }), canConfirm: z.boolean().openapi({ description: "I am the opponent captain and have not confirmed yet." }) }).nullable().openapi({ description: "The score, once the organiser has recorded it. Our side is the organiser's." }),
     series: z.object({ id: z.string(), title: z.string() }).nullable().openapi({ description: "The weekly game this match belongs to." }),
     waitlistCount: z.number().int().openapi({ description: "How many people are waiting for a spot." }),

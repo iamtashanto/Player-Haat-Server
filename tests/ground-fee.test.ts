@@ -79,3 +79,27 @@ describe("ground-fee split", () => {
     expect(bad.status).toBe(422);
   });
 });
+
+describe("turf games and a fixed fee per player", () => {
+  it("PER_PLAYER: the fee is what each player pays, the game collects it times the players needed, and the turf flag filters the feed", async () => {
+    const { org, res, id } = await game({ feeMode: "PER_PLAYER", groundFee: 50, playersNeeded: 10, isTurf: true, joinMode: "OPEN_JOIN" });
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({ isTurf: true, joinMode: "OPEN_JOIN", fee: { mode: "PER_PLAYER", share: 50, total: 500, payTo: "bKash 01712345678" } });
+    const plain = await call("post", "/requests", org.auth, requestBody(w, { playersNeeded: 4 }));
+    expect(plain.body.data.isTurf).toBe(false);
+    const viewer = await playerUser(w, "v@example.com", football());
+    const turfOnly = (await call("get", "/requests?turf=true", viewer.auth)).body.data as { id: string }[];
+    expect(turfOnly.map((r) => r.id)).toEqual([id]);
+    const rest = (await call("get", "/requests?turf=false", viewer.auth)).body.data as { id: string }[];
+    expect(rest.map((r) => r.id)).toEqual([plain.body.data.id]);
+    expect((await call("get", "/requests", viewer.auth)).body.data).toHaveLength(2);
+  });
+
+  it("can be switched later; a free game (organiser covers the ground) has no fee at all", async () => {
+    const { org, id } = await game({ groundFee: 1000 });
+    const changed = await call("patch", `/requests/${id}`, org.auth, { feeMode: "PER_PLAYER", groundFee: 60, isTurf: true });
+    expect(changed.body.data).toMatchObject({ isTurf: true, fee: { mode: "PER_PLAYER", share: 60 } });
+    const free = await call("patch", `/requests/${id}`, org.auth, { groundFee: null });
+    expect(free.body.data.fee).toBeNull();
+  });
+});

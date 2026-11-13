@@ -76,8 +76,9 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
           const mine = ctx.myApplications?.get(r.id);
           const sees = isOwner || mine?.status === "ACCEPTED";
           return {
-            total: r.groundFee,
-            share: Math.ceil(r.groundFee / Math.max(1, r.playersNeeded)),
+            mode: r.feeMode,
+            total: r.feeMode === "PER_PLAYER" ? r.groundFee * r.playersNeeded : r.groundFee,
+            share: r.feeMode === "PER_PLAYER" ? r.groundFee : Math.ceil(r.groundFee / Math.max(1, r.playersNeeded)),
             payTo: sees ? r.feePayTo : null,
             ...(isOwner && { paidCount: ctx.paidCounts?.get(r.id) ?? 0 }),
             ...(!isOwner && mine?.status === "ACCEPTED" && { iPaid: mine.feePaid ?? false }),
@@ -88,6 +89,7 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
       ? { ourScore: r.result.ourScore, theirScore: r.result.theirScore, opponentName: r.result.opponentName, summary: r.result.summary, outcome: (r.result.ourScore > r.result.theirScore ? "WIN" : r.result.ourScore < r.result.theirScore ? "LOSS" : "DRAW") as "WIN" | "DRAW" | "LOSS", recordedAt: r.result.updatedAt.toISOString(), opponentTeam: r.result.opponentTeam ? { id: r.result.opponentTeam.id, name: r.result.opponentTeam.name } : null, confirmed: !!r.result.opponentConfirmedAt, canConfirm: !!r.result.opponentTeam && !r.result.opponentConfirmedAt && r.result.opponentTeam.captainId === ctx.viewerId }
       : null,
     series: r.series ? { id: r.series.id, title: r.series.title } : null,
+    isTurf: r.isTurf,
     pin: r.venueLat != null && r.venueLng != null ? { lat: r.venueLat, lng: r.venueLng } : null,
     areaCentre: centre(r),
     waitlistCount: ctx.waitlistCounts?.get(r.id) ?? 0,

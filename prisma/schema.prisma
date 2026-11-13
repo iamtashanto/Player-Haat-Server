@@ -144,6 +144,11 @@ enum TeamMemberRole {
   PLAYER
 }
 
+enum FeeMode {
+  TOTAL // groundFee is the whole ground rent, split between the players needed
+  PER_PLAYER // groundFee is what each player pays (e.g. a turf game at 50 taka a head)
+}
+
 enum JoinMode {
   APPROVAL // players apply, the organiser accepts (default)
   OPEN_JOIN // players join straight away until the game is full
@@ -792,6 +797,8 @@ model PlayerRequest {
   rainAlertedAt  DateTime? // the one rain warning for this game has been sent
   venueLat        Float? // the ground's pin, set by the organiser (public: it is where the game is)
   venueLng        Float?
+  feeMode         FeeMode  @default(TOTAL)
+  isTurf          Boolean  @default(false) // played on a rented turf or ground, so a fee is normal
   groundFee      Int? // total ground rent in BDT, split between the players
   feePayTo       String? // where players send their share, e.g. "bKash 01XXXXXXXXX"; shown to accepted players only
   seriesId       String?
@@ -801,6 +808,7 @@ model PlayerRequest {
   opponentTeam   Team?         @relation("RequestOpponent", fields: [opponentTeamId], references: [id], onDelete: SetNull)
 
   @@index([status, matchAt])
+  @@index([isTurf, status, matchAt])
   @@index([upazilaId, status, matchAt])
   @@index([districtId, status, matchAt])
   @@index([sportId, status, matchAt])
