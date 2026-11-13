@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { V1, api, resetDb, seedWorld, type World } from "./helpers.js";
+import { V1, api, prisma, resetDb, seedWorld, type World } from "./helpers.js";
 
 let w: World;
 beforeEach(async () => {
@@ -52,5 +52,16 @@ describe("GET /locations/search: type any part of an address", () => {
   it("returns nothing (not an error) when nothing matches, and rejects an empty or one-letter query", async () => {
     expect((await search("zzzzqq")).body.data).toEqual([]);
     expect((await search("")).status).toBe(422);
+  });
+});
+
+describe("post codes", () => {
+  it("a 4-digit code finds the upazila that has that post office, and results carry their post codes", async () => {
+    await prisma.postOffice.createMany({ data: [{ upazilaId: w.kalapara.id, nameEn: "Kalapara", code: "8650" }, { upazilaId: w.kalapara.id, nameEn: "Mithaganj", code: "8651" }] });
+    const byCode = (await search("8650")).body.data as { level: string; id: number; postcodes: { code: string; office: string }[] }[];
+    expect(byCode[0]).toMatchObject({ level: "upazila", id: w.kalapara.id, postcodes: [{ code: "8650", office: "Kalapara" }, { code: "8651", office: "Mithaganj" }] });
+    const byName = (await search("kalapara", "&level=upazila")).body.data as { id: number; postcodes: unknown[] }[];
+    expect(byName.find((r) => r.id === w.kalapara.id)?.postcodes).toHaveLength(2);
+    expect((await search("9999")).body.data).toEqual([]);
   });
 });

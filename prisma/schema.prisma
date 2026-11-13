@@ -443,9 +443,23 @@ model Upazila {
   teams       Team[]
   gameSeries  GameSeries[]
   tournaments Tournament[]
+  postOffices PostOffice[]
 
   @@unique([districtId, slug])
   @@index([nameEn])
+}
+
+/// A post office and its code (BBS post-office directory via bd-geo-info). Upazila-level only: one upazila has several.
+model PostOffice {
+  id        Int    @id @default(autoincrement())
+  upazilaId Int
+  nameEn    String
+  code      String
+
+  upazila Upazila @relation(fields: [upazilaId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@index([upazilaId])
 }
 
 model Union {

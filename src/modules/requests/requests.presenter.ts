@@ -82,7 +82,12 @@ export function toRequest(r: RequestRow, ctx: ViewerContext) {
     series: r.series ? { id: r.series.id, title: r.series.title } : null,
     waitlistCount: ctx.waitlistCounts?.get(r.id) ?? 0,
     isOwner,
-    myApplication: isOwner ? null : (ctx.myApplications?.get(r.id) ?? null),
+    myApplication: isOwner
+      ? null
+      : (() => {
+          const m = ctx.myApplications?.get(r.id);
+          return m ? { id: m.id, status: m.status, ...(m.waitlistPosition !== undefined && { waitlistPosition: m.waitlistPosition }) } : null;
+        })(),
     ...(isOwner && ctx.pendingCounts && { pendingApplicants: ctx.pendingCounts.get(r.id) ?? 0 }),
     createdAt: r.createdAt.toISOString(),
   };

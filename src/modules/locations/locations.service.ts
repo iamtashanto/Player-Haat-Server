@@ -61,6 +61,17 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
       : [],
   ]);
 
+  // A 4-digit token is a post code: it finds the upazilas that have a post office with that code.
+  const codeTok = tokens.find((t) => /^\d{4}$/.test(t));
+  const byCode =
+    codeTok && levels.includes("upazila")
+      ? await prisma.upazila.findMany({
+          where: { postOffices: { some: { code: codeTok } } },
+          take: per,
+          select: { id: true, nameBn: true, nameEn: true, district: { select: { id: true, nameBn: true, nameEn: true, division: ref } } },
+        })
+      : [];
+
   const lower = tokens.map((t) => t.toLowerCase());
   const has = (r: { nameEn: string; nameBn: string }, tok: string, i: number) => r.nameEn.toLowerCase().includes(lower[i]!) || r.nameBn.includes(tok);
   const score = (r: { nameEn: string; nameBn: string }, order: number) => {
@@ -71,6 +82,7 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
 
   const all = [
     ...districts.map((d) => ({ level: "district" as const, id: d.id, nameBn: d.nameBn, nameEn: d.nameEn, division: d.division, district: null, upazila: null, _s: score(d, 0) })),
+    ...byCode.map((u) => ({ level: "upazila" as const, id: u.id, nameBn: u.nameBn, nameEn: u.nameEn, division: u.district.division, district: { id: u.district.id, nameBn: u.district.nameBn, nameEn: u.district.nameEn }, upazila: null, _s: -1 })),
     ...upazilas.map((u) => ({ level: "upazila" as const, id: u.id, nameBn: u.nameBn, nameEn: u.nameEn, division: u.district.division, district: { id: u.district.id, nameBn: u.district.nameBn, nameEn: u.district.nameEn }, upazila: null, _s: score(u, 1) })),
     ...unions.map((u) => ({
       level: "union" as const,
@@ -83,10 +95,16 @@ export async function searchLocations(q: string, levels: LocationLevel[], limit:
       _s: score(u, 2),
     })),
   ];
-  return all
+  const seen = new Set<string>();
+  const top = all
     .sort((a, b) => a._s - b._s)
-    .slice(0, limit)
-    .map(({ _s, ...r }) => r);
+    .filter((r) => (seen.has(`${r.level}${r.id}`) ? false : (seen.add(`${r.level}${r.id}`), true)))
+    .slice(0, limit);
+  // Post codes ride along: those of the upazila (for an upazila or union hit), so the address can be written out in full.
+  const upazilaIds = [...new Set(top.flatMap((r) => (r.level === "upazila" ? [r.id] : r.level === "union" && r.upazila ? [r.upazila.id] : [])))];
+  const offices = upazilaIds.length ? await prisma.postOffice.findMany({ where: { upazilaId: { in: upazilaIds } }, orderBy: { code: "asc" }, select: { upazilaId: true, code: true, nameEn: true } }) : [];
+  const codesOf = (upazilaId: number) => offices.filter((o) => o.upazilaId === upazilaId).map((o) => ({ code: o.code, office: o.nameEn }));
+  return top.map(({ _s, ...r }) => ({ ...r, postcodes: r.level === "upazila" ? codesOf(r.id) : r.level === "union" && r.upazila ? codesOf(r.upazila.id) : [] }));
 }
 
 /** `relFilter("upazila.district", f)` => { upazila: { district: f } } */

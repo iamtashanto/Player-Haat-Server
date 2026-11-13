@@ -35,7 +35,7 @@ registerRoute({
   summary: "Search places by Bangla or English name",
   query: searchQuery,
   response: z.array(
-    z.object({ level: z.enum(["district", "upazila", "union"]), id: z.number(), nameBn: z.string(), nameEn: z.string(), division: Ref.nullable(), district: Ref.nullable(), upazila: Ref.nullable() }),
+    z.object({ level: z.enum(["district", "upazila", "union"]), id: z.number(), nameBn: z.string(), nameEn: z.string(), division: Ref.nullable(), district: Ref.nullable(), upazila: Ref.nullable(), postcodes: z.array(z.object({ code: z.string(), office: z.string() })).openapi({ description: "Post offices of the upazila (for upazila and union results). Type a 4-digit code to find its upazila." }) }),
   ),
   errors: [422],
 });
