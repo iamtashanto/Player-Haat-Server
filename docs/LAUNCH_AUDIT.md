@@ -79,7 +79,7 @@ Not run: Android emulator walkthrough and a production Android build (need your 
 
 ## 6. Launch checklist
 
-1. `server`: set production env (see `docs/DEPLOY.md`), run `npx prisma migrate deploy`, then `npm run db:seed` (loads locations, post offices, upazila centres). Create the first admin with `admin:create`.
+1. `server`: set production env (see `docs/DEPLOYMENT.md` and `docs/DEPLOY_CHECKLIST.md`), run `npx prisma migrate deploy`, then `npm run db:seed` (loads locations, post offices, upazila centres). Create the first admin with `admin:create`.
 2. `web`: `NEXT_PUBLIC_API_URL=<prod api> pnpm build`; serve behind the nginx config in `web/nginx`. Open `/en/privacy` and check section 5 reads right for your lawyer.
 3. Run the whole suite once against staging: server vitest, web Playwright (desktop + mobile), `flutter test`.
 4. Smoke by hand with real accounts on a real Android phone: sign up, post a game with a pin, share it on WhatsApp, apply from a second phone, accept, chat, mark attendance, record a score, rate.
