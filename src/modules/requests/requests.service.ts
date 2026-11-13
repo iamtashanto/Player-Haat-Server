@@ -248,6 +248,30 @@ export async function feed(viewerId: string, q: z.infer<typeof feedQuery>) {
     // A request listing no positions is open to everyone, so it matches any position filter.
     ...(q.position && { OR: [{ positionsNeeded: { has: q.position } }, { positionsNeeded: { isEmpty: true } }] }),
   };
+  if (q.forMe) {
+    const me = await prisma.playerProfile.findUnique({
+      where: { userId: viewerId },
+      select: { districtId: true, upazilaId: true, unionId: true, sports: { select: { sportId: true, positions: true, khepAvailable: true, rateMin: true, rateMax: true, travelRadius: true } } },
+    });
+    if (me && me.sports.length > 0) {
+      // the same rule that decides who is told about a new game, read from the other side
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: me.sports.map((ps) => ({
+            sportId: ps.sportId,
+            AND: [
+              { OR: [{ positionsNeeded: { isEmpty: true } }, ...(ps.positions.length ? [{ positionsNeeded: { hasSome: ps.positions } }] : [])] },
+              ps.travelRadius === "UNION" ? (me.unionId !== null ? { unionId: me.unionId } : { upazilaId: me.upazilaId }) : ps.travelRadius === "UPAZILA" ? { upazilaId: me.upazilaId } : { districtId: me.districtId },
+              ps.khepAvailable
+                ? { OR: [{ isPaid: false }, { isPaid: true, AND: [{ OR: [{ budgetMax: null }, ...(ps.rateMin !== null ? [{ budgetMax: { gte: ps.rateMin } }] : [{ id: { not: "" } }])] }, { OR: [{ budgetMin: null }, ...(ps.rateMax !== null ? [{ budgetMin: { lte: ps.rateMax } }] : [{ id: { not: "" } }])] }] }] }
+                : { isPaid: false },
+            ],
+          })),
+        },
+      ];
+    }
+  }
   if (q.sort === "near") return nearFeed(viewerId, where, q);
   const rows = await prisma.playerRequest.findMany({
     where,

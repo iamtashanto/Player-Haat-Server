@@ -439,3 +439,20 @@ describe("GET /requests/mine", () => {
     expect((await get(cap.auth, "/requests/mine", { status: "BOGUS" })).status).toBe(422);
   });
 });
+
+describe("feed for me", () => {
+  it("shows only games that fit my sports, positions, travel radius and fee", async () => {
+    const org = await signedIn("org@example.com");
+    const me = await playerUser(w, "me@example.com", [{ sportId: w.football.id, positions: ["GK"] }]);
+    const mk = (over: Record<string, unknown>) => makeRequest(w, org.user.id, over);
+    const fits = await mk({ positionsNeeded: ["GK"] });
+    const anyPos = await mk({ positionsNeeded: [] });
+    await mk({ positionsNeeded: ["ST"] }); // wrong position
+    await mk({ sportId: w.cricket.id }); // wrong sport
+    await mk({ districtId: w.dhaka.id, upazilaId: w.savar.id }); // too far for the default district radius
+    await mk({ isPaid: true, budgetMin: 300, budgetMax: 500 }); // paid, and I am not available for khep
+    const res = await get(me.auth, "/requests?forMe=true");
+    expect((res.body.data as { id: string }[]).map((r) => r.id).sort()).toEqual([fits.id, anyPos.id].sort());
+    expect((await get(me.auth, "/requests")).body.data.length).toBe(6); // the plain feed still shows everything
+  });
+});

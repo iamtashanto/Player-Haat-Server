@@ -79,6 +79,7 @@ export const feedQuery = pageQuery
     isPaid: z.stringbool().optional(),
     kind: z.enum(["MATCH", "EVENT"]).optional().openapi({ description: "Only matches, or only events (recruiters' trials and camps)." }),
     turf: z.stringbool().optional().openapi({ description: "true: only games on a turf or rented ground." }),
+    forMe: z.stringbool().optional().openapi({ description: "true: only games that fit my player profile: a sport I play, a position I play (or any position), within how far I will travel, and a fee I accept. Same rule as the new-game notifications. Ignored without a player profile." }),
     sort: z.enum(["soonest", "near"]).default("soonest").openapi({ description: "`near`: same union, then same upazila, then same district, then the rest, soonest first within each; needs `nearDistrictId`. Area ids only, no coordinates." }),
     nearDistrictId: qid.optional(),
     nearUpazilaId: qid.optional(),
