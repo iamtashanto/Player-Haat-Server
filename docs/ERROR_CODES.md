@@ -10,7 +10,7 @@ Every error response has this shape — the app should translate `error.code`, n
 
 `VALIDATION_ERROR` (422) carries `details: [{ path, code, message }]`, one per bad field.
 
-192 codes. Messages are developer-facing English and may change; **codes are stable**.
+205 codes. Messages are developer-facing English and may change; **codes are stable**.
 
 ## ADMIN
 
@@ -436,6 +436,24 @@ Every error response has this shape — the app should translate `error.code`, n
 | `TEAM_MEMBER_NOT_FOUND` | 404 | Member not found | `modules/teams/teams.service.ts` |
 | `TEAM_NOT_CAPTAIN` | 403 | Only the captain can do that | `modules/teams/teams.service.ts` |
 | `TEAM_NOT_FOUND` | 404 | Team not found | `modules/competition/standings.service.ts`, `modules/teams/teams.service.ts` |
+
+## TOURNAMENT
+
+| Code | HTTP | Developer message | Raised in |
+|---|---|---|---|
+| `TOURNAMENT_ALREADY_IN` | 409 | This team is already entered | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_ENTRY_NOT_FOUND` | 404 | That team is not entered | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_FULL` | 409 | The tournament is full | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_LIMIT` | 409 | You can run at most… | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_MATCH_LOCKED` | 409 | The next match was already played | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_MATCH_NOT_FOUND` | 404 | Match not found | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_MATCH_NOT_READY` | 409 | Both teams must be known first | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_NOT_ALLOWED` | 403 | Only the team's captain or the organiser can do that | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_NOT_FOUND` | 404 | Tournament not found | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_NOT_OPEN` | 409 | Registration is closed | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_NOT_OWNER` | 403 | Only the organiser can do that | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_NOT_RUNNING` | 409 | The tournament has not started | `modules/tournaments/tournaments.service.ts` |
+| `TOURNAMENT_TOO_FEW` | 409 | At least… | `modules/tournaments/tournaments.service.ts` |
 
 ## UNION
 

@@ -15,7 +15,8 @@ type Tx = Prisma.TransactionClient;
 
 const include = {
   sport: { select: { id: true, code: true, nameBn: true, nameEn: true } },
-  ...locationInclude,
+  district: locationInclude.district,
+  upazila: locationInclude.upazila,
   createdBy: { select: { name: true, status: true } },
   teams: { orderBy: { registeredAt: "asc" }, include: { team: { select: { id: true, name: true, logoUrl: true, captainId: true } } } },
   matches: { orderBy: [{ round: "asc" }, { slot: "asc" }] },
